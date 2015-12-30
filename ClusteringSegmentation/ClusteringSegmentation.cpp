@@ -136,12 +136,13 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     writeTagsWithStaticColortable(spImage, resultImg);
     imwrite("tags_after_identical_merge.png", resultImg);
   }
-    
+
+  if ((0)) {
   Mat minImg;
-  
   writeTagsWithMinColortable(spImage, inputImg, minImg);
   imwrite("tags_min_color.png", minImg);
   cout << "wrote " << "tags_min_color.png" << endl;
+  }
   
   // Done
   
