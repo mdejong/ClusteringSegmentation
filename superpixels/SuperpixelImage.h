@@ -22,16 +22,6 @@ typedef unordered_map<int32_t, Superpixel*> TagToSuperpixelMap;
 
 typedef tuple<double, int32_t, int32_t> CompareNeighborTuple;
 
-typedef enum {
-  BACKPROJECT_HIGH_FIVE, // top 95% with gray = 200
-  BACKPROJECT_HIGH_FIVE8, // top 95% with gray = 200 (8 bins per channel)
-  BACKPROJECT_HIGH_TEN,  // top 90% with gray 200
-  BACKPROJECT_HIGH_15,  // top 85% with gray 200
-  BACKPROJECT_HIGH_20,  // top 80% with gray 200
-  BACKPROJECT_HIGH_50,  // top 80% with gray 200
-} BackprojectRange;
-
-
 class SuperpixelImage {
   
   public:
@@ -60,6 +50,9 @@ class SuperpixelImage {
 
   Superpixel* getSuperpixelPtr(int32_t uid);
   
+  // Return vector of all edges
+  vector<SuperpixelEdge> getEdges();
+  
   // Parse tags image and construct superpixels. Note that this method will modify the
   // original tag values by adding 1 to each original tag value.
   
@@ -76,32 +69,10 @@ class SuperpixelImage {
   // Merge superpixels where all pixels are the same pixel.
   
   void mergeIdenticalSuperpixels(Mat &inputImg);
-
-  // Repeated merge of the largest superpixels up until the
-  // easily merged superpixels have been merged.
-  
-  void mergeAlikeSuperpixels(Mat &inputImg);
-  
-  int mergeBackprojectSuperpixels(Mat &inputImg, int colorspace, int startStep, BackprojectRange range);
-  
-  int mergeBackprojectSmallestSuperpixels(Mat &inputImg, int colorspace, int startStep, BackprojectRange range);
-
-  int fillMergeBackprojectSuperpixels(Mat &inputImg, int colorspace, int startStep);
-
-  // Merge small superpixels away from the largest neighbor.
-  
-  int mergeSmallSuperpixels(Mat &inputImg, int colorspace, int startStep);
-  
-  // Merge superpixels detected as "edges" away from the largest neighbor.
-
-  int mergeEdgySuperpixels(Mat &inputImg, int colorspace, int startStep, vector<int32_t> *largeSuperpixelsPtr);
   
   void scanLargestSuperpixels(vector<int32_t> &results);
   
   void rescanLargestSuperpixels(Mat &inputImg, Mat &outputImg, vector<int32_t> *largeSuperpixelsPtr);
-  
-  // Return vector of all edges
-  vector<SuperpixelEdge> getEdges();
   
   void fillMatrixFromCoords(Mat &input, int32_t tag, Mat &output);
   
@@ -125,78 +96,18 @@ class SuperpixelImage {
   
   bool isAllSamePixels(Mat &input, uint32_t knownFirstPixel, vector<pair<int32_t,int32_t> > &coords);
   
-  // Compare function that does histogram compare for each neighbor of superpixel tag
-  
-  void compareNeighborSuperpixels(Mat &inputImg,
-                                  int32_t tag,
-                                  vector<CompareNeighborTuple> &results,
-                                  unordered_map<int32_t, bool> *lockedTablePtr,
-                                  int32_t step);
-  
-  // Compare function that examines neighbor edges
-  
-  void compareNeighborEdges(Mat &inputImg,
-                            int32_t tag,
-                            vector<CompareNeighborTuple> &results,
-                            unordered_map<int32_t, bool> *lockedTablePtr,
-                            int32_t step,
-                            bool normalize);
-  
-  // Evaluate backprojection of superpixel to the connected neighbors
-
-  void backprojectNeighborSuperpixels(Mat &inputImg,
-                                      int32_t tag,
-                                      vector<CompareNeighborTuple> &results,
-                                      unordered_map<int32_t, bool> *lockedTablePtr,
-                                      int32_t step,
-                                      int conversion,
-                                      int numPercentRanges,
-                                      int numTopPercent,
-                                      bool roundPercent,
-                                      int minGraylevel,
-                                      int numBins);
-  
-  void backprojectDepthFirstRecurseIntoNeighbors(Mat &inputImg,
-                                                 int32_t tag,
-                                                 vector<int32_t> &results,
-                                                 unordered_map<int32_t, bool> *lockedTablePtr,
-                                                 int32_t step,
-                                                 int conversion,
-                                                 int numPercentRanges,
-                                                 int numTopPercent,
-                                                 int minGraylevel,
-                                                 int numBins);
-  
-  // Recursive bredth first search to fully expand the largest superpixel in a BFS order
-  // and then lock the superpixel before expanding in terms of smaller superpixels. This
-  // logic looks for possible expansion using back projection but it keeps track of
-  // edge weights so that an edge will not be collapsed when it has a very high weight
-  // as compared to the other edge weights for this specific superpixel.
-  
-  int mergeBredthFirstRecursive(Mat &inputImg, int colorspace, int startStep, vector<int32_t> *largeSuperpixelsPtr, int numBins);
-  
-  void applyBilinearFiltering(Mat &inputImg, Mat &outputImg, int kernel, int cradius);
-  
-  void filterOutVeryLargeNeighbors(int32_t tag, vector<int32_t> &neighbors);
-  
-  bool shouldMergeEdge(int32_t tag, float edgeWeight);
-  
-  void addUnmergedEdgeWeights(int32_t tag, vector<float> &edgeWeights);
-  
-  void addMergedEdgeWeight(int32_t tag, float edgeWeight);
-  
-  void checkNeighborEdgeWeights(Mat &inputImg,
-                                int32_t tag,
-                                vector<int32_t> *neighborsPtr,
-                                unordered_map<SuperpixelEdge, float> &edgeStrengthMap,
-                                int step);
-  
   void sortSuperpixelsBySize();
-  
-  void recurseTouchingSuperpixels(int32_t rootUID,
-                                  int32_t rootValue,
-                                  unordered_map<int32_t, int32_t> &touchingTable);
 
 };
+
+// Util functions
+
+void writeTagsWithStaticColortable(SuperpixelImage &spImage, Mat &resultImg);
+
+void generateStaticColortable(Mat &inputImg, SuperpixelImage &spImage);
+
+void writeTagsWithGraytable(SuperpixelImage &spImage, Mat &origImg, Mat &resultImg);
+
+void writeTagsWithMinColortable(SuperpixelImage &spImage, Mat &origImg, Mat &resultImg);
 
 #endif // SUPERPIXEL_IMAGE_H

@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		3CD522CF1C347DB2005AF4A7 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CD522CE1C347DB2005AF4A7 /* main.cpp */; };
+		3CD522CF1C347DB2005AF4A7 /* ClusteringSegmentation.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CD522CE1C347DB2005AF4A7 /* ClusteringSegmentation.cpp */; };
 		3CD5249C1C347DEE005AF4A7 /* libopencv_aruco.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CD524471C347DEE005AF4A7 /* libopencv_aruco.a */; };
 		3CD5249D1C347DEE005AF4A7 /* libopencv_bgsegm.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CD524481C347DEE005AF4A7 /* libopencv_bgsegm.a */; };
 		3CD5249E1C347DEE005AF4A7 /* libopencv_bioinspired.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CD524491C347DEE005AF4A7 /* libopencv_bioinspired.a */; };
@@ -65,7 +65,20 @@
 		3CD524E51C3481E2005AF4A7 /* SuperpixelImage.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CD524D91C3481E2005AF4A7 /* SuperpixelImage.cpp */; };
 		3CD524E61C3481E2005AF4A7 /* Util.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CD524DB1C3481E2005AF4A7 /* Util.cpp */; };
 		3CD524E71C3481E2005AF4A7 /* vf_DistanceTransform.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CD524DD1C3481E2005AF4A7 /* vf_DistanceTransform.cpp */; };
+		3CD524EF1C34870B005AF4A7 /* CoordTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 3CD524EE1C34870B005AF4A7 /* CoordTest.m */; };
+		3CD524F41C3487F2005AF4A7 /* Coord.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CD524CE1C3481E2005AF4A7 /* Coord.cpp */; };
+		3CD524F91C348B5F005AF4A7 /* MergeSuperpixelImage.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CD524F71C348B5F005AF4A7 /* MergeSuperpixelImage.cpp */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		3CD524F51C348805005AF4A7 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3CD522C31C347DB2005AF4A7 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3CD522CA1C347DB2005AF4A7;
+			remoteInfo = ClusteringSegmentation;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		3CD522C91C347DB2005AF4A7 /* CopyFiles */ = {
@@ -81,7 +94,7 @@
 
 /* Begin PBXFileReference section */
 		3CD522CB1C347DB2005AF4A7 /* ClusteringSegmentation */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ClusteringSegmentation; sourceTree = BUILT_PRODUCTS_DIR; };
-		3CD522CE1C347DB2005AF4A7 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
+		3CD522CE1C347DB2005AF4A7 /* ClusteringSegmentation.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ClusteringSegmentation.cpp; sourceTree = "<group>"; };
 		3CD522D71C347DEE005AF4A7 /* opencv_annotation */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = opencv_annotation; sourceTree = "<group>"; };
 		3CD522D81C347DEE005AF4A7 /* opencv_createsamples */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = opencv_createsamples; sourceTree = "<group>"; };
 		3CD522D91C347DEE005AF4A7 /* opencv_traincascade */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = opencv_traincascade; sourceTree = "<group>"; };
@@ -497,6 +510,11 @@
 		3CD524DC1C3481E2005AF4A7 /* Util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Util.h; sourceTree = "<group>"; };
 		3CD524DD1C3481E2005AF4A7 /* vf_DistanceTransform.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = vf_DistanceTransform.cpp; sourceTree = "<group>"; };
 		3CD524DE1C3481E2005AF4A7 /* vf_DistanceTransform.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = vf_DistanceTransform.h; sourceTree = "<group>"; };
+		3CD524EC1C34870B005AF4A7 /* Test.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Test.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3CD524EE1C34870B005AF4A7 /* CoordTest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CoordTest.m; sourceTree = "<group>"; };
+		3CD524F01C34870B005AF4A7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		3CD524F71C348B5F005AF4A7 /* MergeSuperpixelImage.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = MergeSuperpixelImage.cpp; sourceTree = "<group>"; };
+		3CD524F81C348B5F005AF4A7 /* MergeSuperpixelImage.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MergeSuperpixelImage.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -556,6 +574,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		3CD524E91C34870B005AF4A7 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -563,8 +588,9 @@
 			isa = PBXGroup;
 			children = (
 				3CD524CD1C3481E1005AF4A7 /* superpixels */,
-				3CD522D51C347DEE005AF4A7 /* install_opencv31 */,
 				3CD522CD1C347DB2005AF4A7 /* ClusteringSegmentation */,
+				3CD522D51C347DEE005AF4A7 /* install_opencv31 */,
+				3CD524ED1C34870B005AF4A7 /* Test */,
 				3CD522CC1C347DB2005AF4A7 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -573,6 +599,7 @@
 			isa = PBXGroup;
 			children = (
 				3CD522CB1C347DB2005AF4A7 /* ClusteringSegmentation */,
+				3CD524EC1C34870B005AF4A7 /* Test.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -580,7 +607,7 @@
 		3CD522CD1C347DB2005AF4A7 /* ClusteringSegmentation */ = {
 			isa = PBXGroup;
 			children = (
-				3CD522CE1C347DB2005AF4A7 /* main.cpp */,
+				3CD522CE1C347DB2005AF4A7 /* ClusteringSegmentation.cpp */,
 			);
 			path = ClusteringSegmentation;
 			sourceTree = "<group>";
@@ -1434,6 +1461,10 @@
 		3CD524CD1C3481E1005AF4A7 /* superpixels */ = {
 			isa = PBXGroup;
 			children = (
+				3CD524DA1C3481E2005AF4A7 /* SuperpixelImage.h */,
+				3CD524D91C3481E2005AF4A7 /* SuperpixelImage.cpp */,
+				3CD524F81C348B5F005AF4A7 /* MergeSuperpixelImage.h */,
+				3CD524F71C348B5F005AF4A7 /* MergeSuperpixelImage.cpp */,
 				3CD524CF1C3481E2005AF4A7 /* Coord.h */,
 				3CD524CE1C3481E2005AF4A7 /* Coord.cpp */,
 				3CD524D11C3481E2005AF4A7 /* OpenCVUtil.h */,
@@ -1444,14 +1475,21 @@
 				3CD524D51C3481E2005AF4A7 /* SuperpixelEdge.cpp */,
 				3CD524D81C3481E2005AF4A7 /* SuperpixelEdgeTable.h */,
 				3CD524D71C3481E2005AF4A7 /* SuperpixelEdgeTable.cpp */,
-				3CD524DA1C3481E2005AF4A7 /* SuperpixelImage.h */,
-				3CD524D91C3481E2005AF4A7 /* SuperpixelImage.cpp */,
 				3CD524DC1C3481E2005AF4A7 /* Util.h */,
 				3CD524DB1C3481E2005AF4A7 /* Util.cpp */,
 				3CD524DE1C3481E2005AF4A7 /* vf_DistanceTransform.h */,
 				3CD524DD1C3481E2005AF4A7 /* vf_DistanceTransform.cpp */,
 			);
 			path = superpixels;
+			sourceTree = "<group>";
+		};
+		3CD524ED1C34870B005AF4A7 /* Test */ = {
+			isa = PBXGroup;
+			children = (
+				3CD524EE1C34870B005AF4A7 /* CoordTest.m */,
+				3CD524F01C34870B005AF4A7 /* Info.plist */,
+			);
+			path = Test;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -1474,6 +1512,24 @@
 			productReference = 3CD522CB1C347DB2005AF4A7 /* ClusteringSegmentation */;
 			productType = "com.apple.product-type.tool";
 		};
+		3CD524EB1C34870B005AF4A7 /* Test */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3CD524F11C34870B005AF4A7 /* Build configuration list for PBXNativeTarget "Test" */;
+			buildPhases = (
+				3CD524E81C34870B005AF4A7 /* Sources */,
+				3CD524E91C34870B005AF4A7 /* Frameworks */,
+				3CD524EA1C34870B005AF4A7 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3CD524F61C348805005AF4A7 /* PBXTargetDependency */,
+			);
+			name = Test;
+			productName = Test;
+			productReference = 3CD524EC1C34870B005AF4A7 /* Test.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -1484,6 +1540,9 @@
 				ORGANIZATIONNAME = helpurock;
 				TargetAttributes = {
 					3CD522CA1C347DB2005AF4A7 = {
+						CreatedOnToolsVersion = 7.1.1;
+					};
+					3CD524EB1C34870B005AF4A7 = {
 						CreatedOnToolsVersion = 7.1.1;
 					};
 				};
@@ -1501,9 +1560,20 @@
 			projectRoot = "";
 			targets = (
 				3CD522CA1C347DB2005AF4A7 /* ClusteringSegmentation */,
+				3CD524EB1C34870B005AF4A7 /* Test */,
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		3CD524EA1C34870B005AF4A7 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		3CD522C71C347DB2005AF4A7 /* Sources */ = {
@@ -1514,15 +1584,33 @@
 				3CD524E51C3481E2005AF4A7 /* SuperpixelImage.cpp in Sources */,
 				3CD524E41C3481E2005AF4A7 /* SuperpixelEdgeTable.cpp in Sources */,
 				3CD524E71C3481E2005AF4A7 /* vf_DistanceTransform.cpp in Sources */,
-				3CD522CF1C347DB2005AF4A7 /* main.cpp in Sources */,
+				3CD522CF1C347DB2005AF4A7 /* ClusteringSegmentation.cpp in Sources */,
 				3CD524E21C3481E2005AF4A7 /* Superpixel.cpp in Sources */,
 				3CD524DF1C3481E2005AF4A7 /* Coord.cpp in Sources */,
 				3CD524E01C3481E2005AF4A7 /* OpenCVUtil.cpp in Sources */,
 				3CD524E31C3481E2005AF4A7 /* SuperpixelEdge.cpp in Sources */,
+				3CD524F91C348B5F005AF4A7 /* MergeSuperpixelImage.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3CD524E81C34870B005AF4A7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3CD524F41C3487F2005AF4A7 /* Coord.cpp in Sources */,
+				3CD524EF1C34870B005AF4A7 /* CoordTest.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		3CD524F61C348805005AF4A7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3CD522CA1C347DB2005AF4A7 /* ClusteringSegmentation */;
+			targetProxy = 3CD524F51C348805005AF4A7 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		3CD522D01C347DB2005AF4A7 /* Debug */ = {
@@ -1613,6 +1701,7 @@
 					"$(PROJECT_DIR)/install_opencv31/lib",
 					"$(PROJECT_DIR)/install_opencv31/share/OpenCV/3rdparty/lib",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 10.10;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				USER_HEADER_SEARCH_PATHS = "$(SRCROOT)/**";
 			};
@@ -1627,8 +1716,31 @@
 					"$(PROJECT_DIR)/install_opencv31/lib",
 					"$(PROJECT_DIR)/install_opencv31/share/OpenCV/3rdparty/lib",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 10.10;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				USER_HEADER_SEARCH_PATHS = "$(SRCROOT)/**";
+			};
+			name = Release;
+		};
+		3CD524F21C34870B005AF4A7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Test/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = comp.helpurock.Test;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		3CD524F31C34870B005AF4A7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Test/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = comp.helpurock.Test;
+				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
 		};
@@ -1649,6 +1761,14 @@
 			buildConfigurations = (
 				3CD522D31C347DB2005AF4A7 /* Debug */,
 				3CD522D41C347DB2005AF4A7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+		};
+		3CD524F11C34870B005AF4A7 /* Build configuration list for PBXNativeTarget "Test" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3CD524F21C34870B005AF4A7 /* Debug */,
+				3CD524F31C34870B005AF4A7 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 		};

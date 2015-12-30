@@ -67,6 +67,10 @@
             argument = "OneSmallCircle.png"
             isEnabled = "YES">
          </CommandLineArgument>
+         <CommandLineArgument
+            argument = "OutTags.png"
+            isEnabled = "YES">
+         </CommandLineArgument>
       </CommandLineArguments>
       <AdditionalOptions>
       </AdditionalOptions>
