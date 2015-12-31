@@ -4,6 +4,7 @@
 #ifndef SUPERPIXEL_H
 #define	SUPERPIXEL_H
 
+#include "Coord.h"
 #include "SuperpixelEdge.h"
 
 using namespace std;
@@ -27,7 +28,7 @@ class Superpixel {
 
   int32_t tag;
   
-  vector<pair<int32_t,int32_t> > coords;
+  vector<Coord> coords;
 
   // This vector stores superpixel edges that have been successfully merged.
   
@@ -66,7 +67,7 @@ class Superpixel {
   void fillMatrixFromCoords(Mat &input, int32_t tag, Mat &output);
   
   static
-  void fillMatrixFromCoords(Mat &input, vector<pair<int32_t,int32_t> > &coords, Mat &output);
+  void fillMatrixFromCoords(Mat &input, vector<Coord> &coords, Mat &output);
   
   // This method is the inverse of fillMatrixFromCoords(), it reads pixel values from a matrix
   // and writes them back to the corresponding X,Y values location in an image. This method is
@@ -79,23 +80,23 @@ class Superpixel {
   void reverseFillMatrixFromCoords(Mat &input, bool isGray, int32_t tag, Mat &output);
   
   static
-  void reverseFillMatrixFromCoords(Mat &input, bool isGray, vector<pair<int32_t,int32_t> > &coords, Mat &output);
+  void reverseFillMatrixFromCoords(Mat &input, bool isGray, vector<Coord> &coords, Mat &output);
   
   // Filter the coords and return a vector that contains only the coordinates that share
   // an edge with the other superpixel.
   
   static
   void filterEdgeCoords(Superpixel *superpixe1Ptr,
-                        vector<pair<int32_t,int32_t> > &edgeCoords1,
+                        vector<Coord> &edgeCoords1,
                         Superpixel *superpixe2Ptr,
-                        vector<pair<int32_t,int32_t> > &edgeCoords2);
+                        vector<Coord> &edgeCoords2);
   
   // Get bounding box of superpixel.
   
   void bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &height);
   
   static void
-  bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &height, vector<pair<int32_t,int32_t> > &coords);
+  bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &height, vector<Coord> &coords);
   
   static void splitSplayPixels(Mat &inOutTagImg);
   

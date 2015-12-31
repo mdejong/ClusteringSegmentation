@@ -75,7 +75,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
   Mat tagsImg = inputImg.clone();
   tagsImg = (Scalar) 0;
   
-  const bool debugOutput = true;
+  const bool debugOutput = false;
   
   int numXStepsinWidth = (inputImg.cols >> 2);
   

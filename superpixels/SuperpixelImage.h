@@ -16,6 +16,7 @@ class Superpixel;
 class SuperpixelEdge;
 //class SuperpixelEdgeTable;
 
+#include "Coord.h"
 #include "SuperpixelEdgeTable.h"
 
 typedef unordered_map<int32_t, Superpixel*> TagToSuperpixelMap;
@@ -94,7 +95,7 @@ class SuperpixelImage {
   
   bool isAllSamePixels(Mat &input, Superpixel *spPtr, int32_t otherTag);
   
-  bool isAllSamePixels(Mat &input, uint32_t knownFirstPixel, vector<pair<int32_t,int32_t> > &coords);
+  bool isAllSamePixels(Mat &input, uint32_t knownFirstPixel, vector<Coord> &coords);
   
   void sortSuperpixelsBySize();
 

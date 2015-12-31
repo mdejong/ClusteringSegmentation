@@ -248,8 +248,8 @@ MergeSuperpixelImage::compareNeighborEdges(Mat &inputImg,
     
     // Get edge coordinates that are shared between src and neighbor
     
-    vector<pair<int32_t,int32_t> > edgeCoords1;
-    vector<pair<int32_t,int32_t> > edgeCoords2;
+    vector<Coord> edgeCoords1;
+    vector<Coord> edgeCoords2;
     
     Superpixel::filterEdgeCoords(srcSpPtr, edgeCoords1, neighborSpPtr, edgeCoords2);
     
@@ -321,7 +321,7 @@ MergeSuperpixelImage::compareNeighborEdges(Mat &inputImg,
     
     for (int i = 0; i < numCoordsToCompare; i++) {
       // FIXME: this is doing a costly pair copy, use iterator instead, same as below.
-      pair<int32_t, int32_t> srcCoord = edgeCoords1[i];
+      Coord srcCoord = edgeCoords1[i];
       Vec3b srcVec = srcEdgeMat.at<Vec3b>(0, i);
       
       // Determine which is the dst coordinates is the closest to this src coord via a distance measure.
@@ -336,15 +336,15 @@ MergeSuperpixelImage::compareNeighborEdges(Mat &inputImg,
           continue;
         }
         
-        pair<int32_t, int32_t> neighborCoord = edgeCoords2[j];
+        Coord neighborCoord = edgeCoords2[j];
         
-        double coordDist = hypot( neighborCoord.first - srcCoord.first, neighborCoord.second - srcCoord.second );
+        double coordDist = hypot( neighborCoord.x - srcCoord.x, neighborCoord.y - srcCoord.y );
         
         if (debug) {
           char buffer[1024];
           snprintf(buffer, sizeof(buffer), "coord dist from (%5d, %5d) to (%5d, %5d) is %12.4f",
-                   srcCoord.first, srcCoord.second,
-                   neighborCoord.first, neighborCoord.second,
+                   srcCoord.x, srcCoord.y,
+                   neighborCoord.x, neighborCoord.y,
                    coordDist);
           cout << (char*)buffer << endl;
         }
@@ -359,8 +359,8 @@ MergeSuperpixelImage::compareNeighborEdges(Mat &inputImg,
       if (debug) {
         char buffer[1024];
         snprintf(buffer, sizeof(buffer), "closest to (%5d, %5d) found as (%5d, %5d) dist is %0.4f",
-                 srcCoord.first, srcCoord.second,
-                 edgeCoords2[minCoordOffset].first, edgeCoords2[minCoordOffset].second, minCoordDist);
+                 srcCoord.x, srcCoord.y,
+                 edgeCoords2[minCoordOffset].x, edgeCoords2[minCoordOffset].y, minCoordDist);
         cout << (char*)buffer << endl;
       }
       
@@ -2436,7 +2436,7 @@ int MergeSuperpixelImage::mergeBackprojectSmallestSuperpixels(Mat &inputImg, int
       
       Superpixel *spPtr = getSuperpixelPtr(tag);
       
-      vector<pair<int32_t,int32_t> > &coords = spPtr->coords;
+      auto &coords = spPtr->coords;
       
       int numCoords = (int) coords.size();
       
@@ -2684,7 +2684,7 @@ int MergeSuperpixelImage::fillMergeBackprojectSuperpixels(Mat &inputImg, int col
       
       Superpixel *spPtr = getSuperpixelPtr(tag);
       
-      vector<pair<int32_t,int32_t> > &coords = spPtr->coords;
+      auto &coords = spPtr->coords;
       
       int numCoords = (int) coords.size();
       
@@ -3238,7 +3238,7 @@ int MergeSuperpixelImage::mergeEdgySuperpixels(Mat &inputImg, int colorspace, in
     
     // Collect all coordinates identified as edge pixels from all the neighbors.
     
-    vector<pair<int32_t,int32_t>> edgeCoordsVec;
+    vector<Coord> edgeCoordsVec;
     
     if (debug) {
       char buffer[1024];
@@ -3254,13 +3254,13 @@ int MergeSuperpixelImage::mergeEdgySuperpixels(Mat &inputImg, int colorspace, in
       
       // Gen edge pixels
       
-      vector<pair<int32_t,int32_t> > edgeCoordsSrc;
-      vector<pair<int32_t,int32_t> > edgeCoordsDst;
+      vector<Coord> edgeCoordsSrc;
+      vector<Coord> edgeCoordsDst;
       
       Superpixel::filterEdgeCoords(spPtr, edgeCoordsSrc, neighborPtr, edgeCoordsDst);
       
-      for (vector<pair<int32_t,int32_t> >::iterator coordsIter = edgeCoordsSrc.begin(); coordsIter != edgeCoordsSrc.end(); ++coordsIter) {
-        pair<int32_t,int32_t> coord = *coordsIter;
+      for (auto coordsIter = edgeCoordsSrc.begin(); coordsIter != edgeCoordsSrc.end(); ++coordsIter) {
+        Coord coord = *coordsIter;
         edgeCoordsVec.push_back(coord);
       }
       
@@ -3288,9 +3288,8 @@ int MergeSuperpixelImage::mergeEdgySuperpixels(Mat &inputImg, int colorspace, in
     
     // Dedup list of coords
     
-    vector<pair<int32_t, int32_t> >::iterator searchIter;
     sort(edgeCoordsVec.begin(), edgeCoordsVec.end());
-    searchIter = unique(edgeCoordsVec.begin(), edgeCoordsVec.end());
+    auto searchIter = unique(edgeCoordsVec.begin(), edgeCoordsVec.end());
     edgeCoordsVec.erase(searchIter, edgeCoordsVec.end());
     
     float per = ((int)edgeCoordsVec.size()) / ((float) numSrcCoords);
@@ -3824,8 +3823,6 @@ void MergeSuperpixelImage::rescanLargestSuperpixels(Mat &inputImg, Mat &outputIm
     
     Mat backProjectInputFlatMat(1, numNonZero, CV_8UC(3));
     Mat backProjectOutputFlatMat(1, numNonZero, CV_8UC(1));
-    
-    vector <pair<int32_t, int32_t>> coords;
     
     int offset = 0;
     
@@ -4396,12 +4393,12 @@ void writeSuperpixelMergeMask(SuperpixelImage &spImage, Mat &resultImg, vector<i
     Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
     assert(spPtr);
     
-    vector<pair<int32_t,int32_t> > &coords = spPtr->coords;
+    auto &coords = spPtr->coords;
     
-    for (vector<pair<int32_t,int32_t> >::iterator coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter) {
-      pair<int32_t,int32_t> coord = *coordsIter;
-      int32_t X = coord.first;
-      int32_t Y = coord.second;
+    for (auto coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter) {
+      Coord coord = *coordsIter;
+      int32_t X = coord.x;
+      int32_t Y = coord.y;
       
       uint32_t pixel = 0xFFFF0000;
       
@@ -4424,12 +4421,12 @@ void writeSuperpixelMergeMask(SuperpixelImage &spImage, Mat &resultImg, vector<i
     Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
     assert(spPtr);
     
-    vector<pair<int32_t,int32_t> > &coords = spPtr->coords;
+    auto &coords = spPtr->coords;
     
-    for (vector<pair<int32_t,int32_t> >::iterator coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter) {
-      pair<int32_t,int32_t> coord = *coordsIter;
-      int32_t X = coord.first;
-      int32_t Y = coord.second;
+    for (auto coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter) {
+      Coord coord = *coordsIter;
+      int32_t X = coord.x;
+      int32_t Y = coord.y;
       
       uint32_t pixel;
       

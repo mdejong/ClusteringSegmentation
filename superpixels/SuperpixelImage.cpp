@@ -149,9 +149,9 @@ bool SuperpixelImage::parse(Mat &tags, SuperpixelImage &spImage) {
       
       cout << "superpixel UID = " << tag << " contains " << spPtr->coords.size() << " coords" << endl;
       
-      for (vector<pair<int32_t,int32_t> >::iterator coordsIt = spPtr->coords.begin(); coordsIt != spPtr->coords.end(); ++coordsIt) {
-        int32_t X = coordsIt->first;
-        int32_t Y = coordsIt->second;
+      for (auto coordsIt = spPtr->coords.begin(); coordsIt != spPtr->coords.end(); ++coordsIt) {
+        int32_t X = coordsIt->x;
+        int32_t Y = coordsIt->y;
         cout << "X,Y" << " " << X << "," << Y << endl;
       }
     }
@@ -390,7 +390,7 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
     cout << "will merge " << srcPtr->coords.size() << " coords from smaller into larger superpixel" << endl;
   }
 
-  for (vector <pair<int32_t,int32_t> >::iterator it = srcPtr->coords.begin(); it != srcPtr->coords.end(); ++it) {
+  for (auto it = srcPtr->coords.begin(); it != srcPtr->coords.end(); ++it) {
     dstPtr->coords.push_back(*it);
   }
   
@@ -1187,7 +1187,7 @@ bool SuperpixelImage::isAllSamePixels(Mat &input, int32_t tag) {
   
   Superpixel *spPtr = getSuperpixelPtr(tag);
   
-  vector<pair<int32_t,int32_t> > &coords = spPtr->coords;
+  auto &coords = spPtr->coords;
   
   if (debug) {
     int numCoords = (int) coords.size();
@@ -1195,9 +1195,9 @@ bool SuperpixelImage::isAllSamePixels(Mat &input, int32_t tag) {
     cout << "checking for superpixel all same pixels for " << tag << " with coords N=" << numCoords << endl;
   }
   
-  pair<int32_t,int32_t> coord = spPtr->coords[0];
-  int32_t X = coord.first;
-  int32_t Y = coord.second;
+  Coord coord = coords[0];
+  int32_t X = coord.x;
+  int32_t Y = coord.y;
   Vec3b pixelVec = input.at<Vec3b>(Y, X);
   uint32_t knownFirstPixel = (uint32_t) (Vec3BToUID(pixelVec) & 0x00FFFFFF);
   
@@ -1219,9 +1219,9 @@ bool SuperpixelImage::isAllSamePixels(Mat &input, Superpixel *spPtr, int32_t oth
 
   // Get pixel value from first coord in first superpixel
   
-  pair<int32_t,int32_t> coord = spPtr->coords[0];
-  int32_t X = coord.first;
-  int32_t Y = coord.second;
+  Coord coord = spPtr->coords[0];
+  int32_t X = coord.x;
+  int32_t Y = coord.y;
   Vec3b pixelVec = input.at<Vec3b>(Y, X);
   uint32_t knownFirstPixel = (uint32_t) (Vec3BToUID(pixelVec) & 0x00FFFFFF);
   
@@ -1242,7 +1242,7 @@ bool SuperpixelImage::isAllSamePixels(Mat &input, Superpixel *spPtr, int32_t oth
 // critically important when a very large number of oversegmented superpixel were
 // parsed from the original image.
 
-bool SuperpixelImage::isAllSamePixels(Mat &input, uint32_t knownFirstPixel, vector<pair<int32_t,int32_t> > &coords) {
+bool SuperpixelImage::isAllSamePixels(Mat &input, uint32_t knownFirstPixel, vector<Coord> &coords) {
   const bool debug = false;
   
   int numCoords = (int) coords.size();
@@ -1257,10 +1257,10 @@ bool SuperpixelImage::isAllSamePixels(Mat &input, uint32_t knownFirstPixel, vect
   
   // FIXME: 32BPP support
   
-  for (vector<pair<int32_t,int32_t> >::iterator it = coords.begin(); it != coords.end(); ++it) {
-    pair<int32_t,int32_t> coord = *it;
-    int32_t X = coord.first;
-    int32_t Y = coord.second;
+  for (auto it = coords.begin(); it != coords.end(); ++it) {
+    Coord coord = *it;
+    int32_t X = coord.x;
+    int32_t Y = coord.y;
     
     Vec3b pixelVec = input.at<Vec3b>(Y, X);
     uint32_t pixel = (uint32_t) (Vec3BToUID(pixelVec) & 0x00FFFFFF);
@@ -1341,12 +1341,12 @@ void writeTagsWithStaticColortable(SuperpixelImage &spImage, Mat &resultImg)
     Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
     assert(spPtr);
     
-    vector<pair<int32_t,int32_t> > &coords = spPtr->coords;
+    auto &coords = spPtr->coords;
     
-    for (vector<pair<int32_t,int32_t> >::iterator coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter) {
-      pair<int32_t,int32_t> coord = *coordsIter;
-      int32_t X = coord.first;
-      int32_t Y = coord.second;
+    for (auto coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter) {
+      Coord coord = *coordsIter;
+      int32_t X = coord.x;
+      int32_t Y = coord.y;
       
       uint32_t offset = staticTagToOffsetTable[tag];
       uint32_t pixel = staticColortable[offset];
@@ -1370,12 +1370,12 @@ void writeTagsWithDymanicColortable(SuperpixelImage &spImage, Mat &resultImg, un
     Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
     assert(spPtr);
     
-    vector<pair<int32_t,int32_t> > &coords = spPtr->coords;
+    auto &coords = spPtr->coords;
     
-    for (vector<pair<int32_t,int32_t> >::iterator coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter) {
-      pair<int32_t,int32_t> coord = *coordsIter;
-      int32_t X = coord.first;
-      int32_t Y = coord.second;
+    for (auto coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter) {
+      Coord coord = *coordsIter;
+      int32_t X = coord.x;
+      int32_t Y = coord.y;
       
       assert(map.count(tag) > 0);
       uint32_t pixel = (uint32_t) map[tag];
@@ -1417,12 +1417,12 @@ void writeTagsWithGraytable(SuperpixelImage &spImage, Mat &origImg, Mat &resultI
     
     //cout << "N = " << (int)spPtr->coords.size() << endl;
     
-    vector<pair<int32_t,int32_t> > &coords = spPtr->coords;
+    auto &coords = spPtr->coords;
     
-    for (vector<pair<int32_t,int32_t> >::iterator coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter) {
-      pair<int32_t,int32_t> coord = *coordsIter;
-      int32_t X = coord.first;
-      int32_t Y = coord.second;
+    for (auto coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter) {
+      Coord coord = *coordsIter;
+      int32_t X = coord.x;
+      int32_t Y = coord.y;
       
       resultImg.at<uint8_t>(Y, X) = gray;
     }
@@ -1459,12 +1459,12 @@ void writeTagsWithMinColortable(SuperpixelImage &spImage, Mat &origImg, Mat &res
     
     //cout << "N[" << gray << "] = " << (int)spPtr->coords.size() << endl;
     
-    vector<pair<int32_t,int32_t> > &coords = spPtr->coords;
+    auto &coords = spPtr->coords;
     
-    for (vector<pair<int32_t,int32_t> >::iterator coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter) {
-      pair<int32_t,int32_t> coord = *coordsIter;
-      int32_t X = coord.first;
-      int32_t Y = coord.second;
+    for (auto coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter) {
+      Coord coord = *coordsIter;
+      int32_t X = coord.x;
+      int32_t Y = coord.y;
       
       uint8_t B = gray & 0xFF;
       uint8_t G = (gray >> 8) & 0xFF;

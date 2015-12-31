@@ -48,13 +48,12 @@ Superpixel::~Superpixel()
 
 void Superpixel::appendCoord(int x, int y)
 {
+#if defined(DEBUG)
   assert(x >= 0);
   assert(y >= 0);
+#endif // DEBUG
   
-  pair<int32_t,int32_t> coord(x, y);
-  
-  // append to vector
-  
+  Coord coord(x, y);
   coords.push_back(coord);
 }
 
@@ -66,7 +65,7 @@ void Superpixel::appendCoord(int x, int y)
 void Superpixel::fillMatrixFromCoords(Mat &input, int32_t tag, Mat &output) {
   const bool debug = false;
   
-  vector<pair<int32_t,int32_t> > &coords = this->coords;
+  auto &coords = this->coords;
   
   if (debug) {
     int numCoords = (int) coords.size();
@@ -76,7 +75,7 @@ void Superpixel::fillMatrixFromCoords(Mat &input, int32_t tag, Mat &output) {
   fillMatrixFromCoords(input, coords, output);
 }
 
-void Superpixel::fillMatrixFromCoords(Mat &input, vector<pair<int32_t,int32_t> > &coords, Mat &output) {
+void Superpixel::fillMatrixFromCoords(Mat &input, vector<Coord> &coords, Mat &output) {
   const bool debug = false;
   
   int numCoords = (int) coords.size();
@@ -87,11 +86,10 @@ void Superpixel::fillMatrixFromCoords(Mat &input, vector<pair<int32_t,int32_t> >
   
   int i = 0;
   
-  for (vector<pair<int32_t,int32_t> >::iterator coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter, i++) {
-    pair<int32_t,int32_t> coord = *coordsIter;
-
-    int32_t X = coord.first;
-    int32_t Y = coord.second;
+  for (auto coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter, i++) {
+    Coord coord = *coordsIter;
+    int32_t X = coord.x;
+    int32_t Y = coord.y;
     
     Vec3b pixelVec = input.at<Vec3b>(Y, X);
     output.at<Vec3b>(0, i) = pixelVec;
@@ -122,7 +120,7 @@ void Superpixel::fillMatrixFromCoords(Mat &input, vector<pair<int32_t,int32_t> >
 void Superpixel::reverseFillMatrixFromCoords(Mat &input, bool isGray, int32_t tag, Mat &output) {
   const bool debug = false;
   
-  vector<pair<int32_t,int32_t> > &coords = this->coords;
+  auto &coords = this->coords;
   
   if (debug) {
     int numCoords = (int) coords.size();
@@ -132,7 +130,7 @@ void Superpixel::reverseFillMatrixFromCoords(Mat &input, bool isGray, int32_t ta
   reverseFillMatrixFromCoords(input, isGray, coords, output);
 }
 
-void Superpixel::reverseFillMatrixFromCoords(Mat &input, bool isGray, vector<pair<int32_t,int32_t> > &coords, Mat &output) {
+void Superpixel::reverseFillMatrixFromCoords(Mat &input, bool isGray, vector<Coord> &coords, Mat &output) {
   const bool debug = false;
   
   int numCoords = (int) coords.size();
@@ -149,10 +147,10 @@ void Superpixel::reverseFillMatrixFromCoords(Mat &input, bool isGray, vector<pai
   
   int i = 0;
   
-  for (vector<pair<int32_t,int32_t> >::iterator coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter, i++) {
-    pair<int32_t,int32_t> coord = *coordsIter;
-    int32_t X = coord.first;
-    int32_t Y = coord.second;
+  for (auto coordsIter = coords.begin(); coordsIter != coords.end(); ++coordsIter, i++) {
+    Coord coord = *coordsIter;
+    int32_t X = coord.x;
+    int32_t Y = coord.y;
     
     Vec3b pixelVec;
     
@@ -195,7 +193,7 @@ Superpixel::bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &he
 }
 
 void
-Superpixel::bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &height, vector<pair<int32_t,int32_t> > &coords)
+Superpixel::bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &height, vector<Coord> &coords)
 {
   const bool debug = false;
   
@@ -204,11 +202,11 @@ Superpixel::bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &he
     
     cout << "entry coords: count " << numCoords << endl;
     
-    for (vector<pair<int32_t,int32_t> >::iterator coordsIter = coords.begin()+1; coordsIter != coords.end(); ++coordsIter) {
-      pair<int32_t,int32_t> coord = *coordsIter;
+    for (auto coordsIter = coords.begin()+1; coordsIter != coords.end(); ++coordsIter) {
+      Coord coord = *coordsIter;
       
       if (debug) {
-        cout << "coord " << coord.first << "," << coord.second << endl;
+        cout << "coord " << coord.x << "," << coord.y << endl;
       }
     }
   }
@@ -220,28 +218,28 @@ Superpixel::bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &he
   
   // Examine first coordinate
   
-  pair<int32_t,int32_t> coord = coords[0];
+  auto &coord = coords[0];
   
-  int32_t minX = coord.first;
-  int32_t minY = coord.second;
+  int32_t minX = coord.x;
+  int32_t minY = coord.y;
   int32_t maxX = minX;
   int32_t maxY = minY;
   
   if (debug) {
-      cout << "first coord " << coord.first << "," << coord.second << endl;
+      cout << "first coord " << coord.x << "," << coord.y << endl;
   }
   
   // Compare to all other coordinates
   
-  for (vector<pair<int32_t,int32_t> >::iterator coordsIter = coords.begin()+1; coordsIter != coords.end(); ++coordsIter) {
-    pair<int32_t,int32_t> coord = *coordsIter;
+  for (auto coordsIter = coords.begin()+1; coordsIter != coords.end(); ++coordsIter) {
+    Coord coord = *coordsIter;
     
     if (debug) {
-      cout << "coord " << coord.first << "," << coord.second << endl;
+      cout << "coord " << coord.x << "," << coord.y << endl;
     }
     
-    int32_t X = coord.first;
-    int32_t Y = coord.second;
+    int32_t X = coord.x;
+    int32_t Y = coord.y;
     
     minX = mini(minX, X);
     minY = mini(minY, Y);
@@ -269,7 +267,7 @@ Superpixel::bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &he
       coord = coords[i];
       
       if (debug) {
-        cout << "coord " << coord.first << "," << coord.second << endl;
+        cout << "coord " << coord.x << "," << coord.y << endl;
       }
     }
   }
@@ -282,9 +280,9 @@ Superpixel::bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &he
 
 void
 Superpixel::filterEdgeCoords(Superpixel *superpixe1Ptr,
-                             vector<pair<int32_t,int32_t> > &edgeCoords1,
+                             vector<Coord> &edgeCoords1,
                              Superpixel *superpixe2Ptr,
-                             vector<pair<int32_t,int32_t> > &edgeCoords2)
+                             vector<Coord> &edgeCoords2)
 {
   const bool debug = false;
   
@@ -361,62 +359,65 @@ Superpixel::filterEdgeCoords(Superpixel *superpixe1Ptr,
   
   // Adjust the coordinates of each set of coords to account for the origin X,Y
   
-  vector<pair<int32_t,int32_t> > adjSmallerSuperpixelCoords;
-  vector<pair<int32_t,int32_t> > adjLargerSuperpixelCoords;
+  vector<Coord> adjSmallerSuperpixelCoords;
+  vector<Coord> adjLargerSuperpixelCoords;
   
-  for (vector<pair<int32_t,int32_t> >::iterator coordsIter = smallerPtr->coords.begin(); coordsIter != smallerPtr->coords.end(); ++coordsIter) {
-    pair<int32_t,int32_t> coord = *coordsIter;
+  for (auto coordsIter = smallerPtr->coords.begin(); coordsIter != smallerPtr->coords.end(); ++coordsIter) {
+    Coord coord = *coordsIter;
     
     if (debug) {
-      cout << "smaller coord " << coord.first << "," << coord.second << endl;
+      cout << "smaller coord " << coord.x << "," << coord.y << endl;
     }
     
-    int32_t adjMinX = coord.first - bothSuperpixelOriginX;
-    int32_t adjMinY = coord.second - bothSuperpixelOriginY;
+    int32_t adjMinX = coord.x - bothSuperpixelOriginX;
+    int32_t adjMinY = coord.y - bothSuperpixelOriginY;
     
-    pair<int32_t,int32_t> adjCoord(adjMinX, adjMinY);
+    assert(adjMinX >= 0);
+    assert(adjMinY >= 0);
+    
+    Coord adjCoord(adjMinX, adjMinY);
     adjSmallerSuperpixelCoords.push_back(adjCoord);
   }
   
   // Adjust coordinates of larger superpixel, this logic must filter out
   // and coordinates outside of the bbox.
 
-  for (vector<pair<int32_t,int32_t> >::iterator coordsIter = largerPtr->coords.begin(); coordsIter != largerPtr->coords.end(); ++coordsIter) {
-    pair<int32_t,int32_t> coord = *coordsIter;
+  for (auto coordsIter = largerPtr->coords.begin(); coordsIter != largerPtr->coords.end(); ++coordsIter) {
+    Coord coord = *coordsIter;
     
     if (debug) {
-      cout << "larger coord " << coord.first << "," << coord.second << endl;
+      cout << "larger coord " << coord.x << "," << coord.y << endl;
     }
     
     bool skip = true;
     
-    if (coord.first < bothSuperpixelOriginX) {
+    if (coord.x < bothSuperpixelOriginX) {
       // Skip
-    } else if (coord.second < bothSuperpixelOriginY) {
+    } else if (coord.y < bothSuperpixelOriginY) {
       // Skip
-    } else if (coord.first >= (bothSuperpixelOriginX + bothSuperpixelWidth)) {
+    } else if (coord.x >= (bothSuperpixelOriginX + bothSuperpixelWidth)) {
       // Skip
-    } else if (coord.second >= (bothSuperpixelOriginY + bothSuperpixelHeight)) {
+    } else if (coord.y >= (bothSuperpixelOriginY + bothSuperpixelHeight)) {
       // Skip
     } else {
       if (debug) {
-        cout << "keep larger superpixel coordinate " << coord.first << "," << coord.second << endl;
+        cout << "keep larger superpixel coordinate " << coord.x << "," << coord.y << endl;
       }
       
       skip = false;
       
-      int32_t adjMinX = coord.first - bothSuperpixelOriginX;
-      int32_t adjMinY = coord.second - bothSuperpixelOriginY;
+      int32_t adjMinX = coord.x - bothSuperpixelOriginX;
+      int32_t adjMinY = coord.y - bothSuperpixelOriginY;
       assert(adjMinX >= 0);
       assert(adjMinY >= 0);
       
-      pair<int32_t,int32_t> adjCoord(adjMinX, adjMinY);
+      Coord adjCoord(adjMinX, adjMinY);
       adjLargerSuperpixelCoords.push_back(adjCoord);
     }
     
     if (debug) {
       if (skip) {
-        cout << "skipped larger superpixel coordinate " << coord.first << "," << coord.second << endl;
+        cout << "skipped larger superpixel coordinate " << coord.x << "," << coord.y << endl;
       }
     }
   }
@@ -481,7 +482,7 @@ Superpixel::filterEdgeCoords(Superpixel *superpixe1Ptr,
       
       // Loop over each neighbor around (X,Y) and lookup tag
       
-      for (vector<pair<int32_t, int32_t>>::iterator pairIter = neighborOffsets.begin() ; pairIter != neighborOffsets.end(); ++pairIter) {
+      for (auto pairIter = neighborOffsets.begin() ; pairIter != neighborOffsets.end(); ++pairIter) {
         int dX = pairIter->first;
         int dY = pairIter->second;
         
@@ -515,7 +516,7 @@ Superpixel::filterEdgeCoords(Superpixel *superpixe1Ptr,
               cout << "found edge coord at center (" << x << "," << y << ") with tag " << centerTag << endl;
             }
             
-            pair<int32_t,int32_t> centerCoord(bothSuperpixelOriginX + x, bothSuperpixelOriginY + y);
+            Coord centerCoord(bothSuperpixelOriginX + x, bothSuperpixelOriginY + y);
             
             if (centerTag == superpixe1Ptr->tag) {
               // Center tag corresponds to edgeCoords1
