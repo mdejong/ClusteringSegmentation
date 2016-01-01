@@ -616,45 +616,6 @@ Superpixel* SuperpixelImage::getSuperpixelPtr(int32_t uid)
   }
 }
 
-// Compare method for CompareNeighborTuple type, in the case of a tie the second column
-// is sorted in terms of decreasing int values.
-
-static
-bool CompareNeighborTupleFunc (CompareNeighborTuple &elem1, CompareNeighborTuple &elem2) {
-  double hcmp1 = get<0>(elem1);
-  double hcmp2 = get<0>(elem2);
-  if (hcmp1 == hcmp2) {
-    int numPixels1 = get<1>(elem1);
-    int numPixels2 = get<1>(elem2);
-    return (numPixels1 > numPixels2);
-  }
-  return (hcmp1 < hcmp2);
-}
-
-// Sort tuple (UNUSED, UID, SIZE) by decreasing SIZE values
-
-static
-bool CompareNeighborTupleSortByDecreasingLargestNumCoordsFunc (CompareNeighborTuple &elem1, CompareNeighborTuple &elem2) {
-  int numPixels1 = get<2>(elem1);
-  int numPixels2 = get<2>(elem2);
-  return (numPixels1 > numPixels2);
-}
-
-// Sort into decreasing order in terms of the float value in the first element of the tuple.
-// In the case of a tie then sort by decreasing superpixel size.
-
-static
-bool CompareNeighborTupleDecreasingFunc (CompareNeighborTuple &elem1, CompareNeighborTuple &elem2) {
-  double hcmp1 = get<0>(elem1);
-  double hcmp2 = get<0>(elem2);
-  if (hcmp1 == hcmp2) {
-    int numPixels1 = get<1>(elem1);
-    int numPixels2 = get<1>(elem2);
-    return (numPixels1 > numPixels2);
-  }
-  return (hcmp1 > hcmp2);
-}
-
 // Scan superpixels looking for the case where all pixels in one superpixel exactly match all
 // the superpixels in a neighbor superpixel. This exact matching situation can happen in flat
 // image areas so removing the duplication can significantly simplify the graph before the

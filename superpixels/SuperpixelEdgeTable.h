@@ -5,7 +5,6 @@
 #ifndef SUPERPIXEL_EDGE_TABLE_H
 #define	SUPERPIXEL_EDGE_TABLE_H
 
-#include <opencv2/opencv.hpp>
 #include <unordered_map>
 
 #include "SuperpixelEdge.h"

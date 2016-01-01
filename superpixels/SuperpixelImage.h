@@ -14,7 +14,6 @@ using namespace cv;
 
 class Superpixel;
 class SuperpixelEdge;
-//class SuperpixelEdgeTable;
 
 #include "Coord.h"
 #include "SuperpixelEdgeTable.h"

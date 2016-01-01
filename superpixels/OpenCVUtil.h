@@ -5,7 +5,6 @@
 
 #include <opencv2/opencv.hpp>
 #include <unordered_map>
-#include "Superpixel.h"
 
 using namespace std;
 using namespace cv;
@@ -44,16 +43,6 @@ Vec3b PixelToVec3b(uint32_t pixel) {
   uint32_t G = (pixel >> 8) & 0xFF;
   uint32_t R = (pixel >> 16) & 0xFF;
   return Vec3b(B, G, R);
-}
-
-// Find bounding box of a superpixel. This is the (X,Y) of the upper right corner and the width and height.
-
-static inline
-cv::Rect Superpixel_opencv_bbox(Superpixel *spPtr)
-{
-  int32_t originX, originY, width, height;
-  spPtr->bbox(originX, originY, width, height);
-  return cv::Rect(originX, originY, width, height);
 }
 
 // Print SSIM for two images to cout

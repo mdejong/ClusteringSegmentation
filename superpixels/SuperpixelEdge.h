@@ -4,12 +4,9 @@
 #ifndef SUPERPIXEL_EDGE_H
 #define	SUPERPIXEL_EDGE_H
 
-#include <opencv2/opencv.hpp>
-
 class Superpixel;
 
 using namespace std;
-using namespace cv;
 
 class SuperpixelEdge {
   

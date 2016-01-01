@@ -4,11 +4,12 @@
 #ifndef SUPERPIXEL_H
 #define	SUPERPIXEL_H
 
+#include "OpenCVUtil.h"
 #include "Coord.h"
 #include "SuperpixelEdge.h"
 
 using namespace std;
-//using namespace cv;
+using namespace cv;
 
 #include <unordered_map>
 
@@ -102,5 +103,15 @@ class Superpixel {
   
   bool shouldMergeEdge(float edgeWeight);
 };
+
+// Find bounding box of a superpixel. This is the (X,Y) of the upper right corner and the width and height.
+
+static inline
+cv::Rect Superpixel_opencv_bbox(Superpixel *spPtr)
+{
+  int32_t originX, originY, width, height;
+  spPtr->bbox(originX, originY, width, height);
+  return cv::Rect(originX, originY, width, height);
+}
 
 #endif // SUPERPIXEL_H
