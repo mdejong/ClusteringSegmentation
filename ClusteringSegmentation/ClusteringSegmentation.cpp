@@ -48,6 +48,8 @@ int main(int argc, const char** argv) {
     inputImgFilename = argv[1];
     outputTagsImgFilename = argv[2];
   }
+
+  cout << "read \"" << inputImgFilename << "\"" << endl;
   
   Mat inputImg = imread(inputImgFilename, CV_LOAD_IMAGE_COLOR);
   if( inputImg.empty() ) {

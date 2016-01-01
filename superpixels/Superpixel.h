@@ -19,6 +19,11 @@ using namespace cv;
 
 #define ENABLE_SUPERPIXEL_ASSOC_DATA
 
+typedef enum {
+  SuperpixelFlagsNotAllSame = (1 << 0),
+  SuperpixelFlagsAllSame = (1 << 1),
+} SuperpixelFlags;
+
 class Superpixel {
   
   public:
@@ -39,7 +44,26 @@ class Superpixel {
   // as hard edges. These values could chang
   
   vector<float> unmergedEdgeWeights;
+  
+  // Flags that apply to all pixels in the superpixel grouping, 0 when no flags set.
+  uint32_t flags;
+  
+  void setAllSame() {
+    this->flags = SuperpixelFlagsAllSame;
+  }
+  
+  bool isAllSame() {
+    return (this->flags == SuperpixelFlagsAllSame);
+  }
+  
+  void setNotAllSame() {
+    this->flags = SuperpixelFlagsNotAllSame;
+  }
 
+  bool isNotAllSame() {
+    return (this->flags == SuperpixelFlagsNotAllSame);
+  }
+  
 #if defined(ENABLE_SUPERPIXEL_ASSOC_DATA)
   
   // A user of this Superpixel class may have specific data that should be

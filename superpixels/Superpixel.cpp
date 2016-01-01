@@ -10,7 +10,7 @@
 #include "OpenCVUtil.h"
 
 Superpixel::Superpixel()
-:tag(0), assocDataPtr(NULL)
+:tag(0), assocDataPtr(NULL), flags(0)
 {
   ;
 }
@@ -19,6 +19,7 @@ Superpixel::Superpixel(int32_t tag)
 {
   this->tag = tag;
   this->assocDataPtr = NULL;
+  this->flags = 0;
 }
 
 Superpixel::~Superpixel()

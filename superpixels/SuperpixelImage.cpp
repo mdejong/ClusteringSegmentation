@@ -636,8 +636,15 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
   for (vector<int32_t>::iterator it = superpixels.begin(); it != superpixels.end(); ++it) {
     int32_t tag = *it;
     
-    if (isAllSamePixels(inputImg, tag)) {
+    bool isAllSame = isAllSamePixels(inputImg, tag);
+    
+    Superpixel *spPtr = getSuperpixelPtr(tag);
+    
+    if (isAllSame) {
+      spPtr->setAllSame();
       identicalSuperpixels.push_back(tag);
+    } else {
+      spPtr->setNotAllSame();
     }
   }
   
@@ -1177,7 +1184,12 @@ bool SuperpixelImage::isAllSamePixels(Mat &input, Superpixel *spPtr, int32_t oth
     // just return false for the all same test.
     return false;
   }
-
+  
+  // The current superpixel is assumed to contain all the same pixels
+#if defined(DEBUG)
+  assert(spPtr->isAllSame() == true);
+#endif // DEBUG
+  
   // Get pixel value from first coord in first superpixel
   
   Coord coord = spPtr->coords[0];
@@ -1185,6 +1197,26 @@ bool SuperpixelImage::isAllSamePixels(Mat &input, Superpixel *spPtr, int32_t oth
   int32_t Y = coord.y;
   Vec3b pixelVec = input.at<Vec3b>(Y, X);
   uint32_t knownFirstPixel = (uint32_t) (Vec3BToUID(pixelVec) & 0x00FFFFFF);
+  
+  // Special case when otherSpPtr is known to contain pixels that are all
+  // exactly the same. In this case, one need only check knownFirstPixel
+  // against the first value in otherSpPtr->coords.
+  
+  if (otherSpPtr->isAllSame()) {
+    Coord coord = otherSpPtr->coords[0];
+    int32_t X = coord.x;
+    int32_t Y = coord.y;
+    
+    Vec3b pixelVec = input.at<Vec3b>(Y, X);
+    uint32_t otherPixel = (uint32_t) (Vec3BToUID(pixelVec) & 0x00FFFFFF);
+    
+    if (knownFirstPixel == otherPixel) {
+      return true;
+    }
+  } else if (otherSpPtr->isNotAllSame()) {
+    // Shortcut when pixels in other superpixel are known to not be all the same
+    return false;
+  }
   
   // Compare first value to all other values in the other superpixel.
   // Performance is critically important here so this code takes care
