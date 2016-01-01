@@ -34,13 +34,20 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg);
 //void writeTagsWithMinColortable(SuperpixelImage &spImage, Mat &origImg, Mat &resultImg);
 
 int main(int argc, const char** argv) {
-  if (argc != 3) {
-    cerr << "usage : " << argv[0] << " IMAGE TAGS_IMAGE" << endl;
+  const char *inputImgFilename = NULL;
+  const char *outputTagsImgFilename = NULL;
+
+  if (argc == 2) {
+    inputImgFilename = argv[1];
+    // Default to "outtags.png"
+    outputTagsImgFilename = "outtags.png";
+  } else if (argc != 3) {
+    cerr << "usage : " << argv[0] << " IMAGE ?TAGS_IMAGE?" << endl;
     exit(1);
+  } else if (argc == 3) {
+    inputImgFilename = argv[1];
+    outputTagsImgFilename = argv[2];
   }
-  
-  const char *inputImgFilename = argv[1];
-  const char *outputTagsImgFilename = argv[2];
   
   Mat inputImg = imread(inputImgFilename, CV_LOAD_IMAGE_COLOR);
   if( inputImg.empty() ) {
