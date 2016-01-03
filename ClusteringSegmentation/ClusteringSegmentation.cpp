@@ -146,6 +146,16 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
   
   spImage.mergeIdenticalSuperpixels(inputImg);
   
+  if ((
+#if defined(DEBUG)
+       1
+#else
+       0
+#endif // DEBUG
+       )) {
+    spImage.sortSuperpixelsBySize();
+  }
+  
   if (debugWriteIntermediateFiles) {
     writeTagsWithStaticColortable(spImage, resultImg);
     imwrite("tags_after_identical_merge.png", resultImg);

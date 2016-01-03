@@ -635,6 +635,7 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
   // merge.
   
   vector<int32_t> identicalSuperpixels;
+  identicalSuperpixels.reserve(4096);
   
   for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
     int32_t tag = *it;
@@ -655,7 +656,7 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
     cout << "found " << identicalSuperpixels.size() << " superpixels with all identical pixel values" << endl;
   }
   
-  for (auto it = identicalSuperpixels.begin(); it != identicalSuperpixels.end(); ++it ) {
+  for (auto it = identicalSuperpixels.begin(); it != identicalSuperpixels.end(); ) {
     int32_t tag = *it;
     
     if (getSuperpixelPtr(tag) == NULL) {
@@ -666,6 +667,7 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
         cout << "identical superpixel " << tag << " was merged away already" << endl;
       }
       
+      ++it;
       continue;
     }
     
@@ -690,12 +692,20 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
     Superpixel *spPtr = getSuperpixelPtr(tag);
     assert(spPtr);
     
+    bool mergedNeighbor = false;
+    
     for (auto neighborIter = neighbors.begin(); neighborIter != neighbors.end(); ++neighborIter) {
       int32_t neighborTag = *neighborIter;
+      
+      bool isAllSame = isAllSamePixels(inputImg, spPtr, neighborTag);
+      
+      if (debug) {
+        cout << "neighbor " << neighborTag << " isAllSamePixels() -> " << isAllSame << endl;
+      }
     
-      if (isAllSamePixels(inputImg, spPtr, neighborTag)) {
+      if (isAllSame) {
         if (debug) {
-          cout << "found identical superpixels " << tag << " and " << neighborTag << endl;
+          cout << "found identical superpixels " << tag << " and " << neighborTag << " (merging)" << endl;
         }
         
         SuperpixelEdge edge(tag, neighborTag);
@@ -710,10 +720,25 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
           }
           
           break;
+        } else {
+          // Successfully merged neighbor into this superpixel
+          mergedNeighbor = true;
         }
       }
+    } // end foreach neighbors loop
+
+    if (mergedNeighbor) {
+      if (debug) {
+        cout << "repeating merge loop for superpixel " << tag << " since identical neighbor was merged" << endl;
+      }
+    } else {
+      if (debug) {
+        cout << "advance iterator from superpixel " << tag << " since no neighbor was merged" << endl;
+      }
+      
+      ++it;
     }
-  }
+  } // end for identicalSuperpixels loop
   
   return;
 }
@@ -740,15 +765,40 @@ void SuperpixelImage::sortSuperpixelsBySize()
   assert(sortedSuperpixels.size() == superpixels.size());
   
   int i = 0;
-  for (auto it = sortedSuperpixels.begin(); it != sortedSuperpixels.end(); ++it, i++) {
+  
+  auto spIter = superpixels.begin();
+  
+  for (auto it = sortedSuperpixels.begin(); it != sortedSuperpixels.end(); ++it, ++spIter, i++) {
     SuperpixelSortStruct ss = *it;
     int32_t tag = ss.spPtr->tag;
-    superpixels[i] = tag;
+
+#if defined(DEBUG)
+    assert(spIter != superpixels.end());
+#endif // DEBUG
+    
+    *spIter = tag;
     
     if (debug) {
-      cout << "sorted superpixel " << i << " has tag " << tag << " with N = " << ss.spPtr->coords.size() << endl;
+      cout << "sorted superpixel at offset " << i << " now has tag " << (*spIter) << " with N = " << ss.spPtr->coords.size() << endl;
     }
   }
+  
+#if defined(DEBUG)
+  // Loop over sorted pixels and verify that sizes decrease as list is iterated
+  int prevSize = 0;
+  
+  for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
+    int32_t tag = *it;
+    Superpixel *spPtr = getSuperpixelPtr(tag);
+    int currentSize = (int) spPtr->coords.size();
+    // Ignore first element
+    if (prevSize != 0) {
+      assert(currentSize <= prevSize);
+    }
+    assert(currentSize > 0);
+    prevSize = currentSize;
+  }
+#endif // DEBUG
   
   return;
 }
