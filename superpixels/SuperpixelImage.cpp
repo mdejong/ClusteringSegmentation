@@ -127,14 +127,17 @@ bool SuperpixelImage::parse(Mat &tags, SuperpixelImage &spImage) {
   // Collect all superpixels as a single vector sorted by increasing UID values
   
   vector<int32_t> &superpixels = spImage.superpixels;
+  superpixels.reserve(tagToSuperpixelMap.size());
   
   for (TagToSuperpixelMap::iterator it = tagToSuperpixelMap.begin(); it!=tagToSuperpixelMap.end(); ++it) {
-    //int32_t tag = it->first;
     Superpixel *spPtr = it->second;
-    superpixels.push_back(spPtr->tag);
+    int32_t tag = spPtr->tag;
+    superpixels.push_back(tag);
   }
 
-  sort (superpixels.begin(), superpixels.end());
+  assert(superpixels.size() == tagToSuperpixelMap.size());
+  
+  sort(superpixels.begin(), superpixels.end());
   
   // Print superpixel info
   
