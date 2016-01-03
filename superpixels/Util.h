@@ -60,10 +60,12 @@ static inline
 void
 append_to_vector(vector<T> &dst, typename vector<T>::iterator iterBegin, typename vector<T>::iterator iterEnd)
 {
-  for (typename vector<T>::iterator it = iterBegin; it != iterEnd; ++it ) {
-    T val = *it;
-    dst.push_back(val);
-  }
+//  for (typename vector<T>::iterator it = iterBegin; it != iterEnd; ++it ) {
+//    T val = *it;
+//    dst.push_back(val);
+//  }
+  
+  dst.insert(dst.end(), iterBegin, iterEnd);
 }
 
 // This template util function will copy all the elements from src into dst.

@@ -408,10 +408,7 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
     cout << "will merge " << srcPtr->coords.size() << " coords from smaller into larger superpixel" << endl;
   }
 
-  for (auto it = srcPtr->coords.begin(); it != srcPtr->coords.end(); ++it) {
-    dstPtr->coords.push_back(*it);
-  }
-  
+  append_to_vector(dstPtr->coords, srcPtr->coords);
   srcPtr->coords.resize(0);
   
   // This logic assumes that the superpixels list is in increasing int order since the
@@ -463,7 +460,7 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
         cout << "superpixel UID = " << tag << " found as delete match in ordered superpixels list" << endl;
       }
       
-      it = superpixels.erase(it);
+      superpixels.erase(it);
       found = true;
     }
   }
