@@ -62,6 +62,21 @@ bool CompareSuperpixelSizeDecreasingFunc (SuperpixelSortStruct &s1, SuperpixelSo
   }
 }
 
+template <class ForwardIterator, class T>
+ForwardIterator binary_search_iter (ForwardIterator first, ForwardIterator last, const T& val)
+{
+  first = std::lower_bound(first,last,val);
+  if (first != last) {
+    if (val < *first) {
+      return last;
+    } else {
+      return first;
+    }
+  } else {
+    return last;
+  }
+}
+
 bool SuperpixelImage::parse(Mat &tags, SuperpixelImage &spImage) {
   const bool debug = false;
   
@@ -399,21 +414,57 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
   
   srcPtr->coords.resize(0);
   
+  // This logic assumes that the superpixels list is in increasing int order since the
+  // parse logic explicitly sorts the generated tags. As superpixels are merged the
+  // coords can be consumed by a previous superpixel, but the list should remain ordered
+  // in int increasing order so that a binary search can be implemented.
+  
+#if defined(DEBUG)
+  {
+    int32_t prevTag = 0;
+    
+    for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
+      int32_t tag = *it;
+      assert(tag > prevTag);
+      prevTag = tag;
+    }
+  }
+#endif // DEBUG
+  
   // Find entry for srcPtr->tags in superpixels and remove the UID
   
   bool found = false;
   
-  for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
-    int32_t tag = *it;
+  if ((false)) {
+    for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
+      int32_t tag = *it;
+      
+      if (srcPtr->tag == tag) {
+        if (debug) {
+          cout << "superpixel UID = " << tag << " found as delete match in ordered superpixels list" << endl;
+        }
+        
+        it = superpixels.erase(it);
+        found = true;
+        break;
+      }
+    }
+  } else {
+    // Binary search for iterator into sorted array
     
-    if (srcPtr->tag == tag) {
+    int32_t tag = srcPtr->tag;
+    auto it = binary_search_iter(superpixels.begin(), superpixels.end(), tag);
+    
+    if (it != superpixels.end()) {
+#if defined(DEBUG)
+      assert(*it == tag);
+#endif // DEBUG
       if (debug) {
         cout << "superpixel UID = " << tag << " found as delete match in ordered superpixels list" << endl;
       }
       
       it = superpixels.erase(it);
       found = true;
-      break;
     }
   }
   
