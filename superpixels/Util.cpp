@@ -20,7 +20,7 @@ void sample_mean(vector<float> &values, float *meanPtr) {
   }
   
   float sum = 0.0f;
-  for (vector<float>::iterator it = values.begin(); it != values.end(); ++it) {
+  for (auto it = values.begin(); it != values.end(); ++it) {
     float val = *it;
     sum += val;
   }
@@ -41,7 +41,7 @@ void sample_mean_delta_squared_div(vector<float> &values, float mean, float *std
   }
   
   float sum = 0.0f;
-  for (vector<float>::iterator it = values.begin(); it != values.end(); ++it) {
+  for (auto it = values.begin(); it != values.end(); ++it) {
     float value = *it;
     float delta = value - mean;
     sum += (delta * delta);
@@ -63,7 +63,7 @@ float_diffs(vector<float> &values) {
   
   if (debug) {
     cout << "float_diffs() for values" << endl;
-    for (vector<float>::iterator it = values.begin(); it != values.end(); ++it) {
+    for (auto it = values.begin(); it != values.end(); ++it) {
       float value = *it;
       cout << value << endl;
     }
@@ -73,7 +73,7 @@ float_diffs(vector<float> &values) {
   
   vector<float> deltas;
   
-  for (vector<float>::iterator it = values.begin(); it != values.end(); ++it) {
+  for (auto it = values.begin(); it != values.end(); ++it) {
     float value = *it;
     float delta = value - last;
     deltas.push_back(delta);
@@ -82,7 +82,7 @@ float_diffs(vector<float> &values) {
   
   if (debug) {
     cout << "returning deltas" << endl;
-    for (vector<float>::iterator it = deltas.begin(); it != deltas.end(); ++it) {
+    for (auto it = deltas.begin(); it != deltas.end(); ++it) {
       float delta = *it;
       cout << delta << endl;
     }

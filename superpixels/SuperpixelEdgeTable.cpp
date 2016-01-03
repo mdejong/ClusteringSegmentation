@@ -24,7 +24,7 @@ vector<SuperpixelEdge> SuperpixelEdgeTable::getAllEdges()
   
   vector<int32_t> allSuperpixles = getAllTagsInNeighborsTable();
   
-  for (vector<int32_t>::iterator it = allSuperpixles.begin(); it != allSuperpixles.end(); ++it ) {
+  for (auto it = allSuperpixles.begin(); it != allSuperpixles.end(); ++it ) {
     int32_t tag = *it;
     
     vector<int32_t> neighbors = getNeighbors(tag);
@@ -33,7 +33,7 @@ vector<SuperpixelEdge> SuperpixelEdgeTable::getAllEdges()
       cout << "for superpixel " << tag << " neighbors:" << endl;
     }
     
-    for (vector<int32_t>::iterator neighborIter = neighbors.begin(); neighborIter != neighbors.end(); ++neighborIter ) {
+    for (auto neighborIter = neighbors.begin(); neighborIter != neighbors.end(); ++neighborIter ) {
       int32_t neighborTag = *neighborIter;
 
       if (debug) {
@@ -114,8 +114,9 @@ void SuperpixelEdgeTable::removeNeighbors(int32_t tag)
 vector<int32_t> SuperpixelEdgeTable::getAllTagsInNeighborsTable()
 {
   vector<int32_t> vec;
-  for ( unordered_map <int32_t, vector<int32_t> >::iterator it = neighbors.begin(); it != neighbors.end(); ++it ) {
-    vec.push_back(it->first);
+  for ( auto it = neighbors.begin(); it != neighbors.end(); ++it ) {
+    int32_t tag = it->first;
+    vec.push_back(tag);
   }
   sort (vec.begin(), vec.end());
   return vec;

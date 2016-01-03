@@ -102,7 +102,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  auto superpixels = spImage.superpixels;
   XCTAssert(superpixels.size() == 1, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");

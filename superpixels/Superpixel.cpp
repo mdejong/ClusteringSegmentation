@@ -704,7 +704,7 @@ void Superpixel::splitSplayPixels(Mat &inOutTagImg)
           
           // Loop over each neighbor around (X,Y) and lookup tag
           
-          for (vector<pair<int32_t, int32_t>>::iterator pairIter = neighborOffsets.begin() ; pairIter != neighborOffsets.end(); ++pairIter) {
+          for (auto pairIter = neighborOffsets.begin() ; pairIter != neighborOffsets.end(); ++pairIter) {
             int dX = pairIter->first;
             int dY = pairIter->second;
             

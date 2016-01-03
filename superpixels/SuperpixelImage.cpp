@@ -97,7 +97,7 @@ bool SuperpixelImage::parse(Mat &tags, SuperpixelImage &spImage) {
         tags.at<Vec3b>(y, x) = tagVec;
       }
       
-      TagToSuperpixelMap::iterator iter = tagToSuperpixelMap.find(tag);
+      auto iter = tagToSuperpixelMap.find(tag);
       
       if (iter == tagToSuperpixelMap.end()) {
         // A Superpixel has not been created for this UID since no key
@@ -126,10 +126,10 @@ bool SuperpixelImage::parse(Mat &tags, SuperpixelImage &spImage) {
   
   // Collect all superpixels as a single vector sorted by increasing UID values
   
-  vector<int32_t> &superpixels = spImage.superpixels;
+  auto &superpixels = spImage.superpixels;
   superpixels.reserve(tagToSuperpixelMap.size());
   
-  for (TagToSuperpixelMap::iterator it = tagToSuperpixelMap.begin(); it!=tagToSuperpixelMap.end(); ++it) {
+  for (auto it = tagToSuperpixelMap.begin(); it!=tagToSuperpixelMap.end(); ++it) {
     Superpixel *spPtr = it->second;
     int32_t tag = spPtr->tag;
     superpixels.push_back(tag);
@@ -144,7 +144,7 @@ bool SuperpixelImage::parse(Mat &tags, SuperpixelImage &spImage) {
   if (debug) {
     cout << "added " << (tags.rows * tags.cols) << " pixels as " << superpixels.size() << " superpixels" << endl;
     
-    for (vector<int32_t>::iterator it = superpixels.begin(); it != superpixels.end(); ++it) {
+    for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
       int32_t tag = *it;
       
       assert(tagToSuperpixelMap.count(tag) > 0);
@@ -181,7 +181,7 @@ bool SuperpixelImage::parse(Mat &tags, SuperpixelImage &spImage) {
 bool SuperpixelImage::parseSuperpixelEdges(Mat &tags, SuperpixelImage &spImage) {
   const bool debug = false;
   
-  vector<int32_t> &superpixels = spImage.superpixels;
+  auto &superpixels = spImage.superpixels;
   
   //vector<SuperpixelEdge> &edges = spImage.edges;
   
@@ -222,7 +222,7 @@ bool SuperpixelImage::parseSuperpixelEdges(Mat &tags, SuperpixelImage &spImage) 
       cout << "center (" << x << "," << y << ") with tag " << centerTag << endl;
       }
       
-      TagToNeighborMap::iterator iter = tagToNeighborMap.find(centerTag);
+      auto iter = tagToNeighborMap.find(centerTag);
       
       if (iter == tagToNeighborMap.end()) {
         // A Superpixel has not been created for this UID since no key
@@ -244,7 +244,7 @@ bool SuperpixelImage::parseSuperpixelEdges(Mat &tags, SuperpixelImage &spImage) 
 
       // Loop over each neighbor around (X,Y) and lookup tag
       
-      for (vector<pair<int32_t, int32_t>>::iterator pairIter = neighborOffsets.begin() ; pairIter != neighborOffsets.end(); ++pairIter) {
+      for (auto pairIter = neighborOffsets.begin() ; pairIter != neighborOffsets.end(); ++pairIter) {
         int dX = pairIter->first;
         int dY = pairIter->second;
         
@@ -273,7 +273,7 @@ bool SuperpixelImage::parseSuperpixelEdges(Mat &tags, SuperpixelImage &spImage) 
           cout << "checking (" << nX << "," << nY << ") with tag " << foundNeighborUID << " to see if known neighbor" << endl;
           }
           
-          for (vector<int>::iterator it = neighborUIDsVec.begin() ; it != neighborUIDsVec.end(); ++it) {
+          for (auto it = neighborUIDsVec.begin() ; it != neighborUIDsVec.end(); ++it) {
             int32_t knownNeighborUID = *it;
             if (foundNeighborUID == knownNeighborUID) {
               // This collection of neighbors already contains an entry for this neighbor
@@ -295,7 +295,7 @@ bool SuperpixelImage::parseSuperpixelEdges(Mat &tags, SuperpixelImage &spImage) 
       if (debug) {
       cout << "after searching all neighbors of (" << x << "," << y << ") the neighbors array (len " << neighborUIDsVec.size() << ") is:" << endl;
       
-      for (vector<int>::iterator it = neighborUIDsVec.begin() ; it != neighborUIDsVec.end(); ++it) {
+      for (auto it = neighborUIDsVec.begin() ; it != neighborUIDsVec.end(); ++it) {
         int32_t knownNeighborUID = *it;
         cout << knownNeighborUID << endl;
       }
@@ -308,7 +308,7 @@ bool SuperpixelImage::parseSuperpixelEdges(Mat &tags, SuperpixelImage &spImage) 
   // iterating over the superpixels and only creating an edge object when a pair (A, B) is
   // found where A < B.
   
-  for (vector<int32_t>::iterator it = superpixels.begin(); it != superpixels.end(); ++it) {
+  for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
     int32_t tag = *it;
     
     // Foreach superpixel, collect all the connected neighbors and generate edges
@@ -317,7 +317,7 @@ bool SuperpixelImage::parseSuperpixelEdges(Mat &tags, SuperpixelImage &spImage) 
     assert(tagToNeighborMap.count(tag) > 0);
 #endif // DEBUG
     
-    vector<int32_t> &neighborUIDsVec = tagToNeighborMap[tag];
+    auto &neighborUIDsVec = tagToNeighborMap[tag];
 
     if (debug) {
     cout << "superpixel UID = " << tag << " neighbors len = " << neighborUIDsVec.size() << endl;
@@ -403,7 +403,7 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
   
   bool found = false;
   
-  for (vector<int32_t>::iterator it = superpixels.begin(); it != superpixels.end(); ++it) {
+  for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
     int32_t tag = *it;
     
     if (srcPtr->tag == tag) {
@@ -425,7 +425,7 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
   
   found = false;
   
-  for (vector<int32_t>::iterator it = neighborsDst.begin(); it != neighborsDst.end(); ) {
+  for (auto it = neighborsDst.begin(); it != neighborsDst.end(); ) {
     int32_t neighborOfDstTag = *it;
 
     if (debug) {
@@ -460,7 +460,7 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
   
   found = false;
   
-  for (vector<int32_t>::iterator it = neighborsSrc.begin(); it != neighborsSrc.end(); ++it ) {
+  for (auto it = neighborsSrc.begin(); it != neighborsSrc.end(); ++it ) {
     int32_t neighborOfSrcTag = *it;
     
     if (debug) {
@@ -485,7 +485,7 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
       
       found = false;
       
-      for (vector<int32_t>::iterator neighborIter = neighbors.begin(); neighborIter != neighbors.end(); ) {
+      for (auto neighborIter = neighbors.begin(); neighborIter != neighbors.end(); ) {
         int32_t neighborOfSrcTag = *neighborIter;
         
         if (neighborOfSrcTag == srcPtr->tag) {
@@ -506,7 +506,7 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
       if (debug) {
         cout << "neighborsOfSrcNotDstMap size() " << neighborsOfSrcNotDstMap.size() << " for neighbor of src " << neighborOfSrcTag << endl;
         
-        for ( unordered_map <int32_t,int32_t>::iterator it = neighborsOfSrcNotDstMap.begin(); it != neighborsOfSrcNotDstMap.end(); ++it ) {
+        for ( auto it = neighborsOfSrcNotDstMap.begin(); it != neighborsOfSrcNotDstMap.end(); ++it ) {
           cout << "neighborsOfSrcNotDstMap[" << it->first << "]" << endl;
         }
       }
@@ -561,7 +561,7 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
   
   vector<int32_t> *neighborsPtr = edgeTable.getNeighborsPtr(dstPtr->tag);
   
-  for (vector<int32_t>::iterator neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter ) {
+  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter ) {
     int32_t neighborTag = *neighborIter;
     
     // Make sure that each neighbor of the merged superpixel also has the merged superpixel
@@ -574,7 +574,7 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
     
     found = false;
     
-    for (vector<int32_t>::iterator nnIter = neighborsOfNeighborPtr->begin(); nnIter != neighborsOfNeighborPtr->end(); ++nnIter ) {
+    for (auto nnIter = neighborsOfNeighborPtr->begin(); nnIter != neighborsOfNeighborPtr->end(); ++nnIter ) {
       int32_t nnTag = *nnIter;
       if (nnTag == dstPtr->tag) {
         found = true;
@@ -587,7 +587,7 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
   
   // Check that merge src no longer appers in superpixels list
   
-  for (vector<int32_t>::iterator it = superpixels.begin(); it != superpixels.end(); ++it) {
+  for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
     int32_t tag = *it;
     
     if (tagToRemove == tag) {
@@ -636,7 +636,7 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
   
   vector<int32_t> identicalSuperpixels;
   
-  for (vector<int32_t>::iterator it = superpixels.begin(); it != superpixels.end(); ++it) {
+  for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
     int32_t tag = *it;
     
     bool isAllSame = isAllSamePixels(inputImg, tag);
@@ -655,7 +655,7 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
     cout << "found " << identicalSuperpixels.size() << " superpixels with all identical pixel values" << endl;
   }
   
-  for (vector<int32_t>::iterator it = identicalSuperpixels.begin(); it != identicalSuperpixels.end(); ++it ) {
+  for (auto it = identicalSuperpixels.begin(); it != identicalSuperpixels.end(); ++it ) {
     int32_t tag = *it;
     
     if (getSuperpixelPtr(tag) == NULL) {
@@ -679,7 +679,7 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
     if (debug) {
       cout << "found neighbors of known identical superpixel " << tag << endl;
       
-      for (vector<int32_t>::iterator neighborIter = neighbors.begin(); neighborIter != neighbors.end(); ++neighborIter) {
+      for (auto neighborIter = neighbors.begin(); neighborIter != neighbors.end(); ++neighborIter) {
         int32_t neighborTag = *neighborIter;
         cout << "neighbor " << neighborTag << endl;
       }
@@ -690,7 +690,7 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
     Superpixel *spPtr = getSuperpixelPtr(tag);
     assert(spPtr);
     
-    for (vector<int32_t>::iterator neighborIter = neighbors.begin(); neighborIter != neighbors.end(); ++neighborIter) {
+    for (auto neighborIter = neighbors.begin(); neighborIter != neighbors.end(); ++neighborIter) {
       int32_t neighborTag = *neighborIter;
     
       if (isAllSamePixels(inputImg, spPtr, neighborTag)) {
@@ -728,7 +728,7 @@ void SuperpixelImage::sortSuperpixelsBySize()
   vector<SuperpixelSortStruct> sortedSuperpixels;
   sortedSuperpixels.reserve(superpixels.size());
   
-  for (vector<int32_t>::iterator it = superpixels.begin(); it != superpixels.end(); ++it) {
+  for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
     int32_t tag = *it;
     SuperpixelSortStruct ss;
     ss.spPtr = getSuperpixelPtr(tag);
@@ -740,13 +740,13 @@ void SuperpixelImage::sortSuperpixelsBySize()
   assert(sortedSuperpixels.size() == superpixels.size());
   
   int i = 0;
-  for (vector<SuperpixelSortStruct>::iterator it = sortedSuperpixels.begin(); it != sortedSuperpixels.end(); ++it, i++) {
+  for (auto it = sortedSuperpixels.begin(); it != sortedSuperpixels.end(); ++it, i++) {
     SuperpixelSortStruct ss = *it;
     int32_t tag = ss.spPtr->tag;
     superpixels[i] = tag;
     
     if (debug) {
-      cout << "sorted superpixel " << i << " has tag " << superpixels[i] << " with N = " << ss.spPtr->coords.size() << endl;
+      cout << "sorted superpixel " << i << " has tag " << tag << " with N = " << ss.spPtr->coords.size() << endl;
     }
   }
   
@@ -773,7 +773,7 @@ SuperpixelImage::scanLargestSuperpixels(vector<int32_t> &results)
   // First, scan for very small superpixels and treat them as edges automatically so that
   // edge pixels scanning need not consider these small pixels.
   
-  for (vector<int32_t>::iterator it = superpixels.begin(); it != superpixels.end(); ++it) {
+  for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
     int32_t tag = *it;
     Superpixel *spPtr = getSuperpixelPtr(tag);
     assert(spPtr);
@@ -797,7 +797,7 @@ SuperpixelImage::scanLargestSuperpixels(vector<int32_t> &results)
     
     sort(copySizes.begin(), copySizes.end(), greater<float>());
     
-    for (vector<float>::iterator it = copySizes.begin(); it != copySizes.end(); ++it) {
+    for (auto it = copySizes.begin(); it != copySizes.end(); ++it) {
       cout << *it << endl;
     }
   }
@@ -846,7 +846,7 @@ SuperpixelImage::scanLargestSuperpixels(vector<int32_t> &results)
   }
   
   int offset = 0;
-  for (vector<float>::iterator it = superpixelsSizes.begin(); it != superpixelsSizes.end(); ++it, offset++) {
+  for (auto it = superpixelsSizes.begin(); it != superpixelsSizes.end(); ++it, offset++) {
     float numCoords = *it;
     
     if (numCoords <= upperLimit) {
@@ -894,7 +894,7 @@ void SuperpixelImage::rescanLargestSuperpixels(Mat &inputImg, Mat &outputImg, ve
   outputImg.create(inputImg.size(), CV_8UC(3));
   outputImg = (Scalar)0;
 
-  for (vector<int32_t>::iterator it = largeSuperpixels.begin(); it != largeSuperpixels.end(); ++it) {
+  for (auto it = largeSuperpixels.begin(); it != largeSuperpixels.end(); ++it) {
     int32_t tag = *it;
     Superpixel *spPtr = getSuperpixelPtr(tag);
     assert(spPtr);
@@ -1327,7 +1327,7 @@ void generateStaticColortable(Mat &inputImg, SuperpixelImage &spImage)
   
   int32_t offset = 0;
   
-  for (vector<int32_t>::iterator it = spImage.superpixels.begin(); it!=spImage.superpixels.end(); ++it) {
+  for (auto it = spImage.superpixels.begin(); it!=spImage.superpixels.end(); ++it) {
     int32_t tag = *it;
     staticTagToOffsetTable[tag] = offset;
     offset += 1;
@@ -1336,7 +1336,7 @@ void generateStaticColortable(Mat &inputImg, SuperpixelImage &spImage)
 
 void writeTagsWithStaticColortable(SuperpixelImage &spImage, Mat &resultImg)
 {
-  for (vector<int32_t>::iterator it = spImage.superpixels.begin(); it != spImage.superpixels.end(); ++it) {
+  for (auto it = spImage.superpixels.begin(); it != spImage.superpixels.end(); ++it) {
     int32_t tag = *it;
     
     Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
@@ -1365,7 +1365,7 @@ void writeTagsWithStaticColortable(SuperpixelImage &spImage, Mat &resultImg)
 
 void writeTagsWithDymanicColortable(SuperpixelImage &spImage, Mat &resultImg, unordered_map<int32_t,int32_t> map)
 {
-  for (vector<int32_t>::iterator it = spImage.superpixels.begin(); it != spImage.superpixels.end(); ++it) {
+  for (auto it = spImage.superpixels.begin(); it != spImage.superpixels.end(); ++it) {
     int32_t tag = *it;
     
     Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
@@ -1402,7 +1402,7 @@ void writeTagsWithGraytable(SuperpixelImage &spImage, Mat &origImg, Mat &resultI
   
   vector<SuperpixelSortStruct> sortedSuperpixels;
   
-  for (vector<int32_t>::iterator it = spImage.superpixels.begin(); it != spImage.superpixels.end(); ++it) {
+  for (auto it = spImage.superpixels.begin(); it != spImage.superpixels.end(); ++it) {
     int32_t tag = *it;
     SuperpixelSortStruct ss;
     ss.spPtr = spImage.getSuperpixelPtr(tag);
@@ -1411,7 +1411,7 @@ void writeTagsWithGraytable(SuperpixelImage &spImage, Mat &origImg, Mat &resultI
   
   sort(sortedSuperpixels.begin(), sortedSuperpixels.end(), CompareSuperpixelSizeDecreasingFunc);
   
-  for (vector<SuperpixelSortStruct>::iterator it = sortedSuperpixels.begin(); it != sortedSuperpixels.end(); ++it) {
+  for (auto it = sortedSuperpixels.begin(); it != sortedSuperpixels.end(); ++it) {
     SuperpixelSortStruct ss = *it;
     Superpixel *spPtr = ss.spPtr;
     assert(spPtr);
@@ -1444,7 +1444,7 @@ void writeTagsWithMinColortable(SuperpixelImage &spImage, Mat &origImg, Mat &res
   
   vector<SuperpixelSortStruct> sortedSuperpixels;
   
-  for (vector<int32_t>::iterator it = spImage.superpixels.begin(); it != spImage.superpixels.end(); ++it) {
+  for (auto it = spImage.superpixels.begin(); it != spImage.superpixels.end(); ++it) {
     int32_t tag = *it;
     SuperpixelSortStruct ss;
     ss.spPtr = spImage.getSuperpixelPtr(tag);
@@ -1453,7 +1453,7 @@ void writeTagsWithMinColortable(SuperpixelImage &spImage, Mat &origImg, Mat &res
   
   sort(sortedSuperpixels.begin(), sortedSuperpixels.end(), CompareSuperpixelSizeDecreasingFunc);
   
-  for (vector<SuperpixelSortStruct>::iterator it = sortedSuperpixels.begin(); it != sortedSuperpixels.end(); ++it) {
+  for (auto it = sortedSuperpixels.begin(); it != sortedSuperpixels.end(); ++it) {
     SuperpixelSortStruct ss = *it;
     Superpixel *spPtr = ss.spPtr;
     assert(spPtr);

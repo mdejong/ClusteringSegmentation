@@ -118,7 +118,7 @@ MergeSuperpixelImage::compareNeighborSuperpixels(Mat &inputImg,
     results.erase (results.begin(), results.end());
   }
   
-  for (vector<int32_t>::iterator neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
+  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
     // Generate histogram for the neighbor and then compare to neighbor
     
     int32_t neighborTag = *neighborIter;
@@ -168,7 +168,7 @@ MergeSuperpixelImage::compareNeighborSuperpixels(Mat &inputImg,
   if (debug) {
     cout << "unsorted tuples from src superpixel " << tag << endl;
     
-    for (vector<CompareNeighborTuple>::iterator it = results.begin(); it != results.end(); ++it) {
+    for (auto it = results.begin(); it != results.end(); ++it) {
       CompareNeighborTuple tuple = *it;
       char buffer[1024];
       snprintf(buffer, sizeof(buffer), "(%12.4f, %5d, %5d)",
@@ -186,7 +186,7 @@ MergeSuperpixelImage::compareNeighborSuperpixels(Mat &inputImg,
   if (debug || debugShowSorted) {
     cout << "sorted tuples from src superpixel " << tag << endl;
 
-    for (vector<CompareNeighborTuple>::iterator it = results.begin(); it != results.end(); ++it) {
+    for (auto it = results.begin(); it != results.end(); ++it) {
       CompareNeighborTuple tuple = *it;
       char buffer[1024];
       snprintf(buffer, sizeof(buffer), "(%12.4f, %5d, %5d)",
@@ -225,7 +225,7 @@ MergeSuperpixelImage::compareNeighborEdges(Mat &inputImg,
   Superpixel *srcSpPtr = getSuperpixelPtr(tag);
   assert(srcSpPtr);
   
-  for (vector<int32_t>::iterator neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
+  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
     int32_t neighborTag = *neighborIter;
     
     if (lockedTablePtr && (lockedTablePtr->count(neighborTag) != 0)) {
@@ -439,7 +439,7 @@ MergeSuperpixelImage::compareNeighborEdges(Mat &inputImg,
   if (normalize) {
     double maxDist = 0.0;
     
-    for (vector<CompareNeighborTuple>::iterator it = results.begin(); it != results.end(); ++it) {
+    for (auto it = results.begin(); it != results.end(); ++it) {
       CompareNeighborTuple tuple = *it;
       
       double dist = get<0>(tuple);
@@ -470,7 +470,7 @@ MergeSuperpixelImage::compareNeighborEdges(Mat &inputImg,
   if (debug) {
     cout << "unsorted tuples from src superpixel " << tag << endl;
     
-    for (vector<CompareNeighborTuple>::iterator it = results.begin(); it != results.end(); ++it) {
+    for (auto it = results.begin(); it != results.end(); ++it) {
       CompareNeighborTuple tuple = *it;
       
       char buffer[1024];
@@ -488,7 +488,7 @@ MergeSuperpixelImage::compareNeighborEdges(Mat &inputImg,
   if (debug || debugShowSorted) {
     cout << "sorted tuples from src superpixel " << tag << endl;
 
-    for (vector<CompareNeighborTuple>::iterator it = results.begin(); it != results.end(); ++it) {
+    for (auto it = results.begin(); it != results.end(); ++it) {
       CompareNeighborTuple tuple = *it;
       
       char buffer[1024];
@@ -558,7 +558,7 @@ MergeSuperpixelImage::backprojectNeighborSuperpixels(Mat &inputImg,
   
   bool allNeighborsLocked = true;
   
-  for (vector<int32_t>::iterator neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
+  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
     int32_t neighborTag = *neighborIter;
     
     if (lockedTablePtr->count(neighborTag) != 0) {
@@ -639,7 +639,7 @@ MergeSuperpixelImage::backprojectNeighborSuperpixels(Mat &inputImg,
     reverseFillMatrixFromCoords(srcSuperpixelGreen, false, tag, srcSuperpixelBackProjection);
   }
   
-  for (vector<int32_t>::iterator neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
+  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
     // Do back projection on neighbor pixels using histogram from biggest superpixel
     
     int32_t neighborTag = *neighborIter;
@@ -794,7 +794,7 @@ MergeSuperpixelImage::backprojectNeighborSuperpixels(Mat &inputImg,
   if (debug) {
     cout << "unsorted tuples (N = " << results.size() << ") from src superpixel " << tag << endl;
     
-    for (vector<CompareNeighborTuple>::iterator it = results.begin(); it != results.end(); ++it) {
+    for (auto it = results.begin(); it != results.end(); ++it) {
       CompareNeighborTuple tuple = *it;
       char buffer[1024];
       snprintf(buffer, sizeof(buffer), "(%12.4f, %5d, %5d)",
@@ -812,7 +812,7 @@ MergeSuperpixelImage::backprojectNeighborSuperpixels(Mat &inputImg,
   if (debug || debugShowSorted) {
     cout << "sorted tuples (N = " << results.size() << ") from src superpixel " << tag << endl;
     
-    for (vector<CompareNeighborTuple>::iterator it = results.begin(); it != results.end(); ++it) {
+    for (auto it = results.begin(); it != results.end(); ++it) {
       CompareNeighborTuple tuple = *it;
       char buffer[1024];
       snprintf(buffer, sizeof(buffer), "(%12.4f, %5d, %5d)",
@@ -876,7 +876,7 @@ MergeSuperpixelImage::backprojectDepthFirstRecurseIntoNeighbors(Mat &inputImg,
   
   bool allNeighborsLocked = true;
   
-  for (vector<int32_t>::iterator neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
+  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
     int32_t neighborTag = *neighborIter;
     
     if (lockedTablePtr->count(neighborTag) != 0) {
@@ -967,7 +967,7 @@ MergeSuperpixelImage::backprojectDepthFirstRecurseIntoNeighbors(Mat &inputImg,
   
   vector<int32_t> queue;
   
-  for (vector<int32_t>::iterator neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
+  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
     int32_t neighborTag = *neighborIter;
     queue.push_back(neighborTag);
     seenTable[neighborTag] = true;
@@ -995,7 +995,7 @@ MergeSuperpixelImage::backprojectDepthFirstRecurseIntoNeighbors(Mat &inputImg,
     if (debug && 0) {
       cout << "queue:" << endl;
       
-      for (vector<int32_t>::iterator it = queue.begin(); it != queue.end(); ++it) {
+      for (auto it = queue.begin(); it != queue.end(); ++it) {
         int32_t neighborTag = *it;
         cout << neighborTag << endl;
       }
@@ -1122,14 +1122,14 @@ MergeSuperpixelImage::backprojectDepthFirstRecurseIntoNeighbors(Mat &inputImg,
           cout << "cheking " << neighborsPtr->size()  << " possible neighbors for addition to DFS queue" << endl;
         }
         
-        for (vector<int32_t>::iterator neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
+        for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
           int32_t neighborTag = *neighborIter;
           
           if (seenTable.count(neighborTag) == 0) {
             seenTable[neighborTag] = true;
             
             if (debug) {
-              for (vector<int32_t>::iterator it = queue.begin(); it != queue.end(); ++it) {
+              for (auto it = queue.begin(); it != queue.end(); ++it) {
                 int32_t existingTag = *it;
                 if (existingTag == neighborTag) {
                   assert(0);
@@ -1208,7 +1208,7 @@ MergeSuperpixelImage::backprojectDepthFirstRecurseIntoNeighbors(Mat &inputImg,
     
     // Iterate over each indicated neighbor to indicate scope
 
-    for (vector<int32_t>::iterator it = results.begin(); it != results.end(); ++it) {
+    for (auto it = results.begin(); it != results.end(); ++it) {
       int32_t resultTag = *it;
       
       Mat resultsSuperpixelMat;
@@ -1264,7 +1264,7 @@ void MergeSuperpixelImage::mergeAlikeSuperpixels(Mat &inputImg)
     int numChecked = 0;
     int32_t maxTag = -1;
   
-    for (vector<int32_t>::iterator it = superpixels.begin(); it != superpixels.end(); ++it) {
+    for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
       int32_t tag = *it;
      
       Superpixel *spPtr = getSuperpixelPtr(tag);
@@ -1341,7 +1341,7 @@ void MergeSuperpixelImage::mergeAlikeSuperpixels(Mat &inputImg)
         merges.push_back(maxTag);
         weights.push_back(0.0f);
         
-        for (vector<CompareNeighborTuple>::iterator it = results.begin(); it != results.end(); ++it) {
+        for (auto it = results.begin(); it != results.end(); ++it) {
           CompareNeighborTuple minTuple = *it;
           float   minWeight   = (float) get<0>(minTuple); // Get BHATTACHARYYA
           int32_t minNeighbor = get<2>(minTuple); // Get NEIGHBOR_TAG
@@ -1432,7 +1432,7 @@ void MergeSuperpixelImage::mergeAlikeSuperpixels(Mat &inputImg)
         if (debug) {
           cout << "done merging edges with final weight list" << endl;
           
-          for (vector<float>::iterator it = weights.begin(); it != weights.end(); ++it) {
+          for (auto it = weights.begin(); it != weights.end(); ++it) {
             float weight = *it;
             cout << weight << endl;
           }
@@ -1565,7 +1565,7 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
       // having to recheck all superpixels that did not merge the first time while still checking
       // the superpixels that were expanded and could be ready to merge now.
       
-      for (unordered_map<int32_t, bool>::iterator it = mergesSinceLockClear.begin(); it != mergesSinceLockClear.end(); ++it) {
+      for (auto it = mergesSinceLockClear.begin(); it != mergesSinceLockClear.end(); ++it) {
         int32_t merged = it->first;
 
         if (locked.count(merged) == 0) {
@@ -1644,7 +1644,7 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
       
       // Merge each alike neighbor
       
-      for (vector<CompareNeighborTuple>::iterator it = resultTuples.begin(); it != resultTuples.end(); ++it) {
+      for (auto it = resultTuples.begin(); it != resultTuples.end(); ++it) {
         CompareNeighborTuple tuple = *it;
       
         int32_t mergeNeighbor = get<2>(tuple);
@@ -1718,7 +1718,7 @@ void MergeSuperpixelImage::checkNeighborEdgeWeights(Mat &inputImg,
   bool doNeighborsEdgeCalc = false;
   vector<int32_t> neighborsThatHaveEdgeWeights;
   
-  for (vector<int32_t>::iterator neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
+  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
     int32_t neighborTag = *neighborIter;
     
 #if defined(DEBUG)
@@ -1752,7 +1752,7 @@ void MergeSuperpixelImage::checkNeighborEdgeWeights(Mat &inputImg,
 
     unordered_map<int32_t, bool> lockedNeighbors;
     
-    for (vector<int32_t>::iterator neighborIter = neighborsThatHaveEdgeWeights.begin(); neighborIter != neighborsThatHaveEdgeWeights.end(); ++neighborIter) {
+    for (auto neighborIter = neighborsThatHaveEdgeWeights.begin(); neighborIter != neighborsThatHaveEdgeWeights.end(); ++neighborIter) {
       int32_t neighborTag = *neighborIter;
       lockedNeighbors[neighborTag] = true;
       
@@ -1771,7 +1771,7 @@ void MergeSuperpixelImage::checkNeighborEdgeWeights(Mat &inputImg,
     
     // Create edge weight table entry for each neighbor that was compared
     
-    for (vector<CompareNeighborTuple>::iterator it = compareNeighborEdgesVec.begin(); it != compareNeighborEdgesVec.end(); ++it) {
+    for (auto it = compareNeighborEdgesVec.begin(); it != compareNeighborEdgesVec.end(); ++it) {
       CompareNeighborTuple tuple = *it;
       float edgeWeight = get<0>(tuple);
       int32_t neighborTag = get<2>(tuple);
@@ -1812,7 +1812,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
   if (debug) {
     cout << "large superpixels before BFS" << endl;
     
-    for (vector<int32_t>::iterator it = largeSuperpixels.begin(); it != largeSuperpixels.end(); ++it) {
+    for (auto it = largeSuperpixels.begin(); it != largeSuperpixels.end(); ++it) {
       int32_t tag = *it;
       cout << tag << endl;
     }
@@ -1838,7 +1838,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
   // largest superpixels but it will not merge contained superpixels into the existing
   // large ones.
   
-  for (vector<int32_t>::iterator it = largeSuperpixels.begin(); it != largeSuperpixels.end(); ++it) {
+  for (auto it = largeSuperpixels.begin(); it != largeSuperpixels.end(); ++it) {
     int32_t tag = *it;
     locked[tag] = true;
   }
@@ -1850,7 +1850,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
     outputTagsImg = (Scalar) 0;
     writeTagsWithStaticColortable(*this, outputTagsImg);
     
-    for (vector<int32_t>::iterator it = largeSuperpixels.begin(); it != largeSuperpixels.end(); ++it) {
+    for (auto it = largeSuperpixels.begin(); it != largeSuperpixels.end(); ++it) {
       int32_t tag = *it;
       
       // Write the largest superpixel tag as the value of the output image.
@@ -1974,7 +1974,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
       // having to recheck all superpixels that did not merge the first time while still checking
       // the superpixels that were expanded and could be ready to merge now.
       
-      for (unordered_map<int32_t, bool>::iterator it = mergesSinceLockClear.begin(); it != mergesSinceLockClear.end(); ++it) {
+      for (auto it = mergesSinceLockClear.begin(); it != mergesSinceLockClear.end(); ++it) {
         int32_t merged = it->first;
         
         if (locked.count(merged) == 0) {
@@ -2030,7 +2030,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
       if (debug) {
         cout << "backprojectNeighborSuperpixels() results for src superpixel " << maxTag << endl;
         
-        for (vector<CompareNeighborTuple>::iterator it = resultTuples.begin(); it != resultTuples.end(); ++it) {
+        for (auto it = resultTuples.begin(); it != resultTuples.end(); ++it) {
           CompareNeighborTuple tuple = *it;
           char buffer[1024];
           snprintf(buffer, sizeof(buffer), "(%12.4f, %5d, %5d)",
@@ -2067,7 +2067,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
           // Gather cached edge weights, this operation is fast since all the edge weights
           // have been cached already and edge weights are shared between superpixels.
           
-          for (vector<int32_t>::iterator neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
+          for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
             int32_t neighborTag = *neighborIter;
             SuperpixelEdge edge(maxTag, neighborTag);
             float edgeWeight = edgeTable.edgeStrengthMap[edge];
@@ -2079,7 +2079,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
               cout << "adding unmerged edge weights" << endl;
             }
             
-            for (vector<float>::iterator it = unmergedEdgeWeights.begin(); it != unmergedEdgeWeights.end(); ++it) {
+            for (auto it = unmergedEdgeWeights.begin(); it != unmergedEdgeWeights.end(); ++it) {
               float edgeWeight = *it;              
               char buffer[1024];
               snprintf(buffer, sizeof(buffer), "%12.4f", edgeWeight);
@@ -2175,7 +2175,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
         
         unordered_map<int32_t, bool> neighborsThatMightBeMergedTable;
         
-        for (vector<CompareNeighborTuple>::iterator it = resultTuples.begin(); it != resultTuples.end(); ++it) {
+        for (auto it = resultTuples.begin(); it != resultTuples.end(); ++it) {
           CompareNeighborTuple tuple = *it;
           int32_t mergeNeighbor = get<2>(tuple);
           neighborsThatMightBeMergedTable[mergeNeighbor] = true;
@@ -2185,7 +2185,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
         
         // Iterate over each neighbor and lookup the cached edge weight
         
-        for (vector<int32_t>::iterator neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
+        for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
           int32_t neighborTag = *neighborIter;
           SuperpixelEdge edge(maxTag, neighborTag);
 #if defined(DEBUG)
@@ -2224,13 +2224,13 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
       
       int binOffset = 0;
 
-      for (vector<vector<CompareNeighborTuple>>::iterator binIter = tuplesSplitIntoBins.begin(); binIter != tuplesSplitIntoBins.end(); ++binIter) {
+      for (auto binIter = tuplesSplitIntoBins.begin(); binIter != tuplesSplitIntoBins.end(); ++binIter) {
         vector<CompareNeighborTuple> currentBin = *binIter;
         
         if (debug) {
           cout << "will merge per bin" << endl;
           
-          for (vector<CompareNeighborTuple>::iterator it = currentBin.begin(); it != currentBin.end(); ++it) {
+          for (auto it = currentBin.begin(); it != currentBin.end(); ++it) {
             CompareNeighborTuple tuple = *it;
             
             char buffer[1024];
@@ -2261,7 +2261,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
         
         vector<CompareNeighborTuple> edgeWeightSortedTuples;
         
-        for (vector<CompareNeighborTuple>::iterator it = currentBin.begin(); it != currentBin.end(); ++it) {
+        for (auto it = currentBin.begin(); it != currentBin.end(); ++it) {
           CompareNeighborTuple tuple = *it;
           int32_t numCoords = get<1>(tuple);
           int32_t mergeNeighbor = get<2>(tuple);
@@ -2281,7 +2281,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
         if (debug) {
           cout << "edge weight ordered neighbors for this bin" << endl;
           
-          for (vector<CompareNeighborTuple>::iterator it = edgeWeightSortedTuples.begin(); it != edgeWeightSortedTuples.end(); ++it) {
+          for (auto it = edgeWeightSortedTuples.begin(); it != edgeWeightSortedTuples.end(); ++it) {
             CompareNeighborTuple tuple = *it;
             
             char buffer[1024];
@@ -2291,7 +2291,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
           }
         }
         
-        for (vector<CompareNeighborTuple>::iterator it = edgeWeightSortedTuples.begin(); it != edgeWeightSortedTuples.end(); ++it) {
+        for (auto it = edgeWeightSortedTuples.begin(); it != edgeWeightSortedTuples.end(); ++it) {
           CompareNeighborTuple tuple = *it;
           
           int32_t mergeNeighbor = get<2>(tuple);
@@ -2431,7 +2431,7 @@ int MergeSuperpixelImage::mergeBackprojectSmallestSuperpixels(Mat &inputImg, int
     int32_t minTag = -1;
     //int32_t maxTag = -1;
     
-    for (vector<int32_t>::iterator it = superpixels.begin(); it != superpixels.end(); ++it) {
+    for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
       int32_t tag = *it;
       
       Superpixel *spPtr = getSuperpixelPtr(tag);
@@ -2472,7 +2472,7 @@ int MergeSuperpixelImage::mergeBackprojectSmallestSuperpixels(Mat &inputImg, int
       // having to recheck all superpixels that did not merge the first time while still checking
       // the superpixels that were expanded and could be ready to merge now.
       
-      for (unordered_map<int32_t, bool>::iterator it = mergesSinceLockClear.begin(); it != mergesSinceLockClear.end(); ++it) {
+      for (auto it = mergesSinceLockClear.begin(); it != mergesSinceLockClear.end(); ++it) {
         int32_t merged = it->first;
         
         if (locked.count(merged) == 0) {
@@ -2542,7 +2542,7 @@ int MergeSuperpixelImage::mergeBackprojectSmallestSuperpixels(Mat &inputImg, int
       
       vector<int32_t> results;
       
-      for (vector<CompareNeighborTuple>::iterator it = resultTuples.begin(); it != resultTuples.end(); ++it) {
+      for (auto it = resultTuples.begin(); it != resultTuples.end(); ++it) {
         CompareNeighborTuple tuple = *it;
         results.push_back(get<2>(tuple));
       }
@@ -2562,7 +2562,7 @@ int MergeSuperpixelImage::mergeBackprojectSmallestSuperpixels(Mat &inputImg, int
       
       // Merge each alike neighbor
       
-      for (vector<int32_t>::iterator it = results.begin(); it != results.end(); ++it) {
+      for (auto it = results.begin(); it != results.end(); ++it) {
         int32_t mergeNeighbor = *it;
         
         SuperpixelEdge edge(minTag, mergeNeighbor);
@@ -2632,7 +2632,7 @@ void MergeSuperpixelImage::addUnmergedEdgeWeights(int32_t tag, vector<float> &ed
 {
   Superpixel *spPtr = getSuperpixelPtr(tag);
   
-  for (vector<float>::iterator it = edgeWeights.begin(); it != edgeWeights.end(); ++it) {
+  for (auto it = edgeWeights.begin(); it != edgeWeights.end(); ++it) {
     float val = *it;
     spPtr->unmergedEdgeWeights.push_back(val);
   }
@@ -2679,7 +2679,7 @@ int MergeSuperpixelImage::fillMergeBackprojectSuperpixels(Mat &inputImg, int col
     int numChecked = 0;
     int32_t maxTag = -1;
     
-    for (vector<int32_t>::iterator it = superpixels.begin(); it != superpixels.end(); ++it) {
+    for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
       int32_t tag = *it;
       
       Superpixel *spPtr = getSuperpixelPtr(tag);
@@ -2723,7 +2723,7 @@ int MergeSuperpixelImage::fillMergeBackprojectSuperpixels(Mat &inputImg, int col
       // having to recheck all superpixels that did not merge the first time while still checking
       // the superpixels that were expanded and could be ready to merge now.
       
-      for (unordered_map<int32_t, bool>::iterator it = mergesSinceLockClear.begin(); it != mergesSinceLockClear.end(); ++it) {
+      for (auto it = mergesSinceLockClear.begin(); it != mergesSinceLockClear.end(); ++it) {
         int32_t merged = it->first;
         
         if (locked.count(merged) == 0) {
@@ -2788,7 +2788,7 @@ int MergeSuperpixelImage::fillMergeBackprojectSuperpixels(Mat &inputImg, int col
       
       // Merge each alike neighbor
       
-      for (vector<int32_t>::iterator it = results.begin(); it != results.end(); ++it) {
+      for (auto it = results.begin(); it != results.end(); ++it) {
         int32_t mergeNeighbor = *it;
         
         SuperpixelEdge edge(maxTag, mergeNeighbor);
@@ -2858,7 +2858,7 @@ void MergeSuperpixelImage::filterOutVeryLargeNeighbors(int32_t tag, vector<int32
 
   vector<CompareNeighborTuple> tuples;
   
-  for (vector<int32_t>::iterator neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
+  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
     int32_t neighborTag = *neighborIter;
     
     Superpixel *spPtr = getSuperpixelPtr(neighborTag);
@@ -2889,7 +2889,7 @@ void MergeSuperpixelImage::filterOutVeryLargeNeighbors(int32_t tag, vector<int32
     
     cout << "sorted tuples:" << endl;
     
-    for (vector<CompareNeighborTuple>::iterator it = tuples.begin(); it != tuples.end(); ++it) {
+    for (auto it = tuples.begin(); it != tuples.end(); ++it) {
       CompareNeighborTuple tuple = *it;
       snprintf(buffer, sizeof(buffer), "neighbor %10d has N = %10d coords", get<1>(tuple), get<2>(tuple));
       cout << (char*)buffer << endl;
@@ -2914,7 +2914,7 @@ void MergeSuperpixelImage::filterOutVeryLargeNeighbors(int32_t tag, vector<int32
   
     sizesVec.clear();
     
-    for (vector<CompareNeighborTuple>::iterator it = tuples.begin(); it != tuples.end(); ++it) {
+    for (auto it = tuples.begin(); it != tuples.end(); ++it) {
       CompareNeighborTuple tuple = *it;
       int numCoords = get<2>(tuple);
       sizesVec.push_back((float)numCoords);
@@ -2925,7 +2925,7 @@ void MergeSuperpixelImage::filterOutVeryLargeNeighbors(int32_t tag, vector<int32
       
       cout << "stddev on " << tuples.size() << " tuples:" << endl;
       
-      for (vector<CompareNeighborTuple>::iterator it = tuples.begin(); it != tuples.end(); ++it) {
+      for (auto it = tuples.begin(); it != tuples.end(); ++it) {
         CompareNeighborTuple tuple = *it;
         snprintf(buffer, sizeof(buffer), "neighbor %10d has N = %10d coords", get<1>(tuple), get<2>(tuple));
         cout << (char*)buffer << endl;
@@ -2984,7 +2984,7 @@ void MergeSuperpixelImage::filterOutVeryLargeNeighbors(int32_t tag, vector<int32
   if (debug) {
     cout << "filterOutVeryLargeNeighbors returning (count " << largeNeighbors.size() << ") for superpixel " << tag << endl;
     
-    for (vector<int32_t>::iterator neighborIter = largeNeighbors.begin(); neighborIter != largeNeighbors.end(); ++neighborIter) {
+    for (auto neighborIter = largeNeighbors.begin(); neighborIter != largeNeighbors.end(); ++neighborIter) {
       int32_t neighborTag = *neighborIter;
       cout << neighborTag << endl;
     }
@@ -3008,7 +3008,7 @@ int MergeSuperpixelImage::mergeSmallSuperpixels(Mat &inputImg, int colorspace, i
   // First, scan for very small superpixels and treat them as edges automatically so that
   // edge pixels scanning need not consider these small pixels.
   
-  for (vector<int32_t>::iterator it = superpixels.begin(); it != superpixels.end(); ++it) {
+  for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
     int32_t tag = *it;
     Superpixel *spPtr = getSuperpixelPtr(tag);
     assert(spPtr);
@@ -3025,7 +3025,7 @@ int MergeSuperpixelImage::mergeSmallSuperpixels(Mat &inputImg, int colorspace, i
     cout << "found " << smallSuperpixels.size() << " very small superpixels" << endl;
   }
   
-  for (vector<int32_t>::iterator it = smallSuperpixels.begin(); it != smallSuperpixels.end(); ) {
+  for (auto it = smallSuperpixels.begin(); it != smallSuperpixels.end(); ) {
     int32_t tag = *it;
     
     Superpixel *spPtr = NULL;
@@ -3063,7 +3063,7 @@ int MergeSuperpixelImage::mergeSmallSuperpixels(Mat &inputImg, int colorspace, i
     unordered_map<int32_t, bool> locked;
     unordered_map<int32_t, bool> *lockedPtr = NULL;
     
-    for (vector<int32_t>::iterator neighborIter = largeNeighbors.begin(); neighborIter != largeNeighbors.end(); ++neighborIter) {
+    for (auto neighborIter = largeNeighbors.begin(); neighborIter != largeNeighbors.end(); ++neighborIter) {
       int32_t neighborTag = *neighborIter;
       locked[neighborTag] = true;
       
@@ -3171,7 +3171,7 @@ int MergeSuperpixelImage::mergeEdgySuperpixels(Mat &inputImg, int colorspace, in
     // largest superpixels but it will not merge contained superpixels into the existing
     // large ones.
     
-    for (vector<int32_t>::iterator it = largeSuperpixels.begin(); it != largeSuperpixels.end(); ++it) {
+    for (auto it = largeSuperpixels.begin(); it != largeSuperpixels.end(); ++it) {
       int32_t tag = *it;
       largestLocked[tag] = true;
     }
@@ -3196,7 +3196,7 @@ int MergeSuperpixelImage::mergeEdgySuperpixels(Mat &inputImg, int colorspace, in
   // NUM_EDGE_PIXELS / NUM_PIXELS so that this normalized value will be 1.0
   // when every pixel is an edge pixel.
   
-  for (vector<int32_t>::iterator it = superpixels.begin(); it != superpixels.end(); ++it) {
+  for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
     int32_t tag = *it;
     Superpixel *spPtr = getSuperpixelPtr(tag);
     assert(spPtr);
@@ -3246,7 +3246,7 @@ int MergeSuperpixelImage::mergeEdgySuperpixels(Mat &inputImg, int colorspace, in
       cout << (char*)buffer << endl;
     }
     
-    for (vector<int32_t>::iterator neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
+    for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
       int32_t neighborTag = *neighborIter;
       
       Superpixel *neighborPtr = getSuperpixelPtr(neighborTag);
@@ -3335,7 +3335,7 @@ int MergeSuperpixelImage::mergeEdgySuperpixels(Mat &inputImg, int colorspace, in
   }
   
   if (debugDumpEdgySuperpixels) {
-    for (vector<int32_t>::iterator it = edgySuperpixels.begin(); it != edgySuperpixels.end(); ++it ) {
+    for (auto it = edgySuperpixels.begin(); it != edgySuperpixels.end(); ++it ) {
       int32_t tag = *it;
 
       Mat edgyMat = inputImg.clone();
@@ -3357,7 +3357,7 @@ int MergeSuperpixelImage::mergeEdgySuperpixels(Mat &inputImg, int colorspace, in
   }
   
   unordered_map<int32_t, bool> edgySuperpixelsTable;
-  for (vector<int32_t>::iterator it = edgySuperpixels.begin(); it != edgySuperpixels.end(); ++it ) {
+  for (auto it = edgySuperpixels.begin(); it != edgySuperpixels.end(); ++it ) {
     int32_t tag = *it;
     edgySuperpixelsTable[tag] = true;
   }
@@ -3368,7 +3368,7 @@ int MergeSuperpixelImage::mergeEdgySuperpixels(Mat &inputImg, int colorspace, in
   // until the table is empty.
   
   while (edgySuperpixelsTable.size() > 0) {
-    unordered_map<int32_t, bool>::iterator it = edgySuperpixelsTable.begin();
+    auto it = edgySuperpixelsTable.begin();
     int32_t tag = it->first;
     
     if (debug) {
@@ -3390,7 +3390,7 @@ int MergeSuperpixelImage::mergeEdgySuperpixels(Mat &inputImg, int colorspace, in
     
     vector<int32_t> *neighborsPtr = edgeTable.getNeighborsPtr(tag);
     
-    for (vector<int32_t>::iterator neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
+    for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
       int32_t neighborTag = *neighborIter;
       
       if (edgySuperpixelsTable.count(neighborTag) == 0) {
@@ -3426,7 +3426,7 @@ int MergeSuperpixelImage::mergeEdgySuperpixels(Mat &inputImg, int colorspace, in
     
     int mergeStepAtResultsStart = mergeStep;
     
-    for (vector<CompareNeighborTuple>::iterator tupleIter = results.begin(); tupleIter != results.end(); ++tupleIter) {
+    for (auto tupleIter = results.begin(); tupleIter != results.end(); ++tupleIter) {
       CompareNeighborTuple tuple = *tupleIter;
       
       float edgeWeight = get<0>(tuple);
@@ -3545,7 +3545,7 @@ MergeSuperpixelImage::scanLargestSuperpixels(vector<int32_t> &results)
   // First, scan for very small superpixels and treat them as edges automatically so that
   // edge pixels scanning need not consider these small pixels.
   
-  for (vector<int32_t>::iterator it = superpixels.begin(); it != superpixels.end(); ++it) {
+  for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
     int32_t tag = *it;
     Superpixel *spPtr = getSuperpixelPtr(tag);
     assert(spPtr);
@@ -3569,7 +3569,7 @@ MergeSuperpixelImage::scanLargestSuperpixels(vector<int32_t> &results)
     
     sort(copySizes.begin(), copySizes.end(), greater<float>());
     
-    for (vector<float>::iterator it = copySizes.begin(); it != copySizes.end(); ++it) {
+    for (auto it = copySizes.begin(); it != copySizes.end(); ++it) {
       cout << *it << endl;
     }
   }
@@ -3618,7 +3618,7 @@ MergeSuperpixelImage::scanLargestSuperpixels(vector<int32_t> &results)
   }
   
   int offset = 0;
-  for (vector<float>::iterator it = superpixelsSizes.begin(); it != superpixelsSizes.end(); ++it, offset++) {
+  for (auto it = superpixelsSizes.begin(); it != superpixelsSizes.end(); ++it, offset++) {
     float numCoords = *it;
     
     if (numCoords <= upperLimit) {
@@ -3666,7 +3666,7 @@ void MergeSuperpixelImage::rescanLargestSuperpixels(Mat &inputImg, Mat &outputIm
   outputImg.create(inputImg.size(), CV_8UC(3));
   outputImg = (Scalar)0;
 
-  for (vector<int32_t>::iterator it = largeSuperpixels.begin(); it != largeSuperpixels.end(); ++it) {
+  for (auto it = largeSuperpixels.begin(); it != largeSuperpixels.end(); ++it) {
     int32_t tag = *it;
     Superpixel *spPtr = getSuperpixelPtr(tag);
     assert(spPtr);
@@ -4242,7 +4242,7 @@ bool pos_sample_within_bound(vector<float> &weights, float currentWeight) {
   
   vector<float> useDeltas;
   
-  for (vector<float>::iterator it = deltaWeights.begin(); it != deltaWeights.end(); ++it) {
+  for (auto it = deltaWeights.begin(); it != deltaWeights.end(); ++it) {
     float deltaWeight = *it;
     
     if (deltaWeight != 0.0f) {
@@ -4259,7 +4259,7 @@ bool pos_sample_within_bound(vector<float> &weights, float currentWeight) {
   
   if (debug) {
     cout << "abs deltas" << endl;
-    for (vector<float>::iterator it = useDeltas.begin(); it != useDeltas.end(); ++it) {
+    for (auto it = useDeltas.begin(); it != useDeltas.end(); ++it) {
       float delta = *it;
       cout << delta << endl;
     }
@@ -4276,7 +4276,7 @@ bool pos_sample_within_bound(vector<float> &weights, float currentWeight) {
     
     float prev = 0.0f; // will always be set in first iteration
     
-    for (vector<float>::iterator it = weights.begin(); it != weights.end(); ++it) {
+    for (auto it = weights.begin(); it != weights.end(); ++it) {
       if (it == weights.begin()) {
         prev = *it;
         continue;
@@ -4302,7 +4302,7 @@ bool pos_sample_within_bound(vector<float> &weights, float currentWeight) {
     
     if (debug) {
       cout << "increasingWeights" << endl;
-      for (vector<float>::iterator it = increasingWeights.begin(); it != increasingWeights.end(); ++it) {
+      for (auto it = increasingWeights.begin(); it != increasingWeights.end(); ++it) {
         float weight = *it;
         cout << weight << endl;
       }
@@ -4314,7 +4314,7 @@ bool pos_sample_within_bound(vector<float> &weights, float currentWeight) {
     
     if (debug) {
       cout << "increasingDeltas" << endl;
-      for (vector<float>::iterator it = increasingDeltas.begin(); it != increasingDeltas.end(); ++it) {
+      for (auto it = increasingDeltas.begin(); it != increasingDeltas.end(); ++it) {
         float delta = *it;
         cout << delta << endl;
       }
@@ -4387,7 +4387,7 @@ void writeSuperpixelMergeMask(SuperpixelImage &spImage, Mat &resultImg, vector<i
   
   // All locked superpixels as Red
 
-  for (unordered_map<int32_t, bool>::iterator it = lockedTablePtr->begin(); it != lockedTablePtr->end(); ++it) {
+  for (auto it = lockedTablePtr->begin(); it != lockedTablePtr->end(); ++it) {
     int32_t tag = it->first;
     
     Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
@@ -4412,7 +4412,7 @@ void writeSuperpixelMergeMask(SuperpixelImage &spImage, Mat &resultImg, vector<i
 
   // Render weighted neighbors as grey values (inverted)
   
-  for (vector<int32_t>::iterator it = merges.begin(); it != merges.end(); ++it) {
+  for (auto it = merges.begin(); it != merges.end(); ++it) {
     int32_t tag = *it;
     
     bool isRootSperpixel = (it == merges.begin());
