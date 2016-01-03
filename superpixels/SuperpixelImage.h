@@ -5,9 +5,9 @@
 #ifndef SUPERPIXEL_IMAGE_H
 #define	SUPERPIXEL_IMAGE_H
 
-#include <opencv2/opencv.hpp>
-
+#include <vector>
 #include <unordered_map>
+#include <opencv2/opencv.hpp>
 
 using namespace std;
 using namespace cv;

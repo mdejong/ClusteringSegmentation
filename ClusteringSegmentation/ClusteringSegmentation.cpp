@@ -76,7 +76,12 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
 {
   const bool debugWriteIntermediateFiles = true;
   
+  // Alloc object on stack
   SuperpixelImage spImage;
+  //
+  // Ref to object allocated on heap
+//  Ptr<SuperpixelImage> spImagePtr = new SuperpixelImage();
+//  SuperpixelImage &spImage = *spImagePtr;
   
   // Generate a "tags" input that contains 1 tag for each 4x4 block of input, so that
   // large regions of the exact same fill color can be detected and processed early.
