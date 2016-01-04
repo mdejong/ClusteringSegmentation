@@ -88,8 +88,6 @@ MergeSuperpixelImage::compareNeighborSuperpixels(Mat &inputImg,
   const bool debugShowSorted = false;
   const bool debugDumpSuperpixels = false;
   
-  vector<int32_t> *neighborsPtr = edgeTable.getNeighborsPtr(tag);
-  
   Mat srcSuperpixelMat;
   Mat srcSuperpixelHist;
   Mat srcSuperpixelBackProjection;
@@ -118,10 +116,8 @@ MergeSuperpixelImage::compareNeighborSuperpixels(Mat &inputImg,
     results.erase (results.begin(), results.end());
   }
   
-  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
+  for ( int32_t neighborTag : edgeTable.getNeighborsSet(tag) ) {
     // Generate histogram for the neighbor and then compare to neighbor
-    
-    int32_t neighborTag = *neighborIter;
     
     if (lockedTablePtr && (lockedTablePtr->count(neighborTag) != 0)) {
       // If a locked down table is provided then do not consider a neighbor that appears
@@ -216,8 +212,6 @@ MergeSuperpixelImage::compareNeighborEdges(Mat &inputImg,
   const bool debugShowSorted = false;
   const bool debugDumpSuperpixelEdges = false;
   
-  vector<int32_t> *neighborsPtr = edgeTable.getNeighborsPtr(tag);
-   
   if (!results.empty()) {
     results.erase (results.begin(), results.end());
   }
@@ -225,9 +219,7 @@ MergeSuperpixelImage::compareNeighborEdges(Mat &inputImg,
   Superpixel *srcSpPtr = getSuperpixelPtr(tag);
   assert(srcSpPtr);
   
-  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
-    int32_t neighborTag = *neighborIter;
-    
+  for ( int32_t neighborTag : edgeTable.getNeighborsSet(tag) ) {
     if (lockedTablePtr && (lockedTablePtr->count(neighborTag) != 0)) {
       // If a locked down table is provided then do not consider a neighbor that appears
       // in the locked table.
@@ -544,8 +536,6 @@ MergeSuperpixelImage::backprojectNeighborSuperpixels(Mat &inputImg,
   
   const bool debugDumpCombinedBackProjection = false;
   
-  vector<int32_t> *neighborsPtr = edgeTable.getNeighborsPtr(tag);
-  
   assert(lockedTablePtr);
   
   if (!results.empty()) {
@@ -558,9 +548,7 @@ MergeSuperpixelImage::backprojectNeighborSuperpixels(Mat &inputImg,
   
   bool allNeighborsLocked = true;
   
-  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
-    int32_t neighborTag = *neighborIter;
-    
+  for ( int32_t neighborTag : edgeTable.getNeighborsSet(tag) ) {
     if (lockedTablePtr->count(neighborTag) != 0) {
       // Neighbor is locked
     } else {
@@ -639,10 +627,8 @@ MergeSuperpixelImage::backprojectNeighborSuperpixels(Mat &inputImg,
     reverseFillMatrixFromCoords(srcSuperpixelGreen, false, tag, srcSuperpixelBackProjection);
   }
   
-  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
+  for ( int32_t neighborTag : edgeTable.getNeighborsSet(tag) ) {
     // Do back projection on neighbor pixels using histogram from biggest superpixel
-    
-    int32_t neighborTag = *neighborIter;
     
     if (lockedTablePtr && (lockedTablePtr->count(neighborTag) != 0)) {
       // If a locked down table is provided then do not consider a neighbor that appears
@@ -862,8 +848,6 @@ MergeSuperpixelImage::backprojectDepthFirstRecurseIntoNeighbors(Mat &inputImg,
   
   const bool debugDumpCombinedBackProjection = false;
   
-  vector<int32_t> *neighborsPtr = edgeTable.getNeighborsPtr(tag);
-  
   assert(lockedTablePtr);
   
   if (!results.empty()) {
@@ -876,9 +860,7 @@ MergeSuperpixelImage::backprojectDepthFirstRecurseIntoNeighbors(Mat &inputImg,
   
   bool allNeighborsLocked = true;
   
-  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
-    int32_t neighborTag = *neighborIter;
-    
+  for ( int32_t neighborTag : edgeTable.getNeighborsSet(tag) ) {
     if (lockedTablePtr->count(neighborTag) != 0) {
       // Neighbor is locked
     } else {
@@ -967,13 +949,10 @@ MergeSuperpixelImage::backprojectDepthFirstRecurseIntoNeighbors(Mat &inputImg,
   
   vector<int32_t> queue;
   
-  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
-    int32_t neighborTag = *neighborIter;
+  for ( int32_t neighborTag : edgeTable.getNeighborsSet(tag) ) {
     queue.push_back(neighborTag);
     seenTable[neighborTag] = true;
   }
-  
-  neighborsPtr = NULL;
   
   // This foreach logic must descend into neighbors and then neighbors of neighbors until the backprojection returns
   // zero for all pixels.
@@ -1116,15 +1095,11 @@ MergeSuperpixelImage::backprojectDepthFirstRecurseIntoNeighbors(Mat &inputImg,
         
         // Iterate over all neighbors of this neighbor and insert at the front of the queue
         
-        neighborsPtr = edgeTable.getNeighborsPtr(neighborTag);
-        
         if (debug) {
-          cout << "cheking " << neighborsPtr->size()  << " possible neighbors for addition to DFS queue" << endl;
+          cout << "cheking " << edgeTable.getNeighborsSet(neighborTag).size()  << " possible neighbors for addition to DFS queue" << endl;
         }
         
-        for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
-          int32_t neighborTag = *neighborIter;
-          
+        for ( int32_t neighborTag : edgeTable.getNeighborsSet(neighborTag) ) {
           if (seenTable.count(neighborTag) == 0) {
             seenTable[neighborTag] = true;
             
@@ -1711,8 +1686,11 @@ void MergeSuperpixelImage::checkNeighborEdgeWeights(Mat &inputImg,
   // the neighbor so that it will be considered in a call to compare
   // neighbor edge weights.
   
+  vector<int32_t> neighborsVec;
+  
   if (neighborsPtr == NULL) {
-    neighborsPtr = edgeTable.getNeighborsPtr(tag);
+    neighborsVec = edgeTable.getNeighbors(tag);
+    neighborsPtr = &neighborsVec;
   }
   
   bool doNeighborsEdgeCalc = false;
@@ -2042,7 +2020,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
       // Check for cached neighbor edge weights, this logic must be run each time a neighbor back projection
       // is done since a BFS merge can modify the list of neighbors.
       
-      vector<int32_t> *neighborsPtr = edgeTable.getNeighborsPtr(maxTag);
+      vector<int32_t> *neighborsPtr = NULL;
       
       checkNeighborEdgeWeights(inputImg, maxTag, neighborsPtr, edgeTable.edgeStrengthMap, mergeIter);
       
@@ -2854,13 +2832,9 @@ void MergeSuperpixelImage::filterOutVeryLargeNeighbors(int32_t tag, vector<int32
   
   largeNeighbors.clear();
 
-  vector<int32_t> *neighborsPtr = edgeTable.getNeighborsPtr(tag);
-
   vector<CompareNeighborTuple> tuples;
   
-  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
-    int32_t neighborTag = *neighborIter;
-    
+  for ( int32_t neighborTag : edgeTable.getNeighborsSet(tag) ) {
     Superpixel *spPtr = getSuperpixelPtr(neighborTag);
     assert(spPtr);
     
@@ -3217,11 +3191,11 @@ int MergeSuperpixelImage::mergeEdgySuperpixels(Mat &inputImg, int colorspace, in
       continue;
     }
     
-    vector<int32_t> *neighborsPtr = edgeTable.getNeighborsPtr(tag);
+    set<int32_t> &neighbors = edgeTable.getNeighborsSet(tag);
     
     // FIXME: might be better to remove this contained in one superpixel check.
     
-    if (neighborsPtr->size() == 1) {
+    if (neighbors.size() == 1) {
       // In the edge case where there is only 1 neighbor this means that the
       // superpixel is fully contained in another superpixel. Ignore this
       // kind of superpixel since often the one neighbor will be the largest
@@ -3246,9 +3220,7 @@ int MergeSuperpixelImage::mergeEdgySuperpixels(Mat &inputImg, int colorspace, in
       cout << (char*)buffer << endl;
     }
     
-    for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
-      int32_t neighborTag = *neighborIter;
-      
+    for ( int32_t neighborTag : neighbors ) {
       Superpixel *neighborPtr = getSuperpixelPtr(neighborTag);
       assert(neighborPtr);
       
@@ -3388,11 +3360,7 @@ int MergeSuperpixelImage::mergeEdgySuperpixels(Mat &inputImg, int colorspace, in
     
     unordered_map<int32_t, bool> lockedNeighbors;
     
-    vector<int32_t> *neighborsPtr = edgeTable.getNeighborsPtr(tag);
-    
-    for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter) {
-      int32_t neighborTag = *neighborIter;
-      
+    for ( int32_t neighborTag : edgeTable.getNeighborsSet(tag) ) {
       if (edgySuperpixelsTable.count(neighborTag) == 0) {
         // Not an edgy superpixel
         lockedNeighbors[neighborTag] = true;

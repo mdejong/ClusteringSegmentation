@@ -35,8 +35,6 @@ void writeTagsWithStaticColortable(SuperpixelImage &spImage, Mat &resultImg);
 // -1 can be used to indicate no tag. There will never be so many
 // tags that 24bits is not enough tags.
 
-typedef unordered_map<int32_t, vector<int32_t> > TagToNeighborMap;
-
 // Sort by size with largest superpixel first
 
 typedef
@@ -196,9 +194,9 @@ bool SuperpixelImage::parse(Mat &tags, SuperpixelImage &spImage) {
 bool SuperpixelImage::parseSuperpixelEdges(Mat &tags, SuperpixelImage &spImage) {
   const bool debug = false;
   
+#if defined(DEBUG)
   auto &superpixels = spImage.superpixels;
-  
-  //vector<SuperpixelEdge> &edges = spImage.edges;
+#endif // DEBUG
   
   SuperpixelEdgeTable &edgeTable = spImage.edgeTable;
   
@@ -225,8 +223,8 @@ bool SuperpixelImage::parseSuperpixelEdges(Mat &tags, SuperpixelImage &spImage) 
   
   assert(neighborOffsets.size() == 8);
   
-  TagToNeighborMap tagToNeighborMap;
-  
+  unordered_map<int32_t, set<int32_t> > &tagToNeighborMap = edgeTable.getNeighborsRef();
+
   for( int y = 0; y < tags.rows; y++ ) {
     for( int x = 0; x < tags.cols; x++ ) {
       Vec3b tagVec = tags.at<Vec3b>(y, x);
@@ -247,15 +245,15 @@ bool SuperpixelImage::parseSuperpixelEdges(Mat &tags, SuperpixelImage &spImage) 
           cout << "create neighbor vector for UID " << centerTag << endl;
         }
         
-        vector<int32_t> neighborVec;
-        iter = tagToNeighborMap.insert(iter, make_pair(centerTag, neighborVec));
+        set<int32_t> neighbors;
+        iter = tagToNeighborMap.insert(iter, make_pair(centerTag, neighbors));
       } else {
         if (debug) {
           cout << "exits  neighbor vector for UID " << centerTag << endl;
         }
       }
       
-      vector<int32_t> &neighborUIDsVec = iter->second;
+      set<int32_t> &neighborUIDsSet = iter->second;
 
       // Loop over each neighbor around (X,Y) and lookup tag
       
@@ -282,23 +280,16 @@ bool SuperpixelImage::parseSuperpixelEdges(Mat &tags, SuperpixelImage &spImage) 
             cout << "ignoring (" << nX << "," << nY << ") with tag " << foundNeighborUID << " since invalid or identity" << endl;
           }
         } else {
-          bool found = false;
-
           if (debug) {
-          cout << "checking (" << nX << "," << nY << ") with tag " << foundNeighborUID << " to see if known neighbor" << endl;
+            cout << "checking (" << nX << "," << nY << ") with tag " << foundNeighborUID << " to see if known neighbor" << endl;
           }
           
-          for (auto it = neighborUIDsVec.begin() ; it != neighborUIDsVec.end(); ++it) {
-            int32_t knownNeighborUID = *it;
-            if (foundNeighborUID == knownNeighborUID) {
-              // This collection of neighbors already contains an entry for this neighbor
-              found = true;
-              break;
-            }
-          }
+          // if (!found) add_to_set()
           
-          if (!found) {
-            neighborUIDsVec.push_back(foundNeighborUID);
+          auto findIter = neighborUIDsSet.find(foundNeighborUID);
+          
+          if (findIter == neighborUIDsSet.end()) {
+            neighborUIDsSet.insert(findIter, foundNeighborUID);
             
             if (debug) {
             cout << "added new neighbor tag " << foundNeighborUID << endl;
@@ -308,16 +299,17 @@ bool SuperpixelImage::parseSuperpixelEdges(Mat &tags, SuperpixelImage &spImage) 
       }
       
       if (debug) {
-      cout << "after searching all neighbors of (" << x << "," << y << ") the neighbors array (len " << neighborUIDsVec.size() << ") is:" << endl;
-      
-      for (auto it = neighborUIDsVec.begin() ; it != neighborUIDsVec.end(); ++it) {
-        int32_t knownNeighborUID = *it;
-        cout << knownNeighborUID << endl;
-      }
+        cout << "after searching all neighbors of (" << x << "," << y << ") the neighbors array (len " << neighborUIDsSet.size() << ") is:" << endl;
+        
+        for ( int32_t knownNeighborUID : neighborUIDsSet ) {
+          cout << knownNeighborUID << endl;
+        }
       }
       
     }
   }
+  
+#if defined(DEBUG)
   
   // Each superpixel now has a vector of values for each neighbor. Create unique list of edges by
   // iterating over the superpixels and only creating an edge object when a pair (A, B) is
@@ -328,29 +320,29 @@ bool SuperpixelImage::parseSuperpixelEdges(Mat &tags, SuperpixelImage &spImage) 
     
     // Foreach superpixel, collect all the connected neighbors and generate edges
     
-#if defined(DEBUG)
     assert(tagToNeighborMap.count(tag) > 0);
-#endif // DEBUG
     
-    auto &neighborUIDsVec = tagToNeighborMap[tag];
+    auto &neighborUIDsSet = tagToNeighborMap[tag];
 
     if (debug) {
-    cout << "superpixel UID = " << tag << " neighbors len = " << neighborUIDsVec.size() << endl;
+    cout << "superpixel UID = " << tag << " neighbors len = " << neighborUIDsSet.size() << endl;
     }
     
     // Every superpixel must have at least 1 neighbor or the input is invalid, unless there
     // is only 1 superpixel to begin with which could happen if all input was same pixel.
     
     if (superpixels.size() > 1) {
-      assert(neighborUIDsVec.size() > 0);
+      assert(neighborUIDsSet.size() > 0);
     }
     
-    edgeTable.setNeighbors(tag, neighborUIDsVec);
+    // edgeTable.setNeighbors(tag, neighborUIDsSet);
   }
-
+  
   if (debug) {
     cout << "created " << edgeTable.getAllEdges().size() << " edges in edge table" << endl;
   }
+  
+#endif // DEBUG
 
   return true;
 }
@@ -466,60 +458,71 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
   }
   
   assert(found);
-  
-  // Remove edge between src and dst by removing src from dst neighbors
-  
-  vector<int32_t> neighborsDst = edgeTable.getNeighbors(dstPtr->tag);
-  
-  found = false;
-  
-  for (auto it = neighborsDst.begin(); it != neighborsDst.end(); ) {
-    int32_t neighborOfDstTag = *it;
 
-    if (debug) {
-      cout << "iter neighbor of dst = " << neighborOfDstTag << endl;
-    }
-    
-    if (neighborOfDstTag == srcPtr->tag) {
-      if (debug) {
-        cout << "remove src from dst neighbor list" << endl;
-      }
-      
-      it = neighborsDst.erase(it);
-      found = true;
-    } else {
-      ++it;
-    }
-    
-    // Clear edge strength cache of any edge that involves dst
-    
-    SuperpixelEdge cachedKey(dstPtr->tag, neighborOfDstTag);
+  bool hasEdgeStrengthMap;
+  int numRemoved;
+  
+  // Remove edge between src and dst by removing src from dst neighbors set
+
+  hasEdgeStrengthMap = (edgeTable.edgeStrengthMap.size() > 0);
+  
+  if (hasEdgeStrengthMap) {
+    // Clear edge strength cache of dst->src edge
+    SuperpixelEdge cachedKey(dstPtr->tag, srcPtr->tag);
     edgeTable.edgeStrengthMap.erase(cachedKey);
   }
   
-  assert(found);
+  set<int32_t> &neighborsOfDst = edgeTable.getNeighborsSet(dstPtr->tag);
   
-  edgeTable.setNeighbors(dstPtr->tag, neighborsDst);
+  if (debug) {
+    cout << "initial dst neighbor set :" << endl;
+    for ( int32_t neighborTag : neighborsOfDst ) {
+      cout << neighborTag << endl;
+    }
+  }
   
-  // Update all neighbors of src by removing src as a neighbor
-  // and then adding dst if it does not already exist.
+  // Remove src tag from neighbors of dst set
   
-  vector<int32_t> neighborsSrc = edgeTable.getNeighbors(srcPtr->tag);
+  numRemoved = (int) neighborsOfDst.erase(srcPtr->tag);
+  assert(numRemoved == 1);
   
-  found = false;
+#if defined(DEBUG)
+  if (superpixels.size() > 1) {
+    assert(neighborsOfDst.size() > 0);
+  }
+#endif // DEBUG
   
-  for (auto it = neighborsSrc.begin(); it != neighborsSrc.end(); ++it ) {
-    int32_t neighborOfSrcTag = *it;
-    
+  if (debug) {
+    cout << "final dst neighbor set :" << endl;
+    for ( int32_t neighborTag : neighborsOfDst ) {
+      cout << neighborTag << endl;
+    }
+  }
+  
+  // Update neighbors of src by adding dst as a neighbor.
+  // In the case where dst is already a neighbor,
+  // the duplicate entry in the set is ignored.
+  
+  if (hasEdgeStrengthMap) {
+    // Clear edge strength cache of src->dst edge
+    SuperpixelEdge cachedKey(srcPtr->tag, dstPtr->tag);
+    edgeTable.edgeStrengthMap.erase(cachedKey);
+  }
+  
+  set<int32_t> &neighborsOfSrc = edgeTable.getNeighborsSet(srcPtr->tag);
+  
+  if (debug) {
+    cout << "all neighbors of src = " << srcPtr->tag << endl;
+    for ( int32_t neighborTag : neighborsOfSrc ) {
+      cout << neighborTag << endl;
+    }
+  }
+  
+  for ( int32_t neighborOfSrcTag : neighborsOfSrc ) {
     if (debug) {
       cout << "iter neighbor of src = " << neighborOfSrcTag << endl;
     }
-    
-    // Clear edge strength cache of any edge that involves src
-    
-    SuperpixelEdge cachedKey(srcPtr->tag, neighborOfSrcTag);
-    edgeTable.edgeStrengthMap.erase(cachedKey);
-    
+   
     if (neighborOfSrcTag == dstPtr->tag) {
       // Ignore dst so that src is deleted as a neighbor
       
@@ -527,59 +530,61 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
         cout << "ignore neighbor of src since it is the dst node" << endl;
       }
     } else {
-      unordered_map<int32_t,int32_t> neighborsOfSrcNotDstMap;
-      
-      vector<int32_t> neighbors = edgeTable.getNeighbors(neighborOfSrcTag);
-      
-      found = false;
-      
-      for (auto neighborIter = neighbors.begin(); neighborIter != neighbors.end(); ) {
-        int32_t neighborOfSrcTag = *neighborIter;
-        
-        if (neighborOfSrcTag == srcPtr->tag) {
-          if (debug) {
-            cout << "remove src from src neighbor list" << endl;
-          }
-          
-          neighborIter = neighbors.erase(neighborIter);
-          found = true;
-        } else {
-          neighborsOfSrcNotDstMap[neighborOfSrcTag] = 0;
-          ++neighborIter;
-        }
-      }
-      
-      assert(found);
+      set<int32_t> &neighbors = edgeTable.getNeighborsSet(neighborOfSrcTag);
       
       if (debug) {
-        cout << "neighborsOfSrcNotDstMap size() " << neighborsOfSrcNotDstMap.size() << " for neighbor of src " << neighborOfSrcTag << endl;
-        
-        for ( auto it = neighborsOfSrcNotDstMap.begin(); it != neighborsOfSrcNotDstMap.end(); ++it ) {
-          cout << "neighborsOfSrcNotDstMap[" << it->first << "]" << endl;
+        cout << "update neighbor of src " << neighborOfSrcTag << endl;
+        cout << "initial neighbor of src neighbor set :" << endl;
+        for ( int32_t neighborTag : neighbors ) {
+          cout << neighborTag << endl;
         }
       }
       
-      if (neighborsOfSrcNotDstMap.count(dstPtr->tag) == 0) {
-        // dst is not currently a neighbor of this neighbor of src, make it one now
-        neighbors.push_back(dstPtr->tag);
-        
-        if (debug) {
-          cout << "added dst to neighbor of src node " << neighborOfSrcTag << endl;
-        }
-        
-        vector<int32_t> neighborsDst = edgeTable.getNeighbors(dstPtr->tag);
-        neighborsDst.push_back(neighborOfSrcTag);
-        edgeTable.setNeighbors(dstPtr->tag, neighborsDst);
-        
-        if (debug) {
-          cout << "added neighbor of src node to dst neighbors" << endl;
+      // Add edge between neighbor and dst (if it does not exist)
+      
+      neighbors.insert(dstPtr->tag);
+      
+      // Remove edge between neighbor and src
+      
+      numRemoved = (int) neighbors.erase(srcPtr->tag);
+      assert(numRemoved == 1);
+      
+#if defined(DEBUG)
+      assert(neighbors.size() > 0);
+#endif // DEBUG
+      
+      if (debug) {
+        cout << "final neighbor of src neighbor set :" << endl;
+        for ( int32_t neighborTag : neighbors ) {
+          cout << neighborTag << endl;
         }
       }
       
-      edgeTable.setNeighbors(neighborOfSrcTag, neighbors);
+      // If this neighbor is not currently a neighbor of dst then
+      // add it now with an add that is a nop for duplicate entries
+      
+      neighborsOfDst.insert(neighborOfSrcTag);
+      
+      if (debug) {
+        cout << "final neighbors dst set :" << endl;
+        for ( int32_t neighborTag : neighborsOfDst ) {
+          cout << neighborTag << endl;
+        }
+      }
     }
   }
   
+  if (debug) {
+    cout << "final edge results for merged UID " << dstPtr->tag << endl;
+    
+    set<int32_t> &neighbors = edgeTable.getNeighborsSet(dstPtr->tag);
+    
+    cout << "final dst neighbor set :" << endl;
+    for ( int32_t neighborTag : neighbors ) {
+      cout << neighborTag << endl;
+    }
+  }
+    
   edgeTable.removeNeighbors(srcPtr->tag);
   
   // Move edge weights from src to dst
@@ -607,23 +612,16 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
   dstPtr = getSuperpixelPtr(dstPtr->tag);
   assert(dstPtr != NULL);
   
-  vector<int32_t> *neighborsPtr = edgeTable.getNeighborsPtr(dstPtr->tag);
-  
-  for (auto neighborIter = neighborsPtr->begin(); neighborIter != neighborsPtr->end(); ++neighborIter ) {
-    int32_t neighborTag = *neighborIter;
-    
+  for ( int32_t neighborTag : edgeTable.getNeighborsSet(dstPtr->tag)) {
     // Make sure that each neighbor of the merged superpixel also has the merged superpixel
     // as a neighbor.
     
     Superpixel *neighborPtr = getSuperpixelPtr(neighborTag);
     assert(neighborPtr != NULL);
     
-    vector<int32_t> *neighborsOfNeighborPtr = edgeTable.getNeighborsPtr(neighborTag);
-    
     found = false;
     
-    for (auto nnIter = neighborsOfNeighborPtr->begin(); nnIter != neighborsOfNeighborPtr->end(); ++nnIter ) {
-      int32_t nnTag = *nnIter;
+    for ( int32_t nnTag : edgeTable.getNeighborsSet(neighborTag) ) {
       if (nnTag == dstPtr->tag) {
         found = true;
         break;
@@ -640,6 +638,16 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
     
     if (tagToRemove == tag) {
       assert(0);
+    }
+    
+    // Check that src is not a neighbor of any superpixel
+    
+    set<int32_t> &neighbors = edgeTable.getNeighborsSet(tag);
+    
+    for ( int32_t neighborTag : neighbors ) {
+      if (neighborTag == tagToRemove) {
+        assert(0);
+      }
     }
   }
 #endif // DEBUG
@@ -729,8 +737,7 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
     if (debug) {
       cout << "found neighbors of known identical superpixel " << tag << endl;
       
-      for (auto neighborIter = neighbors.begin(); neighborIter != neighbors.end(); ++neighborIter) {
-        int32_t neighborTag = *neighborIter;
+      for ( int32_t neighborTag : neighbors ) {
         cout << "neighbor " << neighborTag << endl;
       }
     }
@@ -742,9 +749,7 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
     
     bool mergedNeighbor = false;
     
-    for (auto neighborIter = neighbors.begin(); neighborIter != neighbors.end(); ++neighborIter) {
-      int32_t neighborTag = *neighborIter;
-      
+    for ( int32_t neighborTag : neighbors ) {
       bool isAllSame = isAllSamePixels(inputImg, spPtr, neighborTag);
       
       if (debug) {

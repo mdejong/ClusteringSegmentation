@@ -6,6 +6,7 @@
 #define	SUPERPIXEL_EDGE_TABLE_H
 
 #include <unordered_map>
+#include <set>
 
 #include "SuperpixelEdge.h"
 
@@ -25,22 +26,24 @@ class SuperpixelEdgeTable {
   
   unordered_map<SuperpixelEdge, float> edgeStrengthMap;
     
-  // Return the neighbors of a superpixel UID.
+  // Return the neighbors of a superpixel UID as a vector of int32_t
   
   vector<int32_t> getNeighbors(int32_t tag);
   
-  // Fast version of getNeighbors() when the caller wants to
-  // iterate over the results but not change anything.
-  // This impl does not make a copy of the vector being
-  // returned.
+  // A neighbor iterator supports fast access to the neighbors list
+  // in sorted order. The caller must take care to not hold an
+  // iterator during a merge since that can change the neighbor list.
   
-  vector<int32_t>* getNeighborsPtr(int32_t tag);
+  set<int32_t>&
+  getNeighborsSet(int32_t tag);
   
   // Set list of neighbor nodes for a given superpixel UID.
   // This method is typically called when initializing the
   // graph.
   
   void setNeighbors(int32_t tag, vector<int32_t> neighborUIDsVec);
+  
+  void setNeighbors(int32_t tag, set<int32_t> neighborsSet);
 
   // When deleting a node, remove the neighbor entries with this method
   
@@ -53,10 +56,18 @@ class SuperpixelEdgeTable {
   vector<SuperpixelEdge> getAllEdges();
   
   vector<int32_t> getAllTagsInNeighborsTable();
+
+  // Accessor for neighbors member
+  
+  inline
+  unordered_map <int32_t, set<int32_t> > &getNeighborsRef()
+  {
+    return neighbors;
+  }
   
   private:
   
-  unordered_map <int32_t, vector<int32_t> > neighbors;
+  unordered_map <int32_t, set<int32_t> > neighbors;
   
 };
 

@@ -927,7 +927,12 @@
   
   XCTAssert(spImage.tagToSuperpixelMap.size() == superpixels.size(), @"sumperpixel UID table");
   
-  // Merge superpixels (0 2) together
+  // Merge superpixels (0 2) aka (1 3) together
+  // Pre merged
+  
+  // 0 0 0
+  // 1 2 2
+  // 3 3 3
   
   spImage.mergeEdge(edges[1]);
   
@@ -982,9 +987,9 @@
     XCTAssert([result isEqualToArray:expected], @"coords");
   }
   
-  // Post merge, sp 0 should have 2 neighbors
-  
   vector<int32_t> neighbors;
+  
+  // Post merge, sp 0 should have 2 neighbors
   
   neighbors = spImage.edgeTable.getNeighbors(superpixels[0]);
   XCTAssert(neighbors.size() == 2, @"neighbors size");

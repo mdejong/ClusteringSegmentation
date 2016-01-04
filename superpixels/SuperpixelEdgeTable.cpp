@@ -27,15 +27,11 @@ vector<SuperpixelEdge> SuperpixelEdgeTable::getAllEdges()
   for (auto it = allSuperpixles.begin(); it != allSuperpixles.end(); ++it ) {
     int32_t tag = *it;
     
-    vector<int32_t> neighbors = getNeighbors(tag);
-    
     if (debug) {
       cout << "for superpixel " << tag << " neighbors:" << endl;
     }
     
-    for (auto neighborIter = neighbors.begin(); neighborIter != neighbors.end(); ++neighborIter ) {
-      int32_t neighborTag = *neighborIter;
-
+    for ( int32_t neighborTag : getNeighborsSet(tag) ) {
       if (debug) {
         cout << neighborTag << endl;
       }
@@ -60,17 +56,14 @@ vector<SuperpixelEdge> SuperpixelEdgeTable::getAllEdges()
   return allEdges;
 }
 
-// Optimal getNeighborsPtr() returns a pointer into the table which is
-// fast WRT iteration. The caller has to very careful not to attempt
-// to iterate over an invocation of merge edge since that can change
-// the neighbor list.
+// A neighbor iterator supports fast access to the neighbors list
+// in sorted order. The caller must take care to not hold an
+// iterator during a merge since that can change the neighbor list.
 
-vector<int32_t>* SuperpixelEdgeTable::getNeighborsPtr(int32_t tag)
+set<int32_t>&
+SuperpixelEdgeTable::getNeighborsSet(int32_t tag)
 {
-  //assert(neighbors.count(tag) > 0);
-  //return neighbors[tag];
-  
-  unordered_map <int32_t, vector<int32_t> >::iterator iter = neighbors.find(tag);
+  auto iter = neighbors.find(tag);
   
   if (iter == neighbors.end()) {
     // Neighbors key must be defined for this tag
@@ -79,7 +72,7 @@ vector<int32_t>* SuperpixelEdgeTable::getNeighborsPtr(int32_t tag)
     // Otherwise the key exists in the table, return ref to vector in table
     // with the assumption that the caller will not change it.
     
-    return &iter->second;
+    return iter->second;
   }
 }
 
@@ -87,7 +80,11 @@ vector<int32_t>* SuperpixelEdgeTable::getNeighborsPtr(int32_t tag)
 
 vector<int32_t> SuperpixelEdgeTable::getNeighbors(int32_t tag)
 {
-  return *getNeighborsPtr(tag);
+  vector<int32_t> neighbors;
+  for ( int32_t neighborTag : getNeighborsSet(tag) ) {
+    neighbors.push_back(neighborTag);
+  }
+  return neighbors;
 }
 
 // Set initial list of neighbors for a superpixel or rest the list after making
@@ -95,10 +92,29 @@ vector<int32_t> SuperpixelEdgeTable::getNeighbors(int32_t tag)
 // read, there should not be much impact on performance since the list of neighbors
 // is typically small.
 
-void SuperpixelEdgeTable::setNeighbors(int32_t tag, vector<int32_t> neighborsUIDsVec)
+void SuperpixelEdgeTable::setNeighbors(int32_t tag, vector<int32_t> neighborUIDsVec)
 {
-  sort (neighborsUIDsVec.begin(), neighborsUIDsVec.end());
-  neighbors[tag] = neighborsUIDsVec;
+  set<int32_t> neighborsSet;
+  
+  for ( int32_t tag : neighborUIDsVec ) {
+    neighborsSet.insert(tag);
+  }
+  // FIXME: use faster impl of insert
+  //neighborsSet.insert(neighbors.begin(), neighbors.end);
+  
+  //sort (neighborsUIDsVec.begin(), neighborsUIDsVec.end());
+  
+  neighbors[tag] = neighborsSet;
+}
+
+// Set initial list of neighbors for a superpixel or rest the list after making
+// changes. The neighbor values are sorted only to make the results easier to
+// read, there should not be much impact on performance since the list of neighbors
+// is typically small.
+
+void SuperpixelEdgeTable::setNeighbors(int32_t tag, set<int32_t> neighborsSet)
+{
+  neighbors[tag] = neighborsSet;
 }
 
 // When deleting a node, remove the neighbor entries
