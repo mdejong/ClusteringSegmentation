@@ -41,6 +41,34 @@ int main(int argc, const char** argv) {
     inputImgFilename = argv[1];
     // Default to "outtags.png"
     outputTagsImgFilename = "outtags.png";
+    
+    // In the special case where the inputImgFilename is fully qualified, cd to the directory
+    // indicated by the path. This is useful so that just a fully qualified image path can
+    // be passed as the first argument without having to explicitly set the process working dir
+    // since Xcode tends to get that detail wrong when invoking profiling tools.
+    
+    bool containsSlash = false;
+    int lastSlashOffset = -1;
+    
+    for ( char *ptr = (char*)inputImgFilename; *ptr != '\0' ; ptr++ ) {
+      if (*ptr == '/') {
+        containsSlash = true;
+        lastSlashOffset = int(ptr - (char*)inputImgFilename);
+      }
+    }
+    
+    if (containsSlash) {
+      char *dirname = strdup((char*)inputImgFilename);
+      assert(lastSlashOffset >= 0);
+      dirname[lastSlashOffset] = '\0';
+      
+      inputImgFilename = inputImgFilename + lastSlashOffset + 1;
+      
+      cout << "cd \"" << dirname << "\"" << endl;
+      chdir(dirname);
+      
+      free(dirname);
+    }
   } else if (argc != 3) {
     cerr << "usage : " << argv[0] << " IMAGE ?TAGS_IMAGE?" << endl;
     exit(1);
