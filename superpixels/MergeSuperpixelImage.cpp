@@ -1466,9 +1466,9 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
   // finding the next superpixel since superpixels will always be processed
   // from largest to smallest.
   
-  sortSuperpixelsBySize();
+  vector<int32_t> sortedSuperpixels = sortSuperpixelsBySize();
   
-  auto spIter = superpixels.begin();
+  auto spIter = sortedSuperpixels.begin();
   int32_t maxTag = -1;
   
   while (!done) {
@@ -1476,7 +1476,7 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
     // the superpixels list was sorted and then only deletes would happen via a merge.
 
 #if defined(DEBUG)
-    if (spIter != superpixels.begin() && spIter != superpixels.end()) {
+    if (spIter != sortedSuperpixels.begin() && spIter != sortedSuperpixels.end()) {
       spIter--;
       int prevTag = *spIter;
       spIter++;
@@ -1484,14 +1484,14 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
     }
 #endif // DEBUG
     
-    if (spIter == superpixels.end()) {
+    if (spIter == sortedSuperpixels.end()) {
       // At end of superpixels list
       maxTag = -1;
     } else {
       // Find next unlocked superpixel
 
       maxTag = -1;
-      while (spIter != superpixels.end()) {
+      while (spIter != sortedSuperpixels.end()) {
         int32_t nextTag = *spIter;
         
         if (debug) {
@@ -1561,8 +1561,8 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
       }
       
       mergesSinceLockClear.clear();
-      sortSuperpixelsBySize();
-      spIter = superpixels.begin();
+      sortedSuperpixels = sortSuperpixelsBySize();
+      spIter = sortedSuperpixels.begin();
       numLockClear++;
       continue;
     }
@@ -1866,9 +1866,9 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
   // finding the next superpixel since superpixels will always be processed
   // from largest to smallest.
   
-  sortSuperpixelsBySize();
+  vector<int32_t> sortedSuperpixels = sortSuperpixelsBySize();
   
-  auto spIter = superpixels.begin();
+  auto spIter = sortedSuperpixels.begin();
   int32_t maxTag = -1;
   
   while (!done) {
@@ -1876,7 +1876,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
     // the superpixels list was sorted and then only deletes would happen via a merge.
     
 #if defined(DEBUG)
-    if (spIter != superpixels.begin() && spIter != superpixels.end()) {
+    if (spIter != sortedSuperpixels.begin() && spIter != sortedSuperpixels.end()) {
       spIter--;
       int prevTag = *spIter;
       spIter++;
@@ -1884,14 +1884,14 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
     }
 #endif // DEBUG
     
-    if (spIter == superpixels.end()) {
+    if (spIter == sortedSuperpixels.end()) {
       // At end of superpixels list
       maxTag = -1;
     } else {
       // Find next unlocked superpixel
       
       maxTag = -1;
-      while (spIter != superpixels.end()) {
+      while (spIter != sortedSuperpixels.end()) {
         int32_t nextTag = *spIter;
         
         if (debug) {
@@ -1973,8 +1973,8 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
       }
       
       mergesSinceLockClear.clear();
-      sortSuperpixelsBySize();
-      spIter = superpixels.begin();
+      sortedSuperpixels = sortSuperpixelsBySize();
+      spIter = sortedSuperpixels.begin();
       numLockClear++;
       continue;
     }

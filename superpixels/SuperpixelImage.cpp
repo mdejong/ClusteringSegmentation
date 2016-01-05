@@ -82,6 +82,8 @@ bool SuperpixelImage::parse(Mat &tags, SuperpixelImage &spImage) {
   
   TagToSuperpixelMap &tagToSuperpixelMap = spImage.tagToSuperpixelMap;
   
+  auto &superpixels = spImage.superpixels;
+  
   for( int y = 0; y < tags.rows; y++ ) {
     for( int x = 0; x < tags.cols; x++ ) {
       Vec3b tagVec = tags.at<Vec3b>(y, x);
@@ -124,6 +126,7 @@ bool SuperpixelImage::parse(Mat &tags, SuperpixelImage &spImage) {
         
         Superpixel *spPtr = new Superpixel(tag);
         iter = tagToSuperpixelMap.insert(iter, make_pair(tag, spPtr));
+        superpixels.insert(tag);
       } else {
         if (debug) {
           cout << "exists  Superpixel for UID " << tag << endl;
@@ -136,21 +139,8 @@ bool SuperpixelImage::parse(Mat &tags, SuperpixelImage &spImage) {
       spPtr->appendCoord(x, y);
     }
   }
-  
-  // Collect all superpixels as a single vector sorted by increasing UID values
-  
-  auto &superpixels = spImage.superpixels;
-  superpixels.reserve(tagToSuperpixelMap.size());
-  
-  for (auto it = tagToSuperpixelMap.begin(); it!=tagToSuperpixelMap.end(); ++it) {
-    Superpixel *spPtr = it->second;
-    int32_t tag = spPtr->tag;
-    superpixels.push_back(tag);
-  }
 
   assert(superpixels.size() == tagToSuperpixelMap.size());
-  
-  sort(superpixels.begin(), superpixels.end());
   
   // Print superpixel info
   
@@ -422,42 +412,9 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
   
   // Find entry for srcPtr->tags in superpixels and remove the UID
   
-  bool found = false;
-  
-  if ((false)) {
-    for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
-      int32_t tag = *it;
-      
-      if (srcPtr->tag == tag) {
-        if (debug) {
-          cout << "superpixel UID = " << tag << " found as delete match in ordered superpixels list" << endl;
-        }
-        
-        it = superpixels.erase(it);
-        found = true;
-        break;
-      }
-    }
-  } else {
-    // Binary search for iterator into sorted array
-    
-    int32_t tag = srcPtr->tag;
-    auto it = binary_search_iter(superpixels.begin(), superpixels.end(), tag);
-    
-    if (it != superpixels.end()) {
-#if defined(DEBUG)
-      assert(*it == tag);
-#endif // DEBUG
-      if (debug) {
-        cout << "superpixel UID = " << tag << " found as delete match in ordered superpixels list" << endl;
-      }
-      
-      superpixels.erase(it);
-      found = true;
-    }
-  }
-  
-  assert(found);
+  int32_t tag = srcPtr->tag;
+  int numErased = (int) superpixels.erase(tag);
+  assert (numErased == 1);
 
   bool hasEdgeStrengthMap;
   int numRemoved;
@@ -619,7 +576,7 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
     Superpixel *neighborPtr = getSuperpixelPtr(neighborTag);
     assert(neighborPtr != NULL);
     
-    found = false;
+    bool found = false;
     
     for ( int32_t nnTag : edgeTable.getNeighborsSet(neighborTag) ) {
       if (nnTag == dstPtr->tag) {
@@ -799,7 +756,8 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
 // Sort superpixels by size and sort ties so that smaller pixel tag values appear
 // before larger tag values.
 
-void SuperpixelImage::sortSuperpixelsBySize()
+vector<int32_t>
+SuperpixelImage::sortSuperpixelsBySize()
 {
   const bool debug = false;
   
@@ -819,20 +777,17 @@ void SuperpixelImage::sortSuperpixelsBySize()
   
   int i = 0;
   
-  auto spIter = superpixels.begin();
+  vector<int32_t> retVec;
+  retVec.reserve(superpixels.size());
   
-  for (auto it = sortedSuperpixels.begin(); it != sortedSuperpixels.end(); ++it, ++spIter, i++) {
+  for (auto it = sortedSuperpixels.begin(); it != sortedSuperpixels.end(); ++it, i++) {
     SuperpixelSortStruct ss = *it;
     int32_t tag = ss.spPtr->tag;
 
-#if defined(DEBUG)
-    assert(spIter != superpixels.end());
-#endif // DEBUG
-    
-    *spIter = tag;
+    retVec.push_back(tag);
     
     if (debug) {
-      cout << "sorted superpixel at offset " << i << " now has tag " << (*spIter) << " with N = " << ss.spPtr->coords.size() << endl;
+      cout << "sorted superpixel at offset " << i << " now has tag " << tag << " with N = " << ss.spPtr->coords.size() << endl;
     }
   }
   
@@ -840,7 +795,7 @@ void SuperpixelImage::sortSuperpixelsBySize()
   // Loop over sorted pixels and verify that sizes decrease as list is iterated
   int prevSize = 0;
   
-  for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
+  for (auto it = retVec.begin(); it != retVec.end(); ++it) {
     int32_t tag = *it;
     Superpixel *spPtr = getSuperpixelPtr(tag);
     int currentSize = (int) spPtr->coords.size();
@@ -853,7 +808,7 @@ void SuperpixelImage::sortSuperpixelsBySize()
   }
 #endif // DEBUG
   
-  return;
+  return retVec;
 }
 
 // This util method scans the current list of superpixels and returns the largest superpixels

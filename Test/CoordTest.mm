@@ -120,7 +120,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 1, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -155,7 +155,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 2, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -207,7 +207,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 2, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -259,7 +259,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 2, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -313,7 +313,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 3, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -389,7 +389,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 3, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -473,7 +473,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 2, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -531,7 +531,7 @@
   
   XCTAssert(spImage.tagToSuperpixelMap.size() == 1, @"sumperpixel UID table");
   
-  superpixels = spImage.superpixels;
+  superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 1, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -569,7 +569,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 2, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -617,7 +617,7 @@
   
   XCTAssert(spImage.tagToSuperpixelMap.size() == 1, @"sumperpixel UID table");
   
-  superpixels = spImage.superpixels;
+  superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 1, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 1+1, @"tag");
@@ -675,7 +675,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 3, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -747,7 +747,7 @@
   
   XCTAssert(spImage.tagToSuperpixelMap.size() == 2, @"sumperpixel UID table");
   
-  superpixels = spImage.superpixels;
+  superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 2, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -788,8 +788,8 @@
   
   SuperpixelEdge edge = edges[0];
   
-  XCTAssert(edge.A == superpixels[0], @"edges");
-  XCTAssert(edge.B == superpixels[2], @"edge");
+  XCTAssert(edge.A == superpixels[0], @"edge");
+  XCTAssert(edge.B == superpixels[1], @"edge");
   
   // The merge operation must have removed the neighbor 1 from 2
   // and 1 must have been removed from 0
@@ -798,9 +798,9 @@
   
   neighbors = spImage.edgeTable.getNeighbors(superpixels[0]);
   XCTAssert(neighbors.size() == 1, @"neighbors size");
-  XCTAssert(neighbors[0] == superpixels[2], @"neighbors");
+  XCTAssert(neighbors[0] == superpixels[1], @"neighbors");
   
-  neighbors = spImage.edgeTable.getNeighbors(superpixels[2]);
+  neighbors = spImage.edgeTable.getNeighbors(superpixels[1]);
   XCTAssert(neighbors.size() == 1, @"neighbors size");
   XCTAssert(neighbors[0] == superpixels[0], @"neighbors");
   
@@ -809,7 +809,9 @@
   vector<int32_t> tags = spImage.edgeTable.getAllTagsInNeighborsTable();
   XCTAssert(tags.size() == 2, @"neighbors table size");
   XCTAssert(tags[0] == superpixels[0], @"neighbors");
-  XCTAssert(tags[1] == superpixels[2], @"neighbors");
+  XCTAssert(tags[1] == superpixels[1], @"neighbors");
+  
+  return;
 }
 
 // In this 3x3 test grid a merge results in a new edge being created
@@ -834,7 +836,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 4, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -938,7 +940,7 @@
   
   XCTAssert(spImage.tagToSuperpixelMap.size() == 3, @"sumperpixel UID table");
   
-  superpixels = spImage.superpixels;
+  superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 3, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -994,18 +996,18 @@
   neighbors = spImage.edgeTable.getNeighbors(superpixels[0]);
   XCTAssert(neighbors.size() == 2, @"neighbors size");
   XCTAssert(neighbors[0] == superpixels[1], @"neighbors");
-  XCTAssert(neighbors[1] == superpixels[3], @"neighbors");
+  XCTAssert(neighbors[1] == superpixels[2], @"neighbors");
   
   // sp 1 should have 2 neighbors
   
   neighbors = spImage.edgeTable.getNeighbors(superpixels[1]);
   XCTAssert(neighbors.size() == 2, @"neighbors size");
   XCTAssert(neighbors[0] == superpixels[0], @"neighbors");
-  XCTAssert(neighbors[1] == superpixels[3], @"neighbors");
+  XCTAssert(neighbors[1] == superpixels[2], @"neighbors");
   
   // sp 3 should have 2 neighbors
   
-  neighbors = spImage.edgeTable.getNeighbors(superpixels[3]);
+  neighbors = spImage.edgeTable.getNeighbors(superpixels[2]);
   XCTAssert(neighbors.size() == 2, @"neighbors size");
   XCTAssert(neighbors[0] == superpixels[0], @"neighbors");
   XCTAssert(neighbors[1] == superpixels[1], @"neighbors");
@@ -1014,7 +1016,7 @@
   XCTAssert(tags.size() == 3, @"neighbors table size");
   XCTAssert(tags[0] == superpixels[0], @"neighbors");
   XCTAssert(tags[1] == superpixels[1], @"neighbors");
-  XCTAssert(tags[2] == superpixels[3], @"neighbors");
+  XCTAssert(tags[2] == superpixels[2], @"neighbors");
   
   // Superpixel 2 merged into 0 with new edge created between 0 and 3
   
@@ -1029,12 +1031,12 @@
   edge = edges[1];
   
   XCTAssert(edge.A == superpixels[0], @"num edges");
-  XCTAssert(edge.B == superpixels[3], @"num edges");
+  XCTAssert(edge.B == superpixels[2], @"num edges");
   
   edge = edges[2];
   
   XCTAssert(edge.A == superpixels[1], @"num edges");
-  XCTAssert(edge.B == superpixels[3], @"num edges");
+  XCTAssert(edge.B == superpixels[2], @"num edges");
   
   return;
 }
@@ -1060,7 +1062,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 5, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -1175,7 +1177,7 @@
   
   XCTAssert(spImage.tagToSuperpixelMap.size() == 4, @"sumperpixel UID table");
   
-  superpixels = spImage.superpixels;
+  superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 4, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -1288,7 +1290,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 3, @"num sumperpixels");
   
   int32_t uid = superpixels[0];
@@ -1351,7 +1353,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 3, @"num sumperpixels");
   
   // Got bbox for superpixel 10
@@ -1420,7 +1422,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 2, @"num sumperpixels");
   
   // Got bbox for superpixel 10
@@ -1472,7 +1474,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 2, @"num sumperpixels");
   
   // Get edge coords between these two superpixels
@@ -1607,7 +1609,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 2, @"num sumperpixels");
   
   // Get edge coords between these two superpixels
@@ -1778,7 +1780,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 2, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -1850,7 +1852,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 2, @"num sumperpixels");
   
   XCTAssert(superpixels[0] == 0+1, @"tag");
@@ -1926,7 +1928,7 @@
   bool worked = SuperpixelImage::parse(tagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
   
-  vector<int32_t> superpixels = spImage.superpixels;
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 3, @"num sumperpixels");
   
   vector<SuperpixelEdge> edges = spImage.getEdges();

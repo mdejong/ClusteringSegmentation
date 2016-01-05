@@ -6,6 +6,7 @@
 #define	SUPERPIXEL_IMAGE_H
 
 #include <vector>
+#include <set>
 #include <unordered_map>
 #include <opencv2/opencv.hpp>
 
@@ -33,7 +34,7 @@ class SuperpixelImage {
   // The superpixels list contains the UIDs for superpixels
   // in UID sorted order.
   
-  vector<int32_t> superpixels;
+  set<int32_t> superpixels;
 
   // The edge table contains a representation of "edges" in terms
   // of adjacent nodes lists.
@@ -95,8 +96,16 @@ class SuperpixelImage {
   bool isAllSamePixels(Mat &input, Superpixel *spPtr, int32_t otherTag);
   
   bool isAllSamePixels(Mat &input, uint32_t knownFirstPixel, vector<Coord> &coords);
+
+  vector<int32_t> sortSuperpixelsBySize();
   
-  void sortSuperpixelsBySize();
+  vector<int32_t> getSuperpixelsVec() {
+    vector<int32_t> vec;
+    for ( int32_t tag : superpixels ) {
+      vec.push_back(tag);
+    }
+    return vec;
+  }
 
 };
 

@@ -181,7 +181,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
        0
 #endif // DEBUG
        )) {
-    spImage.sortSuperpixelsBySize();
+    auto vec = spImage.sortSuperpixelsBySize();
+    assert(vec.size() > 0);
   }
   
   if (debugWriteIntermediateFiles) {
