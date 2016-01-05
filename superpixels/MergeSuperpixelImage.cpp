@@ -1468,7 +1468,7 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
   
   sortSuperpixelsBySize();
   
-  int sortedListOffset = 0;
+  auto spIter = superpixels.begin();
   int32_t maxTag = -1;
   
   while (!done) {
@@ -1476,31 +1476,31 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
     // the superpixels list was sorted and then only deletes would happen via a merge.
 
 #if defined(DEBUG)
-    if (sortedListOffset > 0 && sortedListOffset != superpixels.size()) {
-      int prevTag = superpixels[sortedListOffset-1];
+    if (spIter != superpixels.begin() && spIter != superpixels.end()) {
+      spIter--;
+      int prevTag = *spIter;
+      spIter++;
       assert(maxTag == prevTag);
     }
 #endif // DEBUG
     
-    int maxSuperpixelOffset = (int) superpixels.size();
-    
-    if (sortedListOffset == maxSuperpixelOffset) {
+    if (spIter == superpixels.end()) {
       // At end of superpixels list
       maxTag = -1;
     } else {
       // Find next unlocked superpixel
 
       maxTag = -1;
-      while (sortedListOffset < maxSuperpixelOffset) {
-        int32_t nextTag = superpixels[sortedListOffset];
+      while (spIter != superpixels.end()) {
+        int32_t nextTag = *spIter;
         
         if (debug) {
           Superpixel *spPtr = getSuperpixelPtr(nextTag);
           int numCoords = (int) spPtr->coords.size();
-          cout << "next max superpixel " << nextTag << " N = " << numCoords << " at offset " << sortedListOffset << endl;
+          cout << "next max superpixel " << nextTag << " N = " << numCoords << endl;
         }
         
-        sortedListOffset++;
+        spIter++;
         
         if (locked[nextTag]) {
           if (debug) {
@@ -1562,7 +1562,7 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
       
       mergesSinceLockClear.clear();
       sortSuperpixelsBySize();
-      sortedListOffset = 0;
+      spIter = superpixels.begin();
       numLockClear++;
       continue;
     }
@@ -1868,7 +1868,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
   
   sortSuperpixelsBySize();
   
-  int sortedListOffset = 0;
+  auto spIter = superpixels.begin();
   int32_t maxTag = -1;
   
   while (!done) {
@@ -1876,31 +1876,31 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
     // the superpixels list was sorted and then only deletes would happen via a merge.
     
 #if defined(DEBUG)
-    if (sortedListOffset > 0 && sortedListOffset != superpixels.size()) {
-      int prevTag = superpixels[sortedListOffset-1];
+    if (spIter != superpixels.begin() && spIter != superpixels.end()) {
+      spIter--;
+      int prevTag = *spIter;
+      spIter++;
       assert(maxTag == prevTag);
     }
 #endif // DEBUG
     
-    int maxSuperpixelOffset = (int) superpixels.size();
-    
-    if (sortedListOffset == maxSuperpixelOffset) {
+    if (spIter == superpixels.end()) {
       // At end of superpixels list
       maxTag = -1;
     } else {
       // Find next unlocked superpixel
       
       maxTag = -1;
-      while (sortedListOffset < maxSuperpixelOffset) {
-        int32_t nextTag = superpixels[sortedListOffset];
+      while (spIter != superpixels.end()) {
+        int32_t nextTag = *spIter;
         
         if (debug) {
           Superpixel *spPtr = getSuperpixelPtr(nextTag);
           int numCoords = (int) spPtr->coords.size();
-          cout << "next max superpixel " << nextTag << " N = " << numCoords << " at offset " << sortedListOffset << endl;
+          cout << "next max superpixel " << nextTag << " N = " << numCoords << endl;
         }
         
-        sortedListOffset++;
+        spIter++;
         
         if (locked[nextTag]) {
           if (debug) {
@@ -1974,7 +1974,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
       
       mergesSinceLockClear.clear();
       sortSuperpixelsBySize();
-      sortedListOffset = 0;
+      spIter = superpixels.begin();
       numLockClear++;
       continue;
     }
