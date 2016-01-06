@@ -2049,6 +2049,30 @@
   visited = visitedCoordsMap[c0];
   XCTAssert(visited == false, @"visited");
   
+  // Operator +
+  
+  Coord tmp;
+  
+  tmp = c0 + c1;
+  XCTAssert(tmp.x == 1 && tmp.y == 0, @"coord");
+  
+  Coord cTwo(2, 4);
+  Coord cThree(3, 6);
+
+  tmp = cTwo;
+  tmp += cThree;
+  
+  XCTAssert(tmp.x == 5 && tmp.y == 10, @"coord");
+  
+  // Operator -
+  
+  tmp = cThree - cTwo;
+  XCTAssert(tmp.x == 1 && tmp.y == 2, @"coord");
+  
+  tmp = cThree;
+  tmp -= cTwo;
+  XCTAssert(tmp.x == 1 && tmp.y == 2, @"coord");
+  
   return;
 }
 

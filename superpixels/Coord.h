@@ -105,6 +105,36 @@ public:
     return lhs == rhs;
   }
   
+  Coord operator+(const Coord& rhs) const
+  {
+    Coord tmp(*this);
+    tmp.x += rhs.x;
+    tmp.y += rhs.y;
+    return tmp;
+  }
+
+  Coord operator-(const Coord& rhs) const
+  {
+    Coord tmp(*this);
+    tmp.x -= rhs.x;
+    tmp.y -= rhs.y;
+    return tmp;
+  }
+  
+  Coord& operator+=(const Coord& rhs)
+  {
+    x += rhs.x;
+    y += rhs.y;
+    return *this;
+  }
+
+  Coord& operator-=(const Coord& rhs)
+  {
+    x -= rhs.x;
+    y -= rhs.y;
+    return *this;
+  }
+  
   size_t gethash() const
   {
     size_t hashed;
