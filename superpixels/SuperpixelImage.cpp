@@ -689,12 +689,12 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
     // merge during the loop so the list of neighbors needs to be a copy of the
     // neighbors list since the neighbors list can be changed by the merge.
     
-    vector<int32_t> neighbors = edgeTable.getNeighbors(tag);
+    auto &neighborsSet = edgeTable.getNeighborsSet(tag);
     
     if (debug) {
       cout << "found neighbors of known identical superpixel " << tag << endl;
       
-      for ( int32_t neighborTag : neighbors ) {
+      for ( int32_t neighborTag : neighborsSet ) {
         cout << "neighbor " << neighborTag << endl;
       }
     }
@@ -706,7 +706,11 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
     
     bool mergedNeighbor = false;
     
-    for ( int32_t neighborTag : neighbors ) {
+    for ( auto neighborIter = neighborsSet.begin(); neighborIter != neighborsSet.end(); ) {
+      int32_t neighborTag = *neighborIter;
+      // Advance the iterator to the next neighbor before a possible merge
+      ++neighborIter;
+
       bool isAllSame = isAllSamePixels(inputImg, spPtr, neighborTag);
       
       if (debug) {
