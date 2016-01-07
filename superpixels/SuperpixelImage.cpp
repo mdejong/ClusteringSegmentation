@@ -3,6 +3,7 @@
 // image.
 
 #include "SuperpixelImage.h"
+#include "MergeSuperpixelImage.h"
 
 #include "Superpixel.h"
 
@@ -752,6 +753,163 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
       ++it;
     }
   } // end for identicalSuperpixels loop
+  
+  return;
+}
+
+// checkPredicate given 
+
+bool
+SuperpixelImage::checkPredicate(Mat &input, Superpixel *spPtr, int32_t otherTag)
+{
+  Superpixel *otherSpPtr = getSuperpixelPtr(otherTag);
+  if (otherSpPtr == NULL) {
+    // Return false when the neighbor was already merged away
+    return false;
+  }
+  
+  // Predicate test examines superpixels (S1, S2) to determine if each of
+  // the pixels on the border between the regions is exactly the same.
+  
+  MergeSuperpixelImage *mspPtr = (MergeSuperpixelImage*)this;
+  
+  mspPtr->checkNeighborEdgeWeights(input, spPtr->tag, NULL, edgeTable.edgeStrengthMap, 0);
+  
+  for ( auto it = edgeTable.edgeStrengthMap.begin(); it != edgeTable.edgeStrengthMap.end(); ++it ) {
+    SuperpixelEdge edge = it->first;
+    float strength = it->second;
+    
+    cout << "edge " << edge << " has strength " << strength << endl;
+  }
+  
+  // If the edge between (S1, S2) is zero then merge
+  
+  SuperpixelEdge edge(spPtr->tag, otherSpPtr->tag);
+  
+  float strength = edgeTable.edgeStrengthMap[edge];
+  
+  if (strength == 0.0) {
+    return true;
+  }
+  
+  return false;
+}
+
+// Scan superpixels looking for the case where one region of superpixels can be merged
+// with a neighbor based on a merge predicate.
+
+void SuperpixelImage::mergeSuperpixelsWithPredicate(Mat &inputImg) {
+  const bool debug = true;
+  
+  // Do initial scan of all the superpixels looking for superpixels that
+  // are known to be identical so that an optimal branch in the predicate
+  // search logic need not scan every pixel in this special case.
+  
+  for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
+    int32_t tag = *it;
+    
+    Superpixel *spPtr = getSuperpixelPtr(tag);
+    
+    if (spPtr->isAllSame() || spPtr->isNotAllSame()) {
+      // This superpixel has already been scanned and flags set accordingly
+      //continue;
+      break;
+    }
+    
+    bool isAllSame = isAllSamePixels(inputImg, tag);
+    
+    if (isAllSame) {
+      spPtr->setAllSame();
+    } else {
+      spPtr->setNotAllSame();
+    }
+  }
+  
+  // Scan superpixels and compare to neighbor superpixels using predicate.
+  // Note that a copy of the superpixels table must be scanned since the
+  // superpixels table can have elements deleted from it as part of a
+  // merge during the loop.
+  
+  auto superpixelsVec = getSuperpixelsVec();
+  
+  for (auto it = superpixelsVec.begin(); it != superpixelsVec.end(); ) {
+    int32_t tag = *it;
+    
+    Superpixel *spPtr = getSuperpixelPtr(tag);
+    
+    if (spPtr == NULL) {
+      // Check for the edge case of this superpixel being merged into a neighbor as a result
+      // of a previous iteration.
+      
+      if (debug) {
+        cout << "identical superpixel " << tag << " was merged away already" << endl;
+      }
+      
+      ++it;
+      continue;
+    }
+    
+    // Iterate over all neighbor superpixels and do merge based on criteria
+    
+    auto &neighborsSet = edgeTable.getNeighborsSet(tag);
+    
+    if (debug) {
+      cout << "found neighbors of superpixel " << tag << endl;
+      
+      for ( int32_t neighborTag : neighborsSet ) {
+        cout << "neighbor " << neighborTag << endl;
+      }
+    }
+    
+    bool mergedNeighbor = false;
+    
+    for ( auto neighborIter = neighborsSet.begin(); neighborIter != neighborsSet.end(); ) {
+      int32_t neighborTag = *neighborIter;
+      // Advance the iterator to the next neighbor before a possible merge
+      ++neighborIter;
+      
+      bool doMerge = checkPredicate(inputImg, spPtr, neighborTag);
+      
+      if (debug) {
+        cout << "neighbor " << neighborTag << " doMerge -> " << doMerge << endl;
+      }
+      
+      if (doMerge) {
+        if (debug) {
+          cout << "found superpixels " << tag << " and " << neighborTag << " (merging)" << endl;
+        }
+        
+        SuperpixelEdge edge(tag, neighborTag);
+        mergeEdge(edge);
+        
+        if (getSuperpixelPtr(tag) == NULL) {
+          // In the case where the identical superpixel was merged into a neighbor then
+          // the neighbors have changed and this iteration has to end.
+          
+          if (debug) {
+            cout << "ending neighbors iteration since " << tag << " was merged into identical neighbor" << endl;
+          }
+          
+          break;
+        } else {
+          // Successfully merged neighbor into this superpixel
+          mergedNeighbor = true;
+        }
+      }
+    } // end foreach neighbors loop
+    
+    if (mergedNeighbor) {
+      if (debug) {
+        cout << "repeating merge loop for superpixel " << tag << " since neighbor was merged" << endl;
+      }
+    } else {
+      if (debug) {
+        cout << "advance iterator from superpixel " << tag << " since no neighbor was merged" << endl;
+      }
+      
+      ++it;
+    }
+  } // end for superpixelsVec loop
   
   return;
 }

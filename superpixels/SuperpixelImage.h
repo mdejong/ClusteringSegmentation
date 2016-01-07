@@ -71,6 +71,11 @@ class SuperpixelImage {
   
   void mergeIdenticalSuperpixels(Mat &inputImg);
   
+  bool
+  checkPredicate(Mat &input, Superpixel *spPtr, int32_t otherTag);
+  
+  void mergeSuperpixelsWithPredicate(Mat &inputImg);
+  
   void scanLargestSuperpixels(vector<int32_t> &results);
   
   void rescanLargestSuperpixels(Mat &inputImg, Mat &outputImg, vector<int32_t> *largeSuperpixelsPtr);

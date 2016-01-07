@@ -515,6 +515,52 @@ void writeTagsWithGraytable(SuperpixelImage &spImage, Mat &origImg, Mat &resultI
   return;
 }
 
+// This next test case uses a merge predicate to determe the differences between
+// superpixels. This should bahve the same as merging by identical pixels since
+// the identical pixels will be very much alike.
+
+- (void)testSimple4by4BWMergeByPredicate {
+  const bool debugDumpImage = true;
+  
+  Mat maze1Img;
+  Mat maze1TagsImg;
+  
+  [self.class getSimple4by4BW1:maze1Img tagsImage:maze1TagsImg];
+  
+  //cout << maze1Img << endl;
+  //cout << maze1TagsImg << endl;
+  
+  MergeSuperpixelImage spImage;
+  
+  bool worked = SuperpixelImage::parse(maze1TagsImg, spImage);
+  XCTAssert(worked, @"SuperpixelImage parse");
+  
+  if (debugDumpImage) {
+    // Needed if dumping is enabled in SuperpixelImage methods
+    generateStaticColortable(maze1Img, spImage);
+  }
+  
+  // There should be 4 superpixels of size 2x2
+  
+  vector<int32_t> superpixels;
+  
+  superpixels = spImage.getSuperpixelsVec();
+  XCTAssert(superpixels.size() == 4, @"num sumperpixels");
+    
+  spImage.mergeSuperpixelsWithPredicate(maze1Img);
+  
+  superpixels = spImage.getSuperpixelsVec();
+  XCTAssert(superpixels.size() == 2, @"num sumperpixels");
+  
+  Superpixel *spPtr1 = spImage.getSuperpixelPtr(superpixels[0]);
+  Superpixel *spPtr2 = spImage.getSuperpixelPtr(superpixels[1]);
+  
+  XCTAssert(spPtr1->coords.size() == 12, @"num coords");
+  XCTAssert(spPtr2->coords.size() == 4, @"num coords");
+  
+  return;
+}
+
 - (void)testBFSMaze1NoMergeImage {
   const bool debugDumpImage = false;
   
