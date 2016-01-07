@@ -1583,6 +1583,14 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
         cout << "start iter step " << mergeIter << endl;
       }
       
+      if (getSuperpixelPtr(maxTag) == NULL) {
+        if (debug) {
+          cout << "leave loop since max has been merged " << maxTag << endl;
+        }
+        
+        break;
+      }
+      
       // Keep top 95% of sameness compare with gray=200 as min value. So, if > 95% of the pixels are a higher level
       // than 200 the superpixel is returned.
       
@@ -1995,6 +2003,14 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
         cout << "start iter step " << mergeIter << " with largest superpixel " << maxTag << endl;
       }
       
+      if (getSuperpixelPtr(maxTag) == NULL) {
+        if (debug) {
+          cout << "leave loop since max has been merged " << maxTag << endl;
+        }
+        
+        break;
+      }
+      
       // Gather any neighbors that are at least 50% the same as determined by back projection.
       
       vector<CompareNeighborTuple> resultTuples;
@@ -2020,7 +2036,9 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
       // Check for cached neighbor edge weights, this logic must be run each time a neighbor back projection
       // is done since a BFS merge can modify the list of neighbors.
       
-      vector<int32_t> *neighborsPtr = NULL;
+      auto neighborsVec = edgeTable.getNeighbors(maxTag);
+      
+      vector<int32_t> *neighborsPtr = &neighborsVec;
       
       checkNeighborEdgeWeights(inputImg, maxTag, neighborsPtr, edgeTable.edgeStrengthMap, mergeIter);
       
