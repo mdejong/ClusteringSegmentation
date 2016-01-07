@@ -80,11 +80,14 @@ SuperpixelEdgeTable::getNeighborsSet(int32_t tag)
 
 vector<int32_t> SuperpixelEdgeTable::getNeighbors(int32_t tag)
 {
-  vector<int32_t> neighborVec;
-  if ( neighbors.find(tag) == neighbors.end()) {
-    return neighborVec;
+  auto it = neighbors.find(tag);
+  if ( it == neighbors.end()) {
+    return vector<int32_t>();
   }
-  for ( int32_t neighborTag : getNeighborsSet(tag) ) {
+  auto &neighborsSet = it->second;
+  vector<int32_t> neighborVec;
+  neighborVec.reserve(neighborsSet.size());
+  for ( int32_t neighborTag : neighborsSet ) {
     neighborVec.push_back(neighborTag);
   }
   return neighborVec;
