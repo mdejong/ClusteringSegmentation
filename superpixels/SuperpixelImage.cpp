@@ -672,7 +672,11 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
   for (auto it = identicalSuperpixels.begin(); it != identicalSuperpixels.end(); ) {
     int32_t tag = *it;
     
-    if (getSuperpixelPtr(tag) == NULL) {
+    // Do a single table lookup for the src superpixel before iterating over neighbors.
+    
+    Superpixel *spPtr = getSuperpixelPtr(tag);
+    
+    if (spPtr == NULL) {
       // Check for the edge case of this superpixel being merged into a neighbor as a result
       // of a previous iteration.
       
@@ -698,11 +702,6 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
         cout << "neighbor " << neighborTag << endl;
       }
     }
-    
-    // Do a single table lookup for the src superpixel before iterating over neighbors.
-    
-    Superpixel *spPtr = getSuperpixelPtr(tag);
-    assert(spPtr);
     
     bool mergedNeighbor = false;
     

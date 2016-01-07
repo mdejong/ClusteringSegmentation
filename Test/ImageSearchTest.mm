@@ -471,7 +471,7 @@ void writeTagsWithGraytable(SuperpixelImage &spImage, Mat &origImg, Mat &resultI
     [super tearDown];
 }
 
-- (void)testSimple4by4BW1 {
+- (void)testSimple4by4BWMergeSame {
   const bool debugDumpImage = true;
 
   Mat maze1Img;
@@ -494,8 +494,23 @@ void writeTagsWithGraytable(SuperpixelImage &spImage, Mat &origImg, Mat &resultI
   
   // There should be 4 superpixels of size 2x2
   
-  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
+  vector<int32_t> superpixels;
+  
+  superpixels = spImage.getSuperpixelsVec();
   XCTAssert(superpixels.size() == 4, @"num sumperpixels");
+  
+  // Merge 3 Identical superpixels
+  
+  spImage.mergeIdenticalSuperpixels(maze1Img);
+  
+  superpixels = spImage.getSuperpixelsVec();
+  XCTAssert(superpixels.size() == 2, @"num sumperpixels");
+  
+  Superpixel *spPtr1 = spImage.getSuperpixelPtr(superpixels[0]);
+  Superpixel *spPtr2 = spImage.getSuperpixelPtr(superpixels[1]);
+  
+  XCTAssert(spPtr1->coords.size() == 12, @"num coords");
+  XCTAssert(spPtr2->coords.size() == 4, @"num coords");
   
   return;
 }
