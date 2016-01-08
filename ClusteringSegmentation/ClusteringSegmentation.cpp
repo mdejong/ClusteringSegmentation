@@ -22,6 +22,8 @@
 
 #include "OpenCVUtil.h"
 
+#include "quant_util.h"
+
 using namespace cv;
 using namespace std;
 
@@ -189,7 +191,42 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     writeTagsWithStaticColortable(spImage, resultImg);
     imwrite("tags_after_identical_merge.png", resultImg);
   }
-
+  
+  // Do initial invocation of quant logic with an N that depends on the number
+  // of large identical regions.
+  
+  if ((1)) {
+    uint32_t pixels[16];
+    
+    pixels[0]  = 0x00EBC58B;
+    pixels[1]  = 0x00DAD4E7;
+    pixels[2]  = 0x00D7779D;
+    pixels[3]  = 0x007E393D;
+    pixels[4]  = 0x00ABA4BA;
+    pixels[5]  = 0x00CF4B53;
+    pixels[6]  = 0x00C49AC7;
+    pixels[7]  = 0x00AC7292;
+    pixels[8]  = 0x00ECEFE7;
+    pixels[9]  = 0x00DC789D;
+    pixels[10] = 0x00A8ABC4;
+    pixels[11] = 0x00906E9E;
+    pixels[12] = 0x00B54748;
+    pixels[13] = 0x00A24F44;
+    pixels[14] = 0x00857E77;
+    pixels[15] = 0x007F654B;
+    
+    const int numPixels = 16;
+    uint32_t *inPixels = pixels;
+    uint32_t outPixels[numPixels];
+    
+    const int numClusters = 256;
+    uint32_t colortable[numClusters];
+    
+    uint32_t numActualClusters = numClusters;
+    
+    quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable );
+  }
+    
   if ((0)) {
   Mat minImg;
   writeTagsWithMinColortable(spImage, inputImg, minImg);

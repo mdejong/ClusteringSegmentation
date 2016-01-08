@@ -159,6 +159,17 @@
 		3CEB38EE1C3E19F90071358C /* ImageSearchTest.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38ED1C3E19F90071358C /* ImageSearchTest.mm */; };
 		3CEB38F01C3F32E00071358C /* SuperpixelEdgeFuncs.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38EF1C3F32DF0071358C /* SuperpixelEdgeFuncs.cpp */; };
 		3CEB38F11C3F32E00071358C /* SuperpixelEdgeFuncs.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38EF1C3F32DF0071358C /* SuperpixelEdgeFuncs.cpp */; };
+		3CEB38FB1C3F489E0071358C /* DivQuantCluster.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38F41C3F489E0071358C /* DivQuantCluster.cpp */; };
+		3CEB38FC1C3F489E0071358C /* DivQuantCluster.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38F41C3F489E0071358C /* DivQuantCluster.cpp */; };
+		3CEB38FD1C3F489E0071358C /* DivQuantMapColors.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38F61C3F489E0071358C /* DivQuantMapColors.cpp */; };
+		3CEB38FE1C3F489E0071358C /* DivQuantMapColors.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38F61C3F489E0071358C /* DivQuantMapColors.cpp */; };
+		3CEB38FF1C3F489E0071358C /* DivQuantMisc.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38F71C3F489E0071358C /* DivQuantMisc.cpp */; };
+		3CEB39001C3F489E0071358C /* DivQuantMisc.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38F71C3F489E0071358C /* DivQuantMisc.cpp */; };
+		3CEB39011C3F489E0071358C /* DivQuantUni.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38F81C3F489E0071358C /* DivQuantUni.cpp */; };
+		3CEB39021C3F489E0071358C /* DivQuantUni.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38F81C3F489E0071358C /* DivQuantUni.cpp */; };
+		3CEB39031C3F489E0071358C /* quant_util.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38F91C3F489E0071358C /* quant_util.cpp */; };
+		3CEB39041C3F489E0071358C /* quant_util.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38F91C3F489E0071358C /* quant_util.cpp */; };
+		3CEB39061C3F494A0071358C /* DivQuantTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB39051C3F494A0071358C /* DivQuantTest.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -599,6 +610,14 @@
 		3CEB38ED1C3E19F90071358C /* ImageSearchTest.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = ImageSearchTest.mm; sourceTree = "<group>"; };
 		3CEB38EF1C3F32DF0071358C /* SuperpixelEdgeFuncs.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SuperpixelEdgeFuncs.cpp; sourceTree = "<group>"; };
 		3CEB38F21C3F33280071358C /* SuperpixelEdgeFuncs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SuperpixelEdgeFuncs.h; sourceTree = "<group>"; };
+		3CEB38F41C3F489E0071358C /* DivQuantCluster.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = DivQuantCluster.cpp; sourceTree = "<group>"; };
+		3CEB38F51C3F489E0071358C /* DivQuantHeader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DivQuantHeader.h; sourceTree = "<group>"; };
+		3CEB38F61C3F489E0071358C /* DivQuantMapColors.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = DivQuantMapColors.cpp; sourceTree = "<group>"; };
+		3CEB38F71C3F489E0071358C /* DivQuantMisc.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = DivQuantMisc.cpp; sourceTree = "<group>"; };
+		3CEB38F81C3F489E0071358C /* DivQuantUni.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = DivQuantUni.cpp; sourceTree = "<group>"; };
+		3CEB38F91C3F489E0071358C /* quant_util.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = quant_util.cpp; sourceTree = "<group>"; };
+		3CEB38FA1C3F489E0071358C /* quant_util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = quant_util.h; sourceTree = "<group>"; };
+		3CEB39051C3F494A0071358C /* DivQuantTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DivQuantTest.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -721,6 +740,7 @@
 			isa = PBXGroup;
 			children = (
 				3CD5250F1C35F1B3005AF4A7 /* install_opencv31 */,
+				3CEB38F31C3F489E0071358C /* DivQuant */,
 				3CD524CD1C3481E1005AF4A7 /* superpixels */,
 				3CD522CD1C347DB2005AF4A7 /* ClusteringSegmentation */,
 				3CD524FF1C34CD6B005AF4A7 /* Test */,
@@ -777,6 +797,7 @@
 			children = (
 				3CD525001C34CD6B005AF4A7 /* CoordTest.mm */,
 				3CEB38ED1C3E19F90071358C /* ImageSearchTest.mm */,
+				3CEB39051C3F494A0071358C /* DivQuantTest.m */,
 				3CD525021C34CD6B005AF4A7 /* Info.plist */,
 			);
 			path = Test;
@@ -1628,6 +1649,20 @@
 			path = lbpcascades;
 			sourceTree = "<group>";
 		};
+		3CEB38F31C3F489E0071358C /* DivQuant */ = {
+			isa = PBXGroup;
+			children = (
+				3CEB38F41C3F489E0071358C /* DivQuantCluster.cpp */,
+				3CEB38F51C3F489E0071358C /* DivQuantHeader.h */,
+				3CEB38F61C3F489E0071358C /* DivQuantMapColors.cpp */,
+				3CEB38F71C3F489E0071358C /* DivQuantMisc.cpp */,
+				3CEB38F81C3F489E0071358C /* DivQuantUni.cpp */,
+				3CEB38F91C3F489E0071358C /* quant_util.cpp */,
+				3CEB38FA1C3F489E0071358C /* quant_util.h */,
+			);
+			path = DivQuant;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -1747,14 +1782,19 @@
 			buildActionMask = 2147483647;
 			files = (
 				3CD524E61C3481E2005AF4A7 /* Util.cpp in Sources */,
+				3CEB38FF1C3F489E0071358C /* DivQuantMisc.cpp in Sources */,
 				3CD524E51C3481E2005AF4A7 /* SuperpixelImage.cpp in Sources */,
+				3CEB38FB1C3F489E0071358C /* DivQuantCluster.cpp in Sources */,
 				3CD524E41C3481E2005AF4A7 /* SuperpixelEdgeTable.cpp in Sources */,
+				3CEB39031C3F489E0071358C /* quant_util.cpp in Sources */,
 				3CD524E71C3481E2005AF4A7 /* vf_DistanceTransform.cpp in Sources */,
 				3CD522CF1C347DB2005AF4A7 /* ClusteringSegmentation.cpp in Sources */,
 				3CD524E21C3481E2005AF4A7 /* Superpixel.cpp in Sources */,
 				3CD524DF1C3481E2005AF4A7 /* Coord.cpp in Sources */,
+				3CEB38FD1C3F489E0071358C /* DivQuantMapColors.cpp in Sources */,
 				3CD524E01C3481E2005AF4A7 /* OpenCVUtil.cpp in Sources */,
 				3CD524E31C3481E2005AF4A7 /* SuperpixelEdge.cpp in Sources */,
+				3CEB39011C3F489E0071358C /* DivQuantUni.cpp in Sources */,
 				3CEB38F01C3F32E00071358C /* SuperpixelEdgeFuncs.cpp in Sources */,
 				3CD524F91C348B5F005AF4A7 /* MergeSuperpixelImage.cpp in Sources */,
 			);
@@ -1764,11 +1804,17 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3CEB39001C3F489E0071358C /* DivQuantMisc.cpp in Sources */,
+				3CEB38FE1C3F489E0071358C /* DivQuantMapColors.cpp in Sources */,
 				3CD525061C35EAC0005AF4A7 /* SuperpixelImage.cpp in Sources */,
 				3CD525071C35EAC1005AF4A7 /* MergeSuperpixelImage.cpp in Sources */,
 				3CD525081C35EAC1005AF4A7 /* Util.cpp in Sources */,
 				3CD525091C35EAC1005AF4A7 /* OpenCVUtil.cpp in Sources */,
+				3CEB38FC1C3F489E0071358C /* DivQuantCluster.cpp in Sources */,
 				3CD5250A1C35EAC1005AF4A7 /* Coord.cpp in Sources */,
+				3CEB39041C3F489E0071358C /* quant_util.cpp in Sources */,
+				3CEB39061C3F494A0071358C /* DivQuantTest.m in Sources */,
+				3CEB39021C3F489E0071358C /* DivQuantUni.cpp in Sources */,
 				3CD5250B1C35EAC1005AF4A7 /* Superpixel.cpp in Sources */,
 				3CD5250C1C35EAC1005AF4A7 /* SuperpixelEdge.cpp in Sources */,
 				3CEB38EE1C3E19F90071358C /* ImageSearchTest.mm in Sources */,
