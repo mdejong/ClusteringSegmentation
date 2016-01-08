@@ -1689,7 +1689,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
             }
           }
           
-          addUnmergedEdgeWeights(maxTag, unmergedEdgeWeights);
+          SuperpixelEdgeFuncs::addUnmergedEdgeWeights(*this, maxTag, unmergedEdgeWeights);
         }
         
         locked[maxTag] = true;
@@ -1809,7 +1809,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
         }
         
         if (unmergedEdgeWeights.size() > 0) {
-          addUnmergedEdgeWeights(maxTag, unmergedEdgeWeights);
+          SuperpixelEdgeFuncs::addUnmergedEdgeWeights(*this, maxTag, unmergedEdgeWeights);
         }
       }
       
@@ -1941,7 +1941,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
             cout << "will merge edge " << edge << endl;
           }
           
-          addMergedEdgeWeight(maxTag, edgeWeight);
+          SuperpixelEdgeFuncs::addMergedEdgeWeight(*this, maxTag, edgeWeight);
           
           mergeEdge(edge);
           mergeIter += 1;
@@ -1980,7 +1980,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
       
       if (unmergedEdgeWeights.size() > 0) {
         // A series of edges was collected after a strong edge was found and merges stopped
-        addUnmergedEdgeWeights(maxTag, unmergedEdgeWeights);
+        SuperpixelEdgeFuncs::addUnmergedEdgeWeights(*this, maxTag, unmergedEdgeWeights);
         break;
       }
     } // end of while true loop
@@ -2225,28 +2225,6 @@ bool MergeSuperpixelImage::shouldMergeEdge(int32_t tag, float edgeWeight)
 {
   Superpixel *spPtr = getSuperpixelPtr(tag);
   return spPtr->shouldMergeEdge(edgeWeight);
-}
-
-// Each edge weight for a neighbor that cannot be merged is added to a list
-// specific to this superpixel.
-
-void MergeSuperpixelImage::addUnmergedEdgeWeights(int32_t tag, vector<float> &edgeWeights)
-{
-  Superpixel *spPtr = getSuperpixelPtr(tag);
-  
-  for (auto it = edgeWeights.begin(); it != edgeWeights.end(); ++it) {
-    float val = *it;
-    spPtr->unmergedEdgeWeights.push_back(val);
-  }
-  
-  return;
-}
-
-void MergeSuperpixelImage::addMergedEdgeWeight(int32_t tag, float edgeWeight)
-{
-  Superpixel *spPtr = getSuperpixelPtr(tag);
-  spPtr->mergedEdgeWeights.push_back(edgeWeight);
-  return;
 }
 
 // Depth first "flood fill" like merge where a source superpixel is used to create a histogram that will
@@ -3115,372 +3093,6 @@ int MergeSuperpixelImage::mergeEdgySuperpixels(Mat &inputImg, int colorspace, in
   } // end (edgySuperpixelsTable > 0) loop
   
   return mergeStep;
-}
-
-// This util method scans the current list of superpixels and returns the largest superpixels
-// using a stddev measure. These largest superpixels are highly unlikely to be useful when
-// scanning for edges on smaller elements, for example. This method should be run after
-// initial joining has identified the largest superpxiels.
-
-void
-MergeSuperpixelImage::scanLargestSuperpixels(vector<int32_t> &results)
-{
-  const bool debug = false;
-  
-  const int maxSmallNum = MaxSmallNumPixelsVal;
-  
-  vector<float> superpixelsSizes;
-  vector<uint32_t> superpixelsForSizes;
-  
-  results.clear();
-  
-  // First, scan for very small superpixels and treat them as edges automatically so that
-  // edge pixels scanning need not consider these small pixels.
-  
-  for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
-    int32_t tag = *it;
-    Superpixel *spPtr = getSuperpixelPtr(tag);
-    assert(spPtr);
-    
-    int numCoords = (int) spPtr->coords.size();
-    
-    if (numCoords < maxSmallNum) {
-      // Ignore really small superpixels in the stats
-    } else {
-      superpixelsSizes.push_back((float)numCoords);
-      superpixelsForSizes.push_back(tag);
-    }
-  }
-  
-  if (debug) {
-    cout << "found " << superpixelsSizes.size() << " non-small superpixel sizes" << endl;
-    
-    vector<float> copySizes = superpixelsSizes;
-    
-    // Sort descending
-    
-    sort(copySizes.begin(), copySizes.end(), greater<float>());
-    
-    for (auto it = copySizes.begin(); it != copySizes.end(); ++it) {
-      cout << *it << endl;
-    }
-  }
-  
-  float mean, stddev;
-  
-  sample_mean(superpixelsSizes, &mean);
-  sample_mean_delta_squared_div(superpixelsSizes, mean, &stddev);
-  
-  if (debug) {
-    char buffer[1024];
-    
-    snprintf(buffer, sizeof(buffer), "mean %0.4f stddev %0.4f", mean, stddev);
-    cout << (char*)buffer << endl;
-
-    snprintf(buffer, sizeof(buffer), "1 stddev %0.4f", (mean + (stddev * 0.5f * 1.0f)));
-    cout << (char*)buffer << endl;
-    
-    snprintf(buffer, sizeof(buffer), "2 stddev %0.4f", (mean + (stddev * 0.5f * 2.0f)));
-    cout << (char*)buffer << endl;
-
-    snprintf(buffer, sizeof(buffer), "3 stddev %0.4f", (mean + (stddev * 0.5f * 3.0f)));
-    cout << (char*)buffer << endl;
-  }
-  
-  // If the stddev is not at least 100 then these pixels are very small and it is unlikely
-  // than any one would be significantly larger than the others. Simply return an empty
-  // list as results in this case.
-  
-  const float minStddev = 100.0f;
-  if (stddev < minStddev) {
-    if (debug) {
-      cout << "small stddev " << stddev << " found so returning empty list of largest superpixels" << endl;
-    }
-    
-    return;
-  }
-  
-  float upperLimit = mean + (stddev * 0.5f * 3.0f); // Cover 99.7 percent of the values
-  
-  if (debug) {
-    char buffer[1024];
-    
-    snprintf(buffer, sizeof(buffer), "upperLimit %0.4f", upperLimit);
-    cout << (char*)buffer << endl;
-  }
-  
-  int offset = 0;
-  for (auto it = superpixelsSizes.begin(); it != superpixelsSizes.end(); ++it, offset++) {
-    float numCoords = *it;
-    
-    if (numCoords <= upperLimit) {
-      // Ignore this element
-      
-      if (debug) {
-        uint32_t tag = superpixelsForSizes[offset];
-        cout << "ignore superpixel " << tag << " with N = " << (int)numCoords << endl;
-      }
-    } else {
-      uint32_t tag = superpixelsForSizes[offset];
-      
-      if (debug) {
-        cout << "keep superpixel " << tag << " with N = " << (int)numCoords << endl;
-      }
-      
-      results.push_back(tag);
-    }
-  }
-  
-  return;
-}
-
-// This method will examine the bounds of the largest superpixels and then use a backprojection
-// to recalculate the exact bounds where the larger smooth area runs into edges defined by
-// the smaller superpixels. For example, in many images with an identical background the primary
-// edge is defined between the background color and the foreground item(s). This method will
-// write a new output image
-
-void MergeSuperpixelImage::rescanLargestSuperpixels(Mat &inputImg, Mat &outputImg, vector<int32_t> *largeSuperpixelsPtr)
-{
-  const bool debug = false;
-  const bool debugDumpSuperpixels = false;
-  const bool debugDumpBackprojections = false;
-  
-  vector<int32_t> largeSuperpixels;
-  if (largeSuperpixelsPtr != NULL) {
-    largeSuperpixels = *largeSuperpixelsPtr;
-  } else {
-    scanLargestSuperpixels(largeSuperpixels);
-  }
-
-  // Gather superpixels that are larger than the upper limit
-
-  outputImg.create(inputImg.size(), CV_8UC(3));
-  outputImg = (Scalar)0;
-
-  for (auto it = largeSuperpixels.begin(); it != largeSuperpixels.end(); ++it) {
-    int32_t tag = *it;
-    Superpixel *spPtr = getSuperpixelPtr(tag);
-    assert(spPtr);
-    
-    // Do back projection after trimming the large superpixel range. First, simply emit the large
-    // superpixel as an image.
-    
-    Mat srcSuperpixelMat;
-    Mat srcSuperpixelHist;
-    Mat srcSuperpixelBackProjection;
-    
-    // Read RGB pixel data from main image into matrix for this one superpixel and then gen histogram.
-    
-    fillMatrixFromCoords(inputImg, tag, srcSuperpixelMat);
-    
-    parse3DHistogram(&srcSuperpixelMat, &srcSuperpixelHist, NULL, NULL, 0, -1);
-    
-    if (debugDumpSuperpixels) {
-      std::ostringstream stringStream;
-      stringStream << "superpixel_" << tag << ".png";
-      
-      std::string str = stringStream.str();
-      const char *filename = str.c_str();
-      
-      Mat revMat = outputImg.clone();
-      revMat = (Scalar) 0;
-      
-      reverseFillMatrixFromCoords(srcSuperpixelMat, false, tag, revMat);
-      
-      cout << "write " << filename << " ( " << revMat.cols << " x " << revMat.rows << " )" << endl;
-      imwrite(filename, revMat);
-    }
-
-    // Generate back projection for entire image
-    
-    parse3DHistogram(NULL, &srcSuperpixelHist, &inputImg, &srcSuperpixelBackProjection, 0, -1);
-    
-    // srcSuperpixelBackProjection is a grayscale 1 channel image
-
-    if (debugDumpBackprojections) {
-      std::ostringstream stringStream;
-      stringStream << "backproject_from_" << tag << ".png";
-      
-      std::string str = stringStream.str();
-      const char *filename = str.c_str();
-      
-      cout << "write " << filename << " ( " << srcSuperpixelBackProjection.cols << " x " << srcSuperpixelBackProjection.rows << " )" << endl;
-      imwrite(filename, srcSuperpixelBackProjection);
-    }
-    
-    // A back projection is more efficient if we actually know a range to indicate how near to the edge the detected edge line is.
-    // But, if the amount it is off is unknown then how to determine the erode range?
-    
-    // Doing a back projection is more effective if the actualy
-    
-    // Erode the superpixel shape a little bit to draw it back from the likely edge.
-    
-    Mat erodeBWMat(inputImg.size(), CV_8UC(1), Scalar(0));
-    Mat bwPixels(srcSuperpixelMat.size(), CV_8UC(1), Scalar(255));
-    
-    // FIXME: rework fill to write to the kind of Mat either color or BW
-    
-    reverseFillMatrixFromCoords(bwPixels, true, tag, erodeBWMat);
-    
-    if (debugDumpSuperpixels) {
-      std::ostringstream stringStream;
-      stringStream << "superpixel_" << tag << "_bw.png";
-      
-      std::string str = stringStream.str();
-      const char *filename = str.c_str();
-      
-      cout << "write " << filename << " ( " << erodeBWMat.cols << " x " << erodeBWMat.rows << " )" << endl;
-      imwrite(filename, erodeBWMat);
-    }
-    
-    // Erode to pull superpixel edges back by a few pixels
-    
-//    Mat erodeMinBWMat = erodeBWMat.clone();
-//    erodeMinBWMat = (Scalar) 0;
-//    Mat erodeMaxBWMat = erodeBWMat.clone();
-//    erodeMaxBWMat = (Scalar) 0;
-
-    Mat minBWMat, maxBWMat;
-    
-    //int erosion_type = MORPH_ELLIPSE;
-    int erosion_type = MORPH_RECT;
-    
-    // FIXME: should the erode size depend on the image dimensions?
-    
-    int erosion_size = 1;
-    
-//    if( erosion_elem == 0 ){ erosion_type = MORPH_RECT; }
-//    else if( erosion_elem == 1 ){ erosion_type = MORPH_CROSS; }
-//    else if( erosion_elem == 2) { erosion_type = MORPH_ELLIPSE; }
-    
-    Mat element = getStructuringElement( erosion_type,
-                                        Size( 2*erosion_size + 1, 2*erosion_size+1 ),
-                                        Point( erosion_size, erosion_size ) );
-    
-    // Apply the erosion operation to reduce the white area
-    
-    erode( erodeBWMat, minBWMat, element );
-    
-    if (debugDumpSuperpixels) {
-      std::ostringstream stringStream;
-      stringStream << "superpixel_" << tag << "_bw_erode.png";
-      
-      std::string str = stringStream.str();
-      const char *filename = str.c_str();
-      
-      cout << "write " << filename << " ( " << minBWMat.cols << " x " << minBWMat.rows << " )" << endl;
-      imwrite(filename, minBWMat);
-    }
-    
-    // Apply a dilate to expand the white area
-    
-    dilate( erodeBWMat, maxBWMat, element );
-
-    if (debugDumpSuperpixels) {
-      std::ostringstream stringStream;
-      stringStream << "superpixel_" << tag << "_bw_dilate.png";
-      
-      std::string str = stringStream.str();
-      const char *filename = str.c_str();
-      
-      cout << "write " << filename << " ( " << maxBWMat.cols << " x " << maxBWMat.rows << " )" << endl;
-      imwrite(filename, maxBWMat);
-    }
-    
-    // Calculate gradient x 2 which is erode and dialate and then intersection.
-    // This area is slightly fuzzy to account for merging not getting exactly
-    // on the edge.
-    
-    Mat gradMat;
-    
-    morphologyEx(erodeBWMat, gradMat, MORPH_GRADIENT, element, Point(-1,-1), 1);
-
-    if (debugDumpSuperpixels) {
-      std::ostringstream stringStream;
-      stringStream << "superpixel_" << tag << "_bw_gradient.png";
-      
-      std::string str = stringStream.str();
-      const char *filename = str.c_str();
-      
-      cout << "write " << filename << " ( " << gradMat.cols << " x " << gradMat.rows << " )" << endl;
-      imwrite(filename, gradMat);
-    }
-    
-    // The white pixels indicate where histogram backprojection should be examined, a mask on whole image.
-    // A histogram could be computed from the entire background area, or it could be computed from the
-    // area around the identified but known to not be the edge.
-    
-    int numNonZero = countNonZero(gradMat);
-    
-    Mat backProjectInputFlatMat(1, numNonZero, CV_8UC(3));
-    Mat backProjectOutputFlatMat(1, numNonZero, CV_8UC(1));
-    
-    int offset = 0;
-    
-    for( int y = 0; y < gradMat.rows; y++ ) {
-      for( int x = 0; x < gradMat.cols; x++ ) {
-        uint8_t bVal = gradMat.at<uint8_t>(y, x);
-        
-        if (bVal) {
-          Vec3b pixelVec = inputImg.at<Vec3b>(y, x);
-          backProjectInputFlatMat.at<Vec3b>(0, offset++) = pixelVec;
-        }
-      }
-    }
-    
-    assert(offset == numNonZero);
-    
-    // Generate back projection for just the mask area.
-    
-    if (debug) {
-      backProjectOutputFlatMat = (Scalar) 0;
-    }
-    
-    parse3DHistogram(NULL, &srcSuperpixelHist, &backProjectInputFlatMat, &backProjectOutputFlatMat, 0, -1);
-    
-    // copy back projection pixels back into full size image, note that any pixels not in the mask
-    // identified by gradMat are ignored.
-    
-    Mat maskedGradientMat = erodeBWMat.clone();
-    maskedGradientMat = (Scalar) 0;
-    
-    offset = 0;
-    
-    for( int y = 0; y < gradMat.rows; y++ ) {
-      for( int x = 0; x < gradMat.cols; x++ ) {
-        uint8_t bVal = gradMat.at<uint8_t>(y, x);
-        
-        if (bVal) {
-          uint8_t per = backProjectOutputFlatMat.at<uint8_t>(0, offset++);
-          maskedGradientMat.at<uint8_t>(y, x) = per;
-        }
-      }
-    }
-    
-    assert(offset == numNonZero);
-    
-    if (debugDumpSuperpixels) {
-      std::ostringstream stringStream;
-      stringStream << "superpixel_" << tag << "_bw_gradient_backproj.png";
-      
-      std::string str = stringStream.str();
-      const char *filename = str.c_str();
-      
-      cout << "write " << filename << " ( " << maskedGradientMat.cols << " x " << maskedGradientMat.rows << " )" << endl;
-      imwrite(filename, maskedGradientMat);
-    }
-    
-    // The generated back projection takes the existing edge around the foreground object into
-    // account with this approach since the histogram was created from edge defined by the
-    // superpixel segmentation. If the goal is to have the edge right on the detected edge
-    // then this would seem to be best. If instead the background is defined by creating a
-    // histogram from the area pulled away from the edge then the background histogram would
-    // not get as close to the foreground object.
-    
-  }
-  
-  return;
 }
 
 // Iterate over superpixels starting from (0,0) and generate a "touching table" that

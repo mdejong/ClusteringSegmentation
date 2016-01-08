@@ -46,10 +46,6 @@ class MergeSuperpixelImage : public SuperpixelImage {
 
   int mergeEdgySuperpixels(Mat &inputImg, int colorspace, int startStep, vector<int32_t> *largeSuperpixelsPtr);
   
-  void scanLargestSuperpixels(vector<int32_t> &results);
-  
-  void rescanLargestSuperpixels(Mat &inputImg, Mat &outputImg, vector<int32_t> *largeSuperpixelsPtr);
-  
   // Compare function that does histogram compare for each neighbor of superpixel tag
   
   void compareNeighborSuperpixels(Mat &inputImg,
@@ -94,11 +90,7 @@ class MergeSuperpixelImage : public SuperpixelImage {
   void filterOutVeryLargeNeighbors(int32_t tag, vector<int32_t> &neighbors);
   
   bool shouldMergeEdge(int32_t tag, float edgeWeight);
-  
-  void addUnmergedEdgeWeights(int32_t tag, vector<float> &edgeWeights);
-  
-  void addMergedEdgeWeight(int32_t tag, float edgeWeight);
-    
+      
   void recurseTouchingSuperpixels(int32_t rootUID,
                                   int32_t rootValue,
                                   unordered_map<int32_t, int32_t> &touchingTable);

@@ -40,6 +40,12 @@ public:
                             unordered_map<int32_t, bool> *lockedTablePtr,
                             int32_t step,
                             bool normalize);
+
+  static
+  void addUnmergedEdgeWeights(SuperpixelImage &spImage, int32_t tag, vector<float> &edgeWeights);
+  
+  static
+  void addMergedEdgeWeight(SuperpixelImage &spImage, int32_t tag, float edgeWeight);
   
 };
 

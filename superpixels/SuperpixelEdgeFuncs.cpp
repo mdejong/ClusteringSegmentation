@@ -419,3 +419,27 @@ SuperpixelEdgeFuncs::compareNeighborEdges(SuperpixelImage &spImage,
   
   return;
 }
+
+// Each edge weight for a neighbor that cannot be merged is added to a list
+// specific to this superpixel.
+
+void
+SuperpixelEdgeFuncs::addUnmergedEdgeWeights(SuperpixelImage &spImage, int32_t tag, vector<float> &edgeWeights)
+{
+  Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
+  
+  for (auto it = edgeWeights.begin(); it != edgeWeights.end(); ++it) {
+    float val = *it;
+    spPtr->unmergedEdgeWeights.push_back(val);
+  }
+  
+  return;
+}
+
+void
+SuperpixelEdgeFuncs::addMergedEdgeWeight(SuperpixelImage &spImage, int32_t tag, float edgeWeight)
+{
+  Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
+  spPtr->mergedEdgeWeights.push_back(edgeWeight);
+  return;
+}
