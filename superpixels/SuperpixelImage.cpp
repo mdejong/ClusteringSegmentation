@@ -3,7 +3,7 @@
 // image.
 
 #include "SuperpixelImage.h"
-#include "MergeSuperpixelImage.h"
+#include "SuperpixelEdgeFuncs.h"
 
 #include "Superpixel.h"
 
@@ -762,6 +762,8 @@ void SuperpixelImage::mergeIdenticalSuperpixels(Mat &inputImg) {
 bool
 SuperpixelImage::checkPredicate(Mat &input, Superpixel *spPtr, int32_t otherTag)
 {
+  const bool debug = false;
+  
   Superpixel *otherSpPtr = getSuperpixelPtr(otherTag);
   if (otherSpPtr == NULL) {
     // Return false when the neighbor was already merged away
@@ -771,15 +773,15 @@ SuperpixelImage::checkPredicate(Mat &input, Superpixel *spPtr, int32_t otherTag)
   // Predicate test examines superpixels (S1, S2) to determine if each of
   // the pixels on the border between the regions is exactly the same.
   
-  MergeSuperpixelImage *mspPtr = (MergeSuperpixelImage*)this;
+  SuperpixelEdgeFuncs::checkNeighborEdgeWeights(*this, input, spPtr->tag, NULL, edgeTable.edgeStrengthMap, 0);
   
-  mspPtr->checkNeighborEdgeWeights(input, spPtr->tag, NULL, edgeTable.edgeStrengthMap, 0);
-  
-  for ( auto it = edgeTable.edgeStrengthMap.begin(); it != edgeTable.edgeStrengthMap.end(); ++it ) {
-    SuperpixelEdge edge = it->first;
-    float strength = it->second;
-    
-    cout << "edge " << edge << " has strength " << strength << endl;
+  if (debug) {
+    for ( auto it = edgeTable.edgeStrengthMap.begin(); it != edgeTable.edgeStrengthMap.end(); ++it ) {
+      SuperpixelEdge edge = it->first;
+      float strength = it->second;
+      
+      cout << "edge " << edge << " has strength " << strength << endl;
+    }
   }
   
   // If the edge between (S1, S2) is zero then merge
@@ -789,6 +791,10 @@ SuperpixelImage::checkPredicate(Mat &input, Superpixel *spPtr, int32_t otherTag)
   float strength = edgeTable.edgeStrengthMap[edge];
   
   if (strength == 0.0) {
+    if (debug) {
+      cout << "will merge edge " << edge << " with strength " << strength << endl;
+    }
+    
     return true;
   }
   

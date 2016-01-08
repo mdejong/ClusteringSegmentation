@@ -11,6 +11,8 @@
 #include "Superpixel.h"
 #include "SuperpixelEdge.h"
 #include "SuperpixelImage.h"
+
+#include "SuperpixelEdgeFuncs.h"
 #include "MergeSuperpixelImage.h"
 
 #import <XCTest/XCTest.h>
@@ -1123,7 +1125,7 @@ void writeTagsWithGraytable(SuperpixelImage &spImage, Mat &origImg, Mat &resultI
   
   // Force cache insertion
   
-  spImage.checkNeighborEdgeWeights(mazeImg, superpixels[0], NULL, spImage.edgeTable.edgeStrengthMap, 0);
+  SuperpixelEdgeFuncs::checkNeighborEdgeWeights(spImage, mazeImg, superpixels[0], NULL, spImage.edgeTable.edgeStrengthMap, 0);
   
   SuperpixelEdge cachedEdge(superpixels[0], superpixels[1]);
   

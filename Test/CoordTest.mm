@@ -8,11 +8,13 @@
 
 #import <Foundation/Foundation.h>
 
+#include "Coord.h"
 #include "Superpixel.h"
 #include "SuperpixelEdge.h"
 #include "SuperpixelImage.h"
+
+#include "SuperpixelEdgeFuncs.h"
 #include "MergeSuperpixelImage.h"
-#include "Coord.h"
 
 #import <XCTest/XCTest.h>
 
@@ -1824,7 +1826,7 @@
   
   vector<CompareNeighborTuple> results;
   
-  spImage.compareNeighborEdges(rgbImg, superpixels[0], results, NULL, 0, true);
+  SuperpixelEdgeFuncs::compareNeighborEdges(spImage, rgbImg, superpixels[0], results, NULL, 0, true);
   
   XCTAssert(results.size() == 1, @"results");
   
@@ -1896,7 +1898,7 @@
   
   vector<CompareNeighborTuple> results;
   
-  spImage.compareNeighborEdges(rgbImg, superpixels[0], results, NULL, 0, true);
+  SuperpixelEdgeFuncs::compareNeighborEdges(spImage, rgbImg, superpixels[0], results, NULL, 0, true);
   
   XCTAssert(results.size() == 1, @"results");
   
@@ -1951,7 +1953,7 @@
   
   // Compare 0 to neighbors 1 and 2
   
-  spImage.compareNeighborEdges(rgbImg, superpixels[0], results, NULL, 0, true);
+  SuperpixelEdgeFuncs::compareNeighborEdges(spImage, rgbImg, superpixels[0], results, NULL, 0, true);
   
   XCTAssert(results.size() == 2, @"results");
   

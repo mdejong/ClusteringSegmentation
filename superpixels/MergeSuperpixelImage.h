@@ -57,16 +57,7 @@ class MergeSuperpixelImage : public SuperpixelImage {
                                   vector<CompareNeighborTuple> &results,
                                   unordered_map<int32_t, bool> *lockedTablePtr,
                                   int32_t step);
-  
-  // Compare function that examines neighbor edges
-  
-  void compareNeighborEdges(Mat &inputImg,
-                            int32_t tag,
-                            vector<CompareNeighborTuple> &results,
-                            unordered_map<int32_t, bool> *lockedTablePtr,
-                            int32_t step,
-                            bool normalize);
-  
+    
   // Evaluate backprojection of superpixel to the connected neighbors
 
   void backprojectNeighborSuperpixels(Mat &inputImg,
@@ -107,13 +98,7 @@ class MergeSuperpixelImage : public SuperpixelImage {
   void addUnmergedEdgeWeights(int32_t tag, vector<float> &edgeWeights);
   
   void addMergedEdgeWeight(int32_t tag, float edgeWeight);
-  
-  void checkNeighborEdgeWeights(Mat &inputImg,
-                                int32_t tag,
-                                vector<int32_t> *neighborsPtr,
-                                unordered_map<SuperpixelEdge, float> &edgeStrengthMap,
-                                int step);
-  
+    
   void recurseTouchingSuperpixels(int32_t rootUID,
                                   int32_t rootValue,
                                   unordered_map<int32_t, int32_t> &touchingTable);
