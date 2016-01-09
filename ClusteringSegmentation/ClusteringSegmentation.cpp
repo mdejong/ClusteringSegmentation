@@ -21,6 +21,7 @@
 #include "SuperpixelImage.h"
 
 #include "OpenCVUtil.h"
+#include "Util.h"
 
 #include "quant_util.h"
 
@@ -100,6 +101,38 @@ int main(int argc, const char** argv) {
   cout << "wrote " << outputTagsImgFilename << endl;
   
   exit(0);
+}
+
+// Given an input image and a pixel buffer that is of the same dimensions
+// write the buffer of pixels out as an image in a file.
+
+static
+void dumpQuantImage(string filename, Mat inputImg, uint32_t *pixels) {
+  Mat quantOutputMat = inputImg.clone();
+  quantOutputMat = (Scalar) 0;
+  
+  const bool debugOutput = false;
+  
+  int pi = 0;
+  for(int y = 0; y < quantOutputMat.rows; y++) {
+    for(int x = 0; x < quantOutputMat.cols; x++) {
+      uint32_t pixel = pixels[pi++];
+      
+      if ((debugOutput)) {
+        char buffer[1024];
+        snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is %d\n", x, y, pixel);
+        cout << buffer;
+      }
+      
+      Vec3b vec = PixelToVec3b(pixel);
+      
+      quantOutputMat.at<Vec3b>(y, x) = vec;
+    }
+  }
+  
+  imwrite(filename, quantOutputMat);
+  cout << "wrote " << filename << endl;
+  return;
 }
 
 bool clusteringCombine(Mat &inputImg, Mat &resultImg)
@@ -255,8 +288,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
  //   int32_t largestSuperpixelTag = largestSuperpixelResults[0];
     //    vector<int32_t> sortedSuperpixels = spImage.sortSuperpixelsBySize();
     
-//    const int numClusters = 256;
-    int numClusters = 1 + (int)largestSuperpixelResults.size();
+    const int numClusters = 256;
+//    int numClusters = 1 + (int)largestSuperpixelResults.size();
     
     cout << "numClusters detected as " << numClusters << endl;
     
@@ -271,29 +304,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     // Write quant output where each original pixel is replaced with the closest
     // colortable entry.
     
-    Mat quantOutputMat = inputImg.clone();
-    quantOutputMat = (Scalar) 0;
-    
-    pi = 0;
-    for(int y = 0; y < quantOutputMat.rows; y++) {
-      for(int x = 0; x < quantOutputMat.cols; x++) {
-        uint32_t pixel = outPixels[pi++];
-        
-        if ((debugOutput)) {
-          char buffer[1024];
-          snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is %d\n", x, y, pixel);
-          cout << buffer;
-        }
-        
-        Vec3b vec = PixelToVec3b(pixel);
-        
-        quantOutputMat.at<Vec3b>(y, x) = vec;
-      }
-    }
-    
-    char *outQuantFilename = (char*)"quant_output.png";
-    imwrite(outQuantFilename, quantOutputMat);
-    cout << "wrote " << outQuantFilename << endl;
+    dumpQuantImage("quant_output.png", inputImg, outPixels);
     
     // Write image that contains one color in each row in a N x 1 image
     
@@ -309,6 +320,168 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     char *outQuantTableFilename = (char*)"quant_table.png";
     imwrite(outQuantTableFilename, qtableOutputMat);
     cout << "wrote " << outQuantTableFilename << endl;
+    
+    // Generate color sorted clusters
+    
+    {
+      vector<uint32_t> clusterCenterPixels;
+      
+      for ( int i = 0; i < numClusters; i++) {
+        uint32_t pixel = colortable[i];
+        clusterCenterPixels.push_back(pixel);
+      }
+      
+      if ((1)) {
+        fprintf(stdout, "numClusters %5d\n", numClusters);
+        
+        unordered_map<uint32_t, uint32_t> seen;
+        
+        for ( int i = 0; i < numActualClusters; i++ ) {
+          uint32_t pixel;
+          pixel = colortable[i];
+          
+          if (seen.count(pixel) > 0) {
+            fprintf(stdout, "cmap[%3d] = 0x%08X (DUP of %d)\n", i, pixel, seen[pixel]);
+          } else {
+            fprintf(stdout, "cmap[%3d] = 0x%08X\n", i, pixel);
+            
+            // Note that only the first seen index is retained, this means that a repeated
+            // pixel value is treated as a dup.
+            
+            seen[pixel] = i;
+          }
+        }
+        
+        fprintf(stdout, "cmap contains %3d unique entries\n", (int)seen.size());
+        
+        int numQuantUnique = (int)seen.size();
+        
+        assert(numQuantUnique == numActualClusters);
+      }
+      
+      vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(clusterCenterPixels);
+      
+      // Once cluster centers have been sorted by 3D color cube distance, emit "centers.png"
+      
+      Mat sortedQtableOutputMat = Mat(numActualClusters, 1, CV_8UC3);
+      sortedQtableOutputMat = (Scalar) 0;
+      
+      for (int i = 0; i < numActualClusters; i++) {
+        int si = (int) sortedOffsets[i];
+        uint32_t pixel = colortable[si];
+        Vec3b vec = PixelToVec3b(pixel);
+        sortedQtableOutputMat.at<Vec3b>(i, 0) = vec;
+      }
+      
+      char *outQuantTableFilename = (char*)"quant_table_sorted.png";
+      imwrite(outQuantTableFilename, sortedQtableOutputMat);
+      cout << "wrote " << outQuantTableFilename << endl;
+      
+      // Map pixels to sorted colortable offset
+      
+      unordered_map<uint32_t, uint32_t> pixel_to_sorted_offset;
+      
+      assert(numActualClusters <= 256);
+      
+      for (int i = 0; i < numActualClusters; i++) {
+        int si = (int) sortedOffsets[i];
+        uint32_t pixel = colortable[si];
+        pixel_to_sorted_offset[pixel] = si;
+      }
+      
+      Mat sortedQuantOutputMat = inputImg.clone();
+      sortedQuantOutputMat = (Scalar) 0;
+      
+      pi = 0;
+      for(int y = 0; y < sortedQuantOutputMat.rows; y++) {
+        for(int x = 0; x < sortedQuantOutputMat.cols; x++) {
+          uint32_t pixel = outPixels[pi++];
+          assert(pixel_to_sorted_offset.count(pixel) > 0);
+          uint32_t offset = pixel_to_sorted_offset[pixel];
+          
+          if ((debugOutput)) {
+            char buffer[1024];
+            snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is %d -> offset %d\n", x, y, pixel, offset);
+            cout << buffer;
+          }
+          
+          assert(offset <= 256);
+          uint32_t grayscalePixel = (offset << 16) | (offset << 8) | offset;
+          Vec3b vec = PixelToVec3b(grayscalePixel);
+          sortedQuantOutputMat.at<Vec3b>(y, x) = vec;
+        }
+      }
+      
+      char *outQuantFilename = (char*)"quant_sorted_offsets.png";
+      imwrite(outQuantFilename, sortedQuantOutputMat);
+      cout << "wrote " << outQuantFilename << endl;
+      
+      // Create table that maps input pixels to the table of 256 quant pixels,
+      // this basically indicates how often certain colors "bunch" up in the
+      // image being scanned. The goal here is to create a simple 1D table
+      // so that a more focused N can be determined for the largest "color" blocks.
+      
+      unordered_map<uint32_t, uint32_t> pixel_to_quant_count;
+      
+      //int numPixels = inputImg.rows * inputImg.cols;
+      for (int i = 0; i < numPixels; i++) {
+        uint32_t pixel = outPixels[i++];
+        pixel_to_quant_count[pixel] += 1;
+      }
+      
+      cout << "pixel_to_quant_count() = " << pixel_to_quant_count.size() << endl;
+      
+      if ((0)) {
+        for ( auto it = pixel_to_quant_count.begin(); it != pixel_to_quant_count.end(); ++it) {
+          uint32_t pixel = it->first;
+          uint32_t count = it->second;
+          printf("count table[0x%08X] = %6d\n", pixel, count);
+        }
+      }
+      
+      // This more focused histogram of just 256 values can now be clustered into a smaller
+      // subset of colors in an effort to find the best N or number of clusters to apply
+      // to the original image.
+      
+      for (int i = 0; i < numActualClusters; i++) {
+        int si = (int) sortedOffsets[i];
+        uint32_t pixel = colortable[si];
+        uint32_t count = pixel_to_quant_count[pixel];
+        
+        printf("count table[0x%08X] = %6d\n", pixel, count);
+      }
+      
+      // Repeated invocation of quant logic as a method of reducing a 256 table of values
+      // to a smaller N that best splits the global colorspace.
+      
+      uint32_t *quantResultPixels = new uint32_t[numPixels];
+      uint32_t *quantColortable = new uint32_t[numActualClusters];
+      
+      int numClustersThisIteration = numActualClusters - 1;
+      
+      for (int i = 0; i < numActualClusters; i++) {
+        int allPixelsUnique = 0;
+        
+        if (numClustersThisIteration < 2) {
+          break;
+        }
+        
+        uint32_t numActualClusters = numClustersThisIteration;
+        
+        quant_recurse(numPixels, outPixels, quantResultPixels, &numActualClusters, quantColortable, allPixelsUnique );
+       
+        std::stringstream fnameStream;
+        fnameStream << "quant_output_N" << numClustersThisIteration << ".png";
+        string fname = fnameStream.str();
+        
+        dumpQuantImage(fname, inputImg, quantResultPixels);
+        
+        numClustersThisIteration -= 1;
+      }
+      
+      delete [] quantResultPixels;
+      delete [] quantColortable;
+    }
     
     // dealloc
     

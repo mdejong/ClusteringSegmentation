@@ -138,4 +138,15 @@ uint32_t intHypotApprox(int32_t x1, int32_t y1, int32_t x2, int32_t y2)
   return (x2 + y2 - (((x2>y2) ? y2 : x2) >> 1) );
 }
 
+// Given a vector of pixels and a pixel that may or may not be in the vector, return
+// the pixel in the vector that is closest to the indicated pixel.
+
+uint32_t closestToPixel(const vector<uint32_t> &pixels, const uint32_t closeToPixel);
+
+// Given a vector of cluster center pixels, determine a cluster to cluster walk order based on 3D
+// distance from one cluster center to the next. This method returns a vector of offsets into
+// the cluster table with the assumption that the number of clusters fits into a 16 bit offset.
+
+vector<uint32_t> generate_cluster_walk_on_center_dist(const vector<uint32_t> &clusterCenterPixels);
+
 #endif // SUPERPIXEL_UTIL_H

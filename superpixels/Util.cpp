@@ -206,6 +206,195 @@ void centerOfMass(uint8_t *bytePtr, uint32_t width, uint32_t height, uint32_t *x
   return;
 }
 
+// Given a vector of pixels and a pixel that may or may not be in the vector, return
+// the pixel in the vector that is closest to the indicated pixel.
+
+uint32_t closestToPixel(const vector<uint32_t> &pixels, const uint32_t closeToPixel) {
+  const bool debug = false;
+  
+#if defined(DEBUG)
+  assert(pixels.size() > 0);
+#endif // DEBUG
+  
+  unsigned int minDist = (~0);
+  uint32_t closestToPixel = 0;
+  
+  uint32_t cB = closeToPixel & 0xFF;
+  uint32_t cG = (closeToPixel >> 8) & 0xFF;
+  uint32_t cR = (closeToPixel >> 16) & 0xFF;
+  
+  for ( uint32_t pixel : pixels ) {
+    uint32_t B = pixel & 0xFF;
+    uint32_t G = (pixel >> 8) & 0xFF;
+    uint32_t R = (pixel >> 16) & 0xFF;
+    
+    int dB = (int)cB - (int)B;
+    int dG = (int)cG - (int)G;
+    int dR = (int)cR - (int)R;
+    
+    unsigned int d3 = (unsigned int) ((dB * dB) + (dG * dG) + (dR * dR));
+    
+    if (debug) {
+      cout << "d3 from (" << B << "," << G << "," << R << ") to closeToPixel (" << cB << "," << cG << "," << cR << ") is (" << dB << "," << dG << "," << dR << ") = " << d3 << endl;
+    }
+    
+    if (d3 < minDist) {
+      closestToPixel = pixel;
+      minDist = d3;
+      
+      if ((debug)) {
+        fprintf(stdout, "new    closestToPixel 0x%08X\n", closestToPixel);
+      }
+      
+      if (minDist == 0) {
+        // Quit the loop once a zero distance has been found
+        break;
+      }
+    }
+  }
+  
+  if ((debug)) {
+    fprintf(stdout, "return closestToPixel 0x%08X\n", closestToPixel);
+  }
+  
+  return closestToPixel;
+}
+
+// Given a vector of cluster center pixels, determine a cluster to cluster walk order based on 3D
+// distance from one cluster center to the next. This method returns a vector of offsets into
+// the cluster table with the assumption that the number of clusters fits into a 16 bit offset.
+
+vector<uint32_t> generate_cluster_walk_on_center_dist(const vector<uint32_t> &clusterCenterPixels)
+{
+  const bool debugDumpClusterWalk = false;
+  
+  int numClusters = (int) clusterCenterPixels.size();
+  
+  unordered_map<uint32_t, uint32_t> clusterCenterToClusterOffsetMap;
+  
+  int clusteri = 0;
+  
+  for ( clusteri = 0; clusteri < numClusters; clusteri++) {
+    uint32_t closestToCenterOfMassPixel = clusterCenterPixels[clusteri];
+    clusterCenterToClusterOffsetMap[closestToCenterOfMassPixel] = clusteri;
+  }
+  
+  // Reorder the clusters so that the first cluster contains the pixel with the value
+  // that is closest to zero. Then, the next cluster is determined by checking
+  // the distance to the first pixel in the next cluster. The clusters are already
+  // ordered in terms of density so this reordering logic basically jumps from one
+  // cluster to the next in terms of the shortest distance to the next clsuter.
+  
+  vector<uint32_t> closestSortedClusterOrder;
+  
+  closestSortedClusterOrder.reserve(numClusters);
+  
+  if ((1)) {
+    // Choose cluster that is closest to (0,0,0)
+    
+    uint32_t closestToZeroCenter = closestToPixel(clusterCenterPixels, 0x0);
+    
+    int closestToZeroClusteri = -1;
+    
+    clusteri = 0;
+    
+    for ( uint32_t clusterCenter : clusterCenterPixels ) {
+      if (closestToZeroCenter == clusterCenter) {
+        closestToZeroClusteri = clusteri;
+        break;
+      }
+      
+      clusteri += 1;
+    }
+    
+    assert(closestToZeroClusteri != -1);
+    
+    if (debugDumpClusterWalk) {
+      fprintf(stdout, "closestToZero 0x%08X is in clusteri %d\n", closestToZeroCenter, closestToZeroClusteri);
+    }
+    
+    closestSortedClusterOrder.push_back(closestToZeroClusteri);
+    
+    // Calculate the distance from the cluster center to the next closest cluster center.
+    
+    {
+      uint32_t closestToCenterOfMassPixel = clusterCenterPixels[closestToZeroClusteri];
+      
+      auto it = clusterCenterToClusterOffsetMap.find(closestToCenterOfMassPixel);
+      
+#if defined(DEBUG)
+      assert(it != end(clusterCenterToClusterOffsetMap));
+#endif // DEBUG
+      
+      clusterCenterToClusterOffsetMap.erase(it);
+    }
+    
+    // Each remaining cluster is represented by an entry in clusterCenterToClusterOffsetMap.
+    // Get the center coord and use the center to lookup the cluster index. Then find
+    // the next closest cluster in terms of distance in 3D space.
+    
+    uint32_t closestCenterPixel = clusterCenterPixels[closestToZeroClusteri];
+    
+    for ( ; 1 ; ) {
+      if (clusterCenterToClusterOffsetMap.size() == 0) {
+        break;
+      }
+      
+      vector<uint32_t> remainingClustersCenterPoints;
+      
+      for ( auto it = begin(clusterCenterToClusterOffsetMap); it != end(clusterCenterToClusterOffsetMap); it++) {
+        //uint32_t clusterCenterPixel = it->first;
+        uint32_t clusterOffset = it->second;
+        
+        uint32_t clusterStartPixel = clusterCenterPixels[clusterOffset];
+        remainingClustersCenterPoints.push_back(clusterStartPixel);
+      }
+      
+      if (debugDumpClusterWalk) {
+        fprintf(stdout, "there are %d remaining center pixel clusters\n", (int)remainingClustersCenterPoints.size());
+        
+        for ( uint32_t pixel : remainingClustersCenterPoints ) {
+          fprintf(stdout, "0x%08X\n", pixel);
+        }
+      }
+      
+      uint32_t nextClosestClusterCenterPixel = closestToPixel(remainingClustersCenterPoints, closestCenterPixel);
+      
+      if (debugDumpClusterWalk) {
+        fprintf(stdout, "nextClosestClusterPixel is 0x%08X from current clusterEndPixel 0x%08X\n", nextClosestClusterCenterPixel, closestCenterPixel);
+      }
+      
+      assert(nextClosestClusterCenterPixel != closestCenterPixel);
+      
+#if defined(DEBUG)
+      assert(clusterCenterToClusterOffsetMap.count(nextClosestClusterCenterPixel) > 0);
+#endif // DEBUG
+      
+      uint32_t nextClosestClusteri = clusterCenterToClusterOffsetMap[nextClosestClusterCenterPixel];
+      
+      closestSortedClusterOrder.push_back(nextClosestClusteri);
+      
+      {
+        // Find index from next closest and then lookup cluster center
+        
+        uint32_t nextClosestCenterPixel = clusterCenterPixels[nextClosestClusteri];
+        
+        auto it = clusterCenterToClusterOffsetMap.find(nextClosestCenterPixel);
+#if defined(DEBUG)
+        assert(it != end(clusterCenterToClusterOffsetMap));
+#endif // DEBUG
+        clusterCenterToClusterOffsetMap.erase(it);
+      }
+      
+      closestCenterPixel = nextClosestClusterCenterPixel;
+    }
+    
+    assert(closestSortedClusterOrder.size() == clusterCenterPixels.size());
+  }
+  
+  return closestSortedClusterOrder;
+}
+
 // my_adler32
 
 // largest prime smaller than 65536
