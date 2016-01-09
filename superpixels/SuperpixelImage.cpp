@@ -984,28 +984,38 @@ SuperpixelImage::sortSuperpixelsBySize()
 // initial joining has identified the largest superpxiels.
 
 void
-SuperpixelImage::scanLargestSuperpixels(vector<int32_t> &results)
+SuperpixelImage::scanLargestSuperpixels(vector<int32_t> &results, int minSuperpixelSize)
 {
   const bool debug = false;
   
   const int maxSmallNum = MaxSmallNumPixelsVal;
   
+//  if (minSuperpixelSize == 0) {
+//    minSuperpixelSize = MaxSmallNumPixelsVal;
+//  }
+  
   vector<float> superpixelsSizes;
   vector<uint32_t> superpixelsForSizes;
   
-  results.clear();
+  vector<int32_t> inputVec;
+  
+  if (results.size() == 0) {
+    inputVec = getSuperpixelsVec();
+  } else {
+    inputVec = results;
+    results.clear();
+  }
   
   // First, scan for very small superpixels and treat them as edges automatically so that
   // edge pixels scanning need not consider these small pixels.
   
-  for (auto it = superpixels.begin(); it != superpixels.end(); ++it) {
-    int32_t tag = *it;
+  for ( int32_t tag : inputVec ) {
     Superpixel *spPtr = getSuperpixelPtr(tag);
     assert(spPtr);
     
     int numCoords = (int) spPtr->coords.size();
     
-    if (numCoords < maxSmallNum) {
+    if (numCoords <= maxSmallNum) {
       // Ignore really small superpixels in the stats
     } else {
       superpixelsSizes.push_back((float)numCoords);
@@ -1023,7 +1033,8 @@ SuperpixelImage::scanLargestSuperpixels(vector<int32_t> &results)
     sort(copySizes.begin(), copySizes.end(), greater<float>());
     
     for (auto it = copySizes.begin(); it != copySizes.end(); ++it) {
-      cout << *it << endl;
+      int32_t sSize = *it;
+      cout << sSize << endl;
     }
   }
   
@@ -1052,14 +1063,19 @@ SuperpixelImage::scanLargestSuperpixels(vector<int32_t> &results)
   // than any one would be significantly larger than the others. Simply return an empty
   // list as results in this case.
   
-  const float minStddev = 100.0f;
-  if (stddev < minStddev) {
-    if (debug) {
-      cout << "small stddev " << stddev << " found so returning empty list of largest superpixels" << endl;
-    }
-    
-    return;
-  }
+//  float minStddev = 100.0f;
+  
+//  if ((mean+stddev) < minStddev) {
+//    minStddev = (mean+stddev);
+//  }
+  
+//  if (stddev < minStddev) {
+//    if (debug) {
+//      cout << "small stddev " << stddev << " smaller than " << minStddev << " found, so returning empty list of largest superpixels" << endl;
+//    }
+//    
+//    return;
+//  }
   
   float upperLimit = mean + (stddev * 0.5f * 3.0f); // Cover 99.7 percent of the values
   
@@ -1080,6 +1096,11 @@ SuperpixelImage::scanLargestSuperpixels(vector<int32_t> &results)
       if (debug) {
         uint32_t tag = superpixelsForSizes[offset];
         cout << "ignore superpixel " << tag << " with N = " << (int)numCoords << endl;
+      }
+    } else if (numCoords <= minSuperpixelSize) {
+      if (debug) {
+        uint32_t tag = superpixelsForSizes[offset];
+        cout << "ignore LTEQ min superpixel " << tag << " with N = " << (int)numCoords << endl;
       }
     } else {
       uint32_t tag = superpixelsForSizes[offset];
@@ -1111,7 +1132,7 @@ void SuperpixelImage::rescanLargestSuperpixels(Mat &inputImg, Mat &outputImg, ve
   if (largeSuperpixelsPtr != NULL) {
     largeSuperpixels = *largeSuperpixelsPtr;
   } else {
-    scanLargestSuperpixels(largeSuperpixels);
+    scanLargestSuperpixels(largeSuperpixels, 0);
   }
 
   // Gather superpixels that are larger than the upper limit

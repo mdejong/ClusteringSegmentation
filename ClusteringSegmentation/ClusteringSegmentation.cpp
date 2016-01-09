@@ -123,6 +123,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
   
   int numXStepsinWidth = (inputImg.cols >> 2);
   
+  const int superpixelWidth = 4;
+  
   for(int y = 0; y < inputImg.rows; y++) {
     int yStep = y >> 2;
     
@@ -196,35 +198,123 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
   // of large identical regions.
   
   if ((1)) {
-    uint32_t pixels[16];
+    const bool debugOutput = false;
     
-    pixels[0]  = 0x00EBC58B;
-    pixels[1]  = 0x00DAD4E7;
-    pixels[2]  = 0x00D7779D;
-    pixels[3]  = 0x007E393D;
-    pixels[4]  = 0x00ABA4BA;
-    pixels[5]  = 0x00CF4B53;
-    pixels[6]  = 0x00C49AC7;
-    pixels[7]  = 0x00AC7292;
-    pixels[8]  = 0x00ECEFE7;
-    pixels[9]  = 0x00DC789D;
-    pixels[10] = 0x00A8ABC4;
-    pixels[11] = 0x00906E9E;
-    pixels[12] = 0x00B54748;
-    pixels[13] = 0x00A24F44;
-    pixels[14] = 0x00857E77;
-    pixels[15] = 0x007F654B;
+    int numPixels = inputImg.rows * inputImg.cols;
     
-    const int numPixels = 16;
+    uint32_t *pixels = new uint32_t[numPixels];
+    assert(pixels);
+    uint32_t pi = 0;
+    
+    for(int y = 0; y < inputImg.rows; y++) {
+      for(int x = 0; x < inputImg.cols; x++) {
+        Vec3b vec = inputImg.at<Vec3b>(y, x);
+        uint32_t pixel = Vec3BToUID(vec);
+        
+        if ((debugOutput)) {
+          char buffer[1024];
+          snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is %d\n", x, y, pixel);
+          cout << buffer;
+        }
+        
+        pixels[pi++] = pixel;
+      }
+      
+      if (debugOutput) {
+        cout << endl;
+      }
+    }
+    
     uint32_t *inPixels = pixels;
-    uint32_t outPixels[numPixels];
+    uint32_t *outPixels = new uint32_t[numPixels];
+    assert(outPixels);
     
-    const int numClusters = 256;
-    uint32_t colortable[numClusters];
+    // Determine a good N (number of clusters)
+    
+    vector<int32_t> largestSuperpixelResults;
+    spImage.scanLargestSuperpixels(largestSuperpixelResults, 0);
+    
+    assert(largestSuperpixelResults.size() > 0);
+    
+    int32_t largestSuperpixelTag = largestSuperpixelResults[0];
+    
+    // Typically the largest superpixel is the background, so pop the first
+    // element and then run the stddev logic again.
+    
+    largestSuperpixelResults = spImage.getSuperpixelsVec();
+    
+    for ( int offset = 0; offset < largestSuperpixelResults.size(); offset++ ) {
+      if (largestSuperpixelResults[offset] == largestSuperpixelTag) {
+        largestSuperpixelResults.erase(largestSuperpixelResults.begin() + offset);
+        break;
+      }
+    }
+    
+    spImage.scanLargestSuperpixels(largestSuperpixelResults, (superpixelWidth*superpixelWidth)); // min is 16 pixels
+    
+ //   int32_t largestSuperpixelTag = largestSuperpixelResults[0];
+    //    vector<int32_t> sortedSuperpixels = spImage.sortSuperpixelsBySize();
+    
+//    const int numClusters = 256;
+    int numClusters = 1 + (int)largestSuperpixelResults.size();
+    
+    cout << "numClusters detected as " << numClusters << endl;
+    
+    uint32_t *colortable = new uint32_t[numClusters];
     
     uint32_t numActualClusters = numClusters;
     
-    quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable );
+    int allPixelsUnique = 0;
+    
+    quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
+    
+    // Write quant output where each original pixel is replaced with the closest
+    // colortable entry.
+    
+    Mat quantOutputMat = inputImg.clone();
+    quantOutputMat = (Scalar) 0;
+    
+    pi = 0;
+    for(int y = 0; y < quantOutputMat.rows; y++) {
+      for(int x = 0; x < quantOutputMat.cols; x++) {
+        uint32_t pixel = outPixels[pi++];
+        
+        if ((debugOutput)) {
+          char buffer[1024];
+          snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is %d\n", x, y, pixel);
+          cout << buffer;
+        }
+        
+        Vec3b vec = PixelToVec3b(pixel);
+        
+        quantOutputMat.at<Vec3b>(y, x) = vec;
+      }
+    }
+    
+    char *outQuantFilename = (char*)"quant_output.png";
+    imwrite(outQuantFilename, quantOutputMat);
+    cout << "wrote " << outQuantFilename << endl;
+    
+    // Write image that contains one color in each row in a N x 1 image
+    
+    Mat qtableOutputMat = Mat(numActualClusters, 1, CV_8UC3);
+    qtableOutputMat = (Scalar) 0;
+    
+    for (int i = 0; i < numActualClusters; i++) {
+      uint32_t pixel = colortable[i];
+      Vec3b vec = PixelToVec3b(pixel);
+      qtableOutputMat.at<Vec3b>(i, 0) = vec;
+    }
+    
+    char *outQuantTableFilename = (char*)"quant_table.png";
+    imwrite(outQuantTableFilename, qtableOutputMat);
+    cout << "wrote " << outQuantTableFilename << endl;
+    
+    // dealloc
+    
+    delete [] pixels;
+    delete [] outPixels;
+    delete [] colortable;
   }
     
   if ((0)) {
