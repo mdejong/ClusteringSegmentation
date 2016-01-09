@@ -135,6 +135,65 @@ void dumpQuantImage(string filename, Mat inputImg, uint32_t *pixels) {
   return;
 }
 
+// Dump N x 1 image that contains pixels
+
+static
+void dumpQuantTableImage(string filename, Mat inputImg, uint32_t *colortable, uint32_t numColortableEntries)
+{
+  // Write image that contains one color in each row in a N x 1 image
+  
+  Mat qtableOutputMat = Mat(numColortableEntries, 1, CV_8UC3);
+  qtableOutputMat = (Scalar) 0;
+  
+  vector<uint32_t> clusterCenterPixels;
+  
+  for ( int i = 0; i < numColortableEntries; i++) {
+    uint32_t pixel = colortable[i];
+    clusterCenterPixels.push_back(pixel);
+  }
+  
+  if ((0)) {
+    fprintf(stdout, "numClusters %5d\n", numColortableEntries);
+    
+    unordered_map<uint32_t, uint32_t> seen;
+    
+    for ( int i = 0; i < numColortableEntries; i++ ) {
+      uint32_t pixel;
+      pixel = colortable[i];
+      
+      if (seen.count(pixel) > 0) {
+        fprintf(stdout, "cmap[%3d] = 0x%08X (DUP of %d)\n", i, pixel, seen[pixel]);
+      } else {
+        fprintf(stdout, "cmap[%3d] = 0x%08X\n", i, pixel);
+        
+        // Note that only the first seen index is retained, this means that a repeated
+        // pixel value is treated as a dup.
+        
+        seen[pixel] = i;
+      }
+    }
+    
+    fprintf(stdout, "cmap contains %3d unique entries\n", (int)seen.size());
+    
+    int numQuantUnique = (int)seen.size();
+    
+    assert(numQuantUnique == numColortableEntries);
+  }
+  
+  vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(clusterCenterPixels);
+  
+  for (int i = 0; i < numColortableEntries; i++) {
+    int si = (int) sortedOffsets[i];
+    uint32_t pixel = colortable[si];
+    Vec3b vec = PixelToVec3b(pixel);
+    qtableOutputMat.at<Vec3b>(i, 0) = vec;
+  }
+  
+  imwrite(filename, qtableOutputMat);
+  cout << "wrote " << filename << endl;
+  return;
+}
+
 bool clusteringCombine(Mat &inputImg, Mat &resultImg)
 {
   const bool debugWriteIntermediateFiles = true;
@@ -306,20 +365,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     
     dumpQuantImage("quant_output.png", inputImg, outPixels);
     
-    // Write image that contains one color in each row in a N x 1 image
-    
-    Mat qtableOutputMat = Mat(numActualClusters, 1, CV_8UC3);
-    qtableOutputMat = (Scalar) 0;
-    
-    for (int i = 0; i < numActualClusters; i++) {
-      uint32_t pixel = colortable[i];
-      Vec3b vec = PixelToVec3b(pixel);
-      qtableOutputMat.at<Vec3b>(i, 0) = vec;
-    }
-    
-    char *outQuantTableFilename = (char*)"quant_table.png";
-    imwrite(outQuantTableFilename, qtableOutputMat);
-    cout << "wrote " << outQuantTableFilename << endl;
+    dumpQuantTableImage("quant_table.png", inputImg, colortable, numActualClusters);
     
     // Generate color sorted clusters
     
@@ -331,7 +377,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         clusterCenterPixels.push_back(pixel);
       }
       
-      if ((1)) {
+      if ((0)) {
         fprintf(stdout, "numClusters %5d\n", numClusters);
         
         unordered_map<uint32_t, uint32_t> seen;
@@ -470,11 +516,21 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         
         quant_recurse(numPixels, outPixels, quantResultPixels, &numActualClusters, quantColortable, allPixelsUnique );
        
-        std::stringstream fnameStream;
-        fnameStream << "quant_output_N" << numClustersThisIteration << ".png";
-        string fname = fnameStream.str();
-        
-        dumpQuantImage(fname, inputImg, quantResultPixels);
+        {
+          std::stringstream fnameStream;
+          fnameStream << "quant_output_N" << numClustersThisIteration << ".png";
+          string fname = fnameStream.str();
+          
+          dumpQuantImage(fname, inputImg, quantResultPixels);
+        }
+
+        {
+          std::stringstream fnameTableStream;
+          fnameTableStream << "quant_table_N" << numClustersThisIteration << ".png";
+          string fnameTable = fnameTableStream.str();
+          
+          dumpQuantTableImage(fnameTable, inputImg, quantColortable, numActualClusters);
+        }
         
         numClustersThisIteration -= 1;
       }
