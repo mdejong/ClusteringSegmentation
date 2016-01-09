@@ -836,8 +836,6 @@ void SuperpixelImage::mergeSuperpixelsWithPredicate(Mat &inputImg) {
   // superpixels table can have elements deleted from it as part of a
   // merge during the loop.
   
-  //auto superpixelsVec = getSuperpixelsVec();
-  
   vector<int32_t> superpixelsVec = sortSuperpixelsBySize();
   
   for (auto it = superpixelsVec.begin(); it != superpixelsVec.end(); ) {

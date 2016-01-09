@@ -27,6 +27,8 @@
 
 #include "MergeSuperpixelImage.h"
 
+#include "srm.h"
+
 using namespace cv;
 using namespace std;
 
@@ -328,29 +330,30 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     vector<int32_t> largestSuperpixelResults;
     spImage.scanLargestSuperpixels(largestSuperpixelResults, 0);
     
-    assert(largestSuperpixelResults.size() > 0);
-    
-    int32_t largestSuperpixelTag = largestSuperpixelResults[0];
-    
-    // Typically the largest superpixel is the background, so pop the first
-    // element and then run the stddev logic again.
-    
-    largestSuperpixelResults = spImage.getSuperpixelsVec();
-    
-    for ( int offset = 0; offset < largestSuperpixelResults.size(); offset++ ) {
-      if (largestSuperpixelResults[offset] == largestSuperpixelTag) {
-        largestSuperpixelResults.erase(largestSuperpixelResults.begin() + offset);
-        break;
+    if (largestSuperpixelResults.size() > 0) {
+      assert(largestSuperpixelResults.size() > 0);
+      int32_t largestSuperpixelTag = largestSuperpixelResults[0];
+      
+      // Typically the largest superpixel is the background, so pop the first
+      // element and then run the stddev logic again.
+      
+      largestSuperpixelResults = spImage.getSuperpixelsVec();
+      
+      for ( int offset = 0; offset < largestSuperpixelResults.size(); offset++ ) {
+        if (largestSuperpixelResults[offset] == largestSuperpixelTag) {
+          largestSuperpixelResults.erase(largestSuperpixelResults.begin() + offset);
+          break;
+        }
       }
+      
+      spImage.scanLargestSuperpixels(largestSuperpixelResults, (superpixelWidth*superpixelWidth)); // min is 16 pixels
     }
-    
-    spImage.scanLargestSuperpixels(largestSuperpixelResults, (superpixelWidth*superpixelWidth)); // min is 16 pixels
     
  //   int32_t largestSuperpixelTag = largestSuperpixelResults[0];
     //    vector<int32_t> sortedSuperpixels = spImage.sortSuperpixelsBySize();
     
-//    const int numClusters = 256;
-    int numClusters = 1 + (int)largestSuperpixelResults.size();
+    const int numClusters = 256;
+//    int numClusters = 1 + (int)largestSuperpixelResults.size();
     
     cout << "numClusters detected as " << numClusters << endl;
     
@@ -563,7 +566,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     }
   }
 
-  if ((1)) {
+  if ((0)) {
     // Attempt to merge regions that are very much alike
     // based on a histogram comparison. When the starting
     // point is identical regions then the regions near
@@ -572,7 +575,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
 
     int mergeStep = 0;
     
-    MergeSuperpixelImage::mergeBackprojectSuperpixels(spImage, inputImg, 1, mergeStep, BACKPROJECT_HIGH_FIVE);
+    MergeSuperpixelImage::mergeBackprojectSuperpixels(spImage, inputImg, 1, mergeStep, BACKPROJECT_HIGH_FIVE8);
     
     if (debugWriteIntermediateFiles) {
       writeTagsWithStaticColortable(spImage, resultImg);
@@ -585,6 +588,65 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
   writeTagsWithMinColortable(spImage, inputImg, minImg);
   imwrite("tags_min_color.png", minImg);
   cout << "wrote " << "tags_min_color.png" << endl;
+  }
+  
+  if ((1)) {
+    // SRM
+    
+    const bool debugOutput = false;
+    
+    int numPixels = inputImg.rows * inputImg.cols;
+    
+    const int channels = 3;
+    uint8_t *in = new uint8_t[numPixels * channels]();
+    uint8_t *out = new uint8_t[numPixels * channels]();
+    
+    int i = 0;
+    for(int y = 0; y < inputImg.rows; y++) {
+      for(int x = 0; x < inputImg.cols; x++) {
+        Vec3b vec = inputImg.at<Vec3b>(y, x);
+        
+        uint8_t B = vec[0];
+        uint8_t G = vec[1];
+        uint8_t R = vec[2];
+        
+        if ((debugOutput)) {
+          char buffer[1024];
+          snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is 0x00%02X%02X%02X -> offset %d\n", x, y, R, G, B, i);
+          cout << buffer;
+        }
+        
+        in[(i*3)+0] = B;
+        in[(i*3)+1] = G;
+        in[(i*3)+2] = R;
+        i += 1;
+      }
+    }
+    
+    double Q = 512.0;
+    
+    SRM(Q, inputImg.cols, inputImg.rows, channels, in, out, 0);
+
+    uint32_t *outPixels = new uint32_t[numPixels]();
+    
+    i = 0;
+    for(int y = 0; y < inputImg.rows; y++) {
+      for(int x = 0; x < inputImg.cols; x++) {
+        uint32_t B = out[(i*3)+0];
+        uint32_t G = out[(i*3)+1];
+        uint32_t R = out[(i*3)+2];
+        
+        uint32_t pixel = (R << 16) | (G << 8) | B;
+        outPixels[i] = pixel;
+        i += 1;
+      }
+    }
+    
+    dumpQuantImage("srm.png", inputImg, outPixels);
+    
+    delete [] outPixels;
+    delete [] in;
+    delete [] out;
   }
   
   // Done

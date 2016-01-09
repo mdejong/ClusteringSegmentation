@@ -170,6 +170,10 @@
 		3CEB39031C3F489E0071358C /* quant_util.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38F91C3F489E0071358C /* quant_util.cpp */; };
 		3CEB39041C3F489E0071358C /* quant_util.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38F91C3F489E0071358C /* quant_util.cpp */; };
 		3CEB39061C3F494A0071358C /* DivQuantTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB39051C3F494A0071358C /* DivQuantTest.m */; };
+		3CEB390F1C40FCCD0071358C /* srm.c in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB39091C40FCCC0071358C /* srm.c */; };
+		3CEB39101C40FCCD0071358C /* srm.c in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB39091C40FCCC0071358C /* srm.c */; };
+		3CEB39111C40FCCD0071358C /* unionfind.c in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB390B1C40FCCC0071358C /* unionfind.c */; };
+		3CEB39121C40FCCD0071358C /* unionfind.c in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB390B1C40FCCC0071358C /* unionfind.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -618,6 +622,10 @@
 		3CEB38F91C3F489E0071358C /* quant_util.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = quant_util.cpp; sourceTree = "<group>"; };
 		3CEB38FA1C3F489E0071358C /* quant_util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = quant_util.h; sourceTree = "<group>"; };
 		3CEB39051C3F494A0071358C /* DivQuantTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DivQuantTest.m; sourceTree = "<group>"; };
+		3CEB39091C40FCCC0071358C /* srm.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = srm.c; sourceTree = "<group>"; };
+		3CEB390A1C40FCCC0071358C /* srm.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = srm.h; sourceTree = "<group>"; };
+		3CEB390B1C40FCCC0071358C /* unionfind.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = unionfind.c; sourceTree = "<group>"; };
+		3CEB390C1C40FCCC0071358C /* unionfind.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = unionfind.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -739,6 +747,7 @@
 		3CD522C21C347DB2005AF4A7 = {
 			isa = PBXGroup;
 			children = (
+				3CEB39071C40FCCB0071358C /* SRM */,
 				3CD5250F1C35F1B3005AF4A7 /* install_opencv31 */,
 				3CEB38F31C3F489E0071358C /* DivQuant */,
 				3CD524CD1C3481E1005AF4A7 /* superpixels */,
@@ -1663,6 +1672,17 @@
 			path = DivQuant;
 			sourceTree = "<group>";
 		};
+		3CEB39071C40FCCB0071358C /* SRM */ = {
+			isa = PBXGroup;
+			children = (
+				3CEB390A1C40FCCC0071358C /* srm.h */,
+				3CEB39091C40FCCC0071358C /* srm.c */,
+				3CEB390C1C40FCCC0071358C /* unionfind.h */,
+				3CEB390B1C40FCCC0071358C /* unionfind.c */,
+			);
+			path = SRM;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -1788,6 +1808,8 @@
 				3CD524E41C3481E2005AF4A7 /* SuperpixelEdgeTable.cpp in Sources */,
 				3CEB39031C3F489E0071358C /* quant_util.cpp in Sources */,
 				3CD524E71C3481E2005AF4A7 /* vf_DistanceTransform.cpp in Sources */,
+				3CEB390F1C40FCCD0071358C /* srm.c in Sources */,
+				3CEB39111C40FCCD0071358C /* unionfind.c in Sources */,
 				3CD522CF1C347DB2005AF4A7 /* ClusteringSegmentation.cpp in Sources */,
 				3CD524E21C3481E2005AF4A7 /* Superpixel.cpp in Sources */,
 				3CD524DF1C3481E2005AF4A7 /* Coord.cpp in Sources */,
@@ -1806,6 +1828,7 @@
 			files = (
 				3CEB39001C3F489E0071358C /* DivQuantMisc.cpp in Sources */,
 				3CEB38FE1C3F489E0071358C /* DivQuantMapColors.cpp in Sources */,
+				3CEB39121C40FCCD0071358C /* unionfind.c in Sources */,
 				3CD525061C35EAC0005AF4A7 /* SuperpixelImage.cpp in Sources */,
 				3CD525071C35EAC1005AF4A7 /* MergeSuperpixelImage.cpp in Sources */,
 				3CD525081C35EAC1005AF4A7 /* Util.cpp in Sources */,
@@ -1821,6 +1844,7 @@
 				3CD5250D1C35EAC1005AF4A7 /* SuperpixelEdgeTable.cpp in Sources */,
 				3CEB38F11C3F32E00071358C /* SuperpixelEdgeFuncs.cpp in Sources */,
 				3CD5250E1C35EAC1005AF4A7 /* vf_DistanceTransform.cpp in Sources */,
+				3CEB39101C40FCCD0071358C /* srm.c in Sources */,
 				3CD525011C34CD6B005AF4A7 /* CoordTest.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
