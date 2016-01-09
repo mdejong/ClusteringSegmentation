@@ -836,7 +836,9 @@ void SuperpixelImage::mergeSuperpixelsWithPredicate(Mat &inputImg) {
   // superpixels table can have elements deleted from it as part of a
   // merge during the loop.
   
-  auto superpixelsVec = getSuperpixelsVec();
+  //auto superpixelsVec = getSuperpixelsVec();
+  
+  vector<int32_t> superpixelsVec = sortSuperpixelsBySize();
   
   for (auto it = superpixelsVec.begin(); it != superpixelsVec.end(); ) {
     int32_t tag = *it;
@@ -848,7 +850,7 @@ void SuperpixelImage::mergeSuperpixelsWithPredicate(Mat &inputImg) {
       // of a previous iteration.
       
       if (debug) {
-        cout << "identical superpixel " << tag << " was merged away already" << endl;
+        cout << "superpixel " << tag << " was merged away already" << endl;
       }
       
       ++it;
@@ -860,7 +862,7 @@ void SuperpixelImage::mergeSuperpixelsWithPredicate(Mat &inputImg) {
     auto &neighborsSet = edgeTable.getNeighborsSet(tag);
     
     if (debug) {
-      cout << "found neighbors of superpixel " << tag << endl;
+      cout << "found " << neighborsSet.size() << " neighbors of superpixel " << tag << endl;
       
       for ( int32_t neighborTag : neighborsSet ) {
         cout << "neighbor " << neighborTag << endl;

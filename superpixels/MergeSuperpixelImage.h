@@ -32,7 +32,8 @@ class MergeSuperpixelImage : public SuperpixelImage {
   
   void mergeAlikeSuperpixels(Mat &inputImg);
   
-  int mergeBackprojectSuperpixels(Mat &inputImg, int colorspace, int startStep, BackprojectRange range);
+  static
+  int mergeBackprojectSuperpixels(SuperpixelImage &spImage, Mat &inputImg, int colorspace, int startStep, BackprojectRange range);
   
   int mergeBackprojectSmallestSuperpixels(Mat &inputImg, int colorspace, int startStep, BackprojectRange range);
 
@@ -56,7 +57,9 @@ class MergeSuperpixelImage : public SuperpixelImage {
     
   // Evaluate backprojection of superpixel to the connected neighbors
 
-  void backprojectNeighborSuperpixels(Mat &inputImg,
+  static
+  void backprojectNeighborSuperpixels(SuperpixelImage &spImage,
+                                      Mat &inputImg,
                                       int32_t tag,
                                       vector<CompareNeighborTuple> &results,
                                       unordered_map<int32_t, bool> *lockedTablePtr,

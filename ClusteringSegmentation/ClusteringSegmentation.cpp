@@ -25,6 +25,8 @@
 
 #include "quant_util.h"
 
+#include "MergeSuperpixelImage.h"
+
 using namespace cv;
 using namespace std;
 
@@ -347,8 +349,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
  //   int32_t largestSuperpixelTag = largestSuperpixelResults[0];
     //    vector<int32_t> sortedSuperpixels = spImage.sortSuperpixelsBySize();
     
-    const int numClusters = 256;
-//    int numClusters = 1 + (int)largestSuperpixelResults.size();
+//    const int numClusters = 256;
+    int numClusters = 1 + (int)largestSuperpixelResults.size();
     
     cout << "numClusters detected as " << numClusters << endl;
     
@@ -497,6 +499,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         printf("count table[0x%08X] = %6d\n", pixel, count);
       }
       
+      /*
+      
       // Repeated invocation of quant logic as a method of reducing a 256 table of values
       // to a smaller N that best splits the global colorspace.
       
@@ -537,6 +541,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       
       delete [] quantResultPixels;
       delete [] quantColortable;
+       
+      */
     }
     
     // dealloc
@@ -545,7 +551,35 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     delete [] outPixels;
     delete [] colortable;
   }
+  
+  if ((0)) {
+    // Attempt to merge based on a likeness predicate
     
+    spImage.mergeSuperpixelsWithPredicate(inputImg);
+    
+    if (debugWriteIntermediateFiles) {
+      writeTagsWithStaticColortable(spImage, resultImg);
+      imwrite("tags_after_predicate_merge.png", resultImg);
+    }
+  }
+
+  if ((1)) {
+    // Attempt to merge regions that are very much alike
+    // based on a histogram comparison. When the starting
+    // point is identical regions then the regions near
+    // identical regions are likely to be very alike
+    // up until a hard edge.
+
+    int mergeStep = 0;
+    
+    MergeSuperpixelImage::mergeBackprojectSuperpixels(spImage, inputImg, 1, mergeStep, BACKPROJECT_HIGH_FIVE);
+    
+    if (debugWriteIntermediateFiles) {
+      writeTagsWithStaticColortable(spImage, resultImg);
+      imwrite("tags_after_histogram_merge.png", resultImg);
+    }
+  }
+  
   if ((0)) {
   Mat minImg;
   writeTagsWithMinColortable(spImage, inputImg, minImg);

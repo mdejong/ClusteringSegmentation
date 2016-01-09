@@ -220,7 +220,8 @@ MergeSuperpixelImage::compareNeighborSuperpixels(Mat &inputImg,
 // Return tuples : (PERCENT NUM_COORDS TAG)
 
 void
-MergeSuperpixelImage::backprojectNeighborSuperpixels(Mat &inputImg,
+MergeSuperpixelImage::backprojectNeighborSuperpixels(SuperpixelImage &spImage,
+                                                Mat &inputImg,
                                                 int32_t tag,
                                                 vector<CompareNeighborTuple> &results,
                                                 unordered_map<int32_t, bool> *lockedTablePtr,
@@ -252,7 +253,7 @@ MergeSuperpixelImage::backprojectNeighborSuperpixels(Mat &inputImg,
   
   bool allNeighborsLocked = true;
   
-  for ( int32_t neighborTag : edgeTable.getNeighborsSet(tag) ) {
+  for ( int32_t neighborTag : spImage.edgeTable.getNeighborsSet(tag) ) {
     if (lockedTablePtr->count(neighborTag) != 0) {
       // Neighbor is locked
     } else {
@@ -278,7 +279,7 @@ MergeSuperpixelImage::backprojectNeighborSuperpixels(Mat &inputImg,
   // Gen histogram and then create a back projected output image that shows the percentage
   // values for each pixel in the connected neighbors.
   
-  fillMatrixFromCoords(inputImg, tag, srcSuperpixelMat);
+  spImage.fillMatrixFromCoords(inputImg, tag, srcSuperpixelMat);
   
   if (debugDumpAllBackProjection == true) {
     // Create histogram and generate back projection for entire image
@@ -328,10 +329,10 @@ MergeSuperpixelImage::backprojectNeighborSuperpixels(Mat &inputImg,
     Mat srcSuperpixelGreen = srcSuperpixelMat;
     srcSuperpixelGreen = Scalar(0,255,0);
     
-    reverseFillMatrixFromCoords(srcSuperpixelGreen, false, tag, srcSuperpixelBackProjection);
+    spImage.reverseFillMatrixFromCoords(srcSuperpixelGreen, false, tag, srcSuperpixelBackProjection);
   }
   
-  for ( int32_t neighborTag : edgeTable.getNeighborsSet(tag) ) {
+  for ( int32_t neighborTag : spImage.edgeTable.getNeighborsSet(tag) ) {
     // Do back projection on neighbor pixels using histogram from biggest superpixel
     
     if (lockedTablePtr && (lockedTablePtr->count(neighborTag) != 0)) {
@@ -351,7 +352,7 @@ MergeSuperpixelImage::backprojectNeighborSuperpixels(Mat &inputImg,
     
     // Back project using the 3D histogram parsed from the largest superpixel only
     
-    fillMatrixFromCoords(inputImg, neighborTag, neighborSuperpixelMat);
+    spImage.fillMatrixFromCoords(inputImg, neighborTag, neighborSuperpixelMat);
       
     parse3DHistogram(NULL, &srcSuperpixelHist, &neighborSuperpixelMat, &neighborBackProjection, conversion, numBins);
     
@@ -385,7 +386,7 @@ MergeSuperpixelImage::backprojectNeighborSuperpixels(Mat &inputImg,
       
       Mat neighborBackProjectionGrayOrigSize(inputImg.size(), CV_8UC(3), (Scalar)0);
       
-      reverseFillMatrixFromCoords(neighborBackProjection, true, neighborTag, neighborBackProjectionGrayOrigSize);
+      spImage.reverseFillMatrixFromCoords(neighborBackProjection, true, neighborTag, neighborBackProjectionGrayOrigSize);
       
       cout << "write " << filename << " ( " << neighborBackProjectionGrayOrigSize.cols << " x " << neighborBackProjectionGrayOrigSize.rows << " )" << endl;
       
@@ -395,7 +396,7 @@ MergeSuperpixelImage::backprojectNeighborSuperpixels(Mat &inputImg,
     if (debugDumpCombinedBackProjection) {
       // Write combined back projection values to combined image.
 
-      reverseFillMatrixFromCoords(neighborBackProjection, true, neighborTag, srcSuperpixelBackProjection);
+      spImage.reverseFillMatrixFromCoords(neighborBackProjection, true, neighborTag, srcSuperpixelBackProjection);
     }
     
     // Threshold the neighbor pixels and then choose a path for expansion that considers all the neighbors
@@ -1143,9 +1144,9 @@ void MergeSuperpixelImage::mergeAlikeSuperpixels(Mat &inputImg)
 // is very much alike, so a merge of an oversegmented area will only combine the very
 // alike portions.
 
-int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorspace, int startStep, BackprojectRange range)
+int MergeSuperpixelImage::mergeBackprojectSuperpixels(SuperpixelImage &spImage, Mat &inputImg, int colorspace, int startStep, BackprojectRange range)
 {
-  const bool debug = false;
+  const bool debug = true;
   const bool dumpEachMergeStepImage = false;
   
   // Each iteration will examine the list of superpixels and pick the biggest one
@@ -1170,7 +1171,7 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
   // finding the next superpixel since superpixels will always be processed
   // from largest to smallest.
   
-  vector<int32_t> sortedSuperpixels = sortSuperpixelsBySize();
+  vector<int32_t> sortedSuperpixels = spImage.sortSuperpixelsBySize();
   
   auto spIter = sortedSuperpixels.begin();
   int32_t maxTag = -1;
@@ -1198,10 +1199,17 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
       while (spIter != sortedSuperpixels.end()) {
         int32_t nextTag = *spIter;
         
+        Superpixel *spPtr = spImage.getSuperpixelPtr(nextTag);
+        
+        if (spPtr == NULL) {
+          locked[nextTag] = true;
+        }
+        
         if (debug) {
-          Superpixel *spPtr = getSuperpixelPtr(nextTag);
-          int numCoords = (int) spPtr->coords.size();
-          cout << "next max superpixel " << nextTag << " N = " << numCoords << endl;
+          if (spPtr != NULL) {
+            int numCoords = (int) spPtr->coords.size();
+            cout << "next max superpixel " << nextTag << " N = " << numCoords << endl;
+          }
         }
         
         spIter++;
@@ -1231,7 +1239,7 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
       }
       
       if (debug) {
-        cout << "found that all superpixels are locked with " << superpixels.size() << " superpixels" << endl;
+        cout << "found that all superpixels are locked with " << sortedSuperpixels.size() << " superpixels" << endl;
         cout << "mergesSinceLockClear.size() " << mergesSinceLockClear.size() << " numLockClear " << numLockClear << endl;
       }
       
@@ -1265,14 +1273,14 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
       }
       
       mergesSinceLockClear.clear();
-      sortedSuperpixels = sortSuperpixelsBySize();
+      sortedSuperpixels = spImage.sortSuperpixelsBySize();
       spIter = sortedSuperpixels.begin();
       numLockClear++;
       continue;
     }
     
     if (debug) {
-      Superpixel *spPtr = getSuperpixelPtr(maxTag);
+      Superpixel *spPtr = spImage.getSuperpixelPtr(maxTag);
       int numCoords = (int) spPtr->coords.size();
       cout << "found largest superpixel " << maxTag << " with N=" << numCoords << " pixels" << endl;
     }
@@ -1287,7 +1295,7 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
         cout << "start iter step " << mergeIter << endl;
       }
       
-      if (getSuperpixelPtr(maxTag) == NULL) {
+      if (spImage.getSuperpixelPtr(maxTag) == NULL) {
         if (debug) {
           cout << "leave loop since max has been merged " << maxTag << endl;
         }
@@ -1301,17 +1309,17 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
       vector<CompareNeighborTuple> resultTuples;
       
       if (range == BACKPROJECT_HIGH_FIVE) {
-        backprojectNeighborSuperpixels(inputImg, maxTag, resultTuples, &locked, mergeIter, colorspace, 20, 1, false, 200, 16);
+        backprojectNeighborSuperpixels(spImage, inputImg, maxTag, resultTuples, &locked, mergeIter, colorspace, 20, 1, false, 200, 16);
       } else if (range == BACKPROJECT_HIGH_FIVE8) {
-        backprojectNeighborSuperpixels(inputImg, maxTag, resultTuples, &locked, mergeIter, colorspace, 20, 2, false, 200, 8);
+        backprojectNeighborSuperpixels(spImage, inputImg, maxTag, resultTuples, &locked, mergeIter, colorspace, 20, 2, false, 200, 8);
       } else if (range == BACKPROJECT_HIGH_TEN) {
-        backprojectNeighborSuperpixels(inputImg, maxTag, resultTuples, &locked, mergeIter, colorspace, 20, 2, false, 200, 16);
+        backprojectNeighborSuperpixels(spImage, inputImg, maxTag, resultTuples, &locked, mergeIter, colorspace, 20, 2, false, 200, 16);
       } else if (range == BACKPROJECT_HIGH_15) {
-        backprojectNeighborSuperpixels(inputImg, maxTag, resultTuples, &locked, mergeIter, colorspace, 20, 3, false, 200, 16);
+        backprojectNeighborSuperpixels(spImage, inputImg, maxTag, resultTuples, &locked, mergeIter, colorspace, 20, 3, false, 200, 16);
       } else if (range == BACKPROJECT_HIGH_20) {
-        backprojectNeighborSuperpixels(inputImg, maxTag, resultTuples, &locked, mergeIter, colorspace, 20, 4, false, 200, 16);
+        backprojectNeighborSuperpixels(spImage, inputImg, maxTag, resultTuples, &locked, mergeIter, colorspace, 20, 4, false, 200, 16);
       } else if (range == BACKPROJECT_HIGH_50) {
-        backprojectNeighborSuperpixels(inputImg, maxTag, resultTuples, &locked, mergeIter, colorspace, 20, 10, false, 128, 8);
+        backprojectNeighborSuperpixels(spImage, inputImg, maxTag, resultTuples, &locked, mergeIter, colorspace, 20, 10, false, 128, 8);
       } else {
         assert(0);
       }
@@ -1342,20 +1350,20 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
           cout << "will merge edge " << edge << endl;
         }
         
-        mergeEdge(edge);
+        spImage.mergeEdge(edge);
         mergeIter += 1;
         mergesSinceLockClear[maxTag] = true;
         
 #if defined(DEBUG)
         // This must never fail since the merge should always consume the other superpixel
-        assert(getSuperpixelPtr(maxTag) != NULL);
+        assert(spImage.getSuperpixelPtr(maxTag) != NULL);
 #endif // DEBUG
         
         if (dumpEachMergeStepImage) {
           Mat resultImg = inputImg.clone();
           resultImg = (Scalar) 0;
           
-          writeTagsWithStaticColortable(*this, resultImg);
+          writeTagsWithStaticColortable(spImage, resultImg);
           
           std::ostringstream stringStream;
           stringStream << "backproject_merge_step_" << mergeIter << ".png";
@@ -1377,7 +1385,7 @@ int MergeSuperpixelImage::mergeBackprojectSuperpixels(Mat &inputImg, int colorsp
   } // end of while (!done) loop
   
   if (debug) {
-    cout << "left backproject loop with " << superpixels.size() << " merged superpixels and step " << mergeIter << endl;
+    cout << "left backproject loop with " << spImage.superpixels.size() << " merged superpixels and step " << mergeIter << endl;
   }
   
   return mergeIter;
@@ -1625,7 +1633,7 @@ int MergeSuperpixelImage::mergeBredthFirstRecursive(Mat &inputImg, int colorspac
       
 //      backprojectNeighborSuperpixels(inputImg, maxTag, resultTuples, &locked, mergeIter, colorspace, 20, 19, true, 64, numBins);
       
-      backprojectNeighborSuperpixels(inputImg, maxTag, resultTuples, &locked, mergeIter, colorspace, 20, 10, true, 128, numBins);
+      backprojectNeighborSuperpixels(*this, inputImg, maxTag, resultTuples, &locked, mergeIter, colorspace, 20, 10, true, 128, numBins);
       
       if (debug) {
         cout << "backprojectNeighborSuperpixels() results for src superpixel " << maxTag << endl;
@@ -2127,17 +2135,17 @@ int MergeSuperpixelImage::mergeBackprojectSmallestSuperpixels(Mat &inputImg, int
       vector<CompareNeighborTuple> resultTuples;
       
       if (range == BACKPROJECT_HIGH_FIVE) {
-        backprojectNeighborSuperpixels(inputImg, minTag, resultTuples, &locked, mergeIter, colorspace, 20, 1, false, 200, 16);
+        backprojectNeighborSuperpixels(*this, inputImg, minTag, resultTuples, &locked, mergeIter, colorspace, 20, 1, false, 200, 16);
       } else if (range == BACKPROJECT_HIGH_FIVE8) {
-        backprojectNeighborSuperpixels(inputImg, minTag, resultTuples, &locked, mergeIter, colorspace, 20, 2, false, 200, 8);
+        backprojectNeighborSuperpixels(*this, inputImg, minTag, resultTuples, &locked, mergeIter, colorspace, 20, 2, false, 200, 8);
       } else if (range == BACKPROJECT_HIGH_TEN) {
-        backprojectNeighborSuperpixels(inputImg, minTag, resultTuples, &locked, mergeIter, colorspace, 20, 2, false, 200, 16);
+        backprojectNeighborSuperpixels(*this, inputImg, minTag, resultTuples, &locked, mergeIter, colorspace, 20, 2, false, 200, 16);
       } else if (range == BACKPROJECT_HIGH_15) {
-        backprojectNeighborSuperpixels(inputImg, minTag, resultTuples, &locked, mergeIter, colorspace, 20, 3, false, 200, 16);
+        backprojectNeighborSuperpixels(*this, inputImg, minTag, resultTuples, &locked, mergeIter, colorspace, 20, 3, false, 200, 16);
       } else if (range == BACKPROJECT_HIGH_20) {
-        backprojectNeighborSuperpixels(inputImg, minTag, resultTuples, &locked, mergeIter, colorspace, 20, 4, false, 200, 16);
+        backprojectNeighborSuperpixels(*this, inputImg, minTag, resultTuples, &locked, mergeIter, colorspace, 20, 4, false, 200, 16);
       } else if (range == BACKPROJECT_HIGH_50) {
-        backprojectNeighborSuperpixels(inputImg, minTag, resultTuples, &locked, mergeIter, colorspace, 20, 10, false, 128, 8);
+        backprojectNeighborSuperpixels(*this, inputImg, minTag, resultTuples, &locked, mergeIter, colorspace, 20, 10, false, 128, 8);
       } else {
         assert(0);
       }
