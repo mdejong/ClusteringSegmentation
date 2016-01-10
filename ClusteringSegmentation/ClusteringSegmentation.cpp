@@ -714,6 +714,118 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     }
     
     cout << "srm generated superpixels N = " << srmSpImage.superpixels.size() << endl;
+    
+    // Scan the largest superpixel regions in largest to smallest order and find
+    // overlap between the SRM generated superpixels.
+    
+    vector<int32_t> srmSuperpixels = srmSpImage.sortSuperpixelsBySize();
+    
+    unordered_map<int32_t, set<int32_t> > srmSuperpixelToExactMap;
+    
+    Mat renderedTagsMat = resultImg.clone();
+    renderedTagsMat = (Scalar) 0;
+    
+    spImage.fillMatrixWithSuperpixelTags(renderedTagsMat);
+
+    // Once a specific superpixel tag has been processed from renderedTagsMat
+    // then it is added to this set.
+    
+    set<int32_t> processedSuperpixels;
+
+    for ( int32_t tag : srmSuperpixels ) {
+      Superpixel *spPtr = srmSpImage.getSuperpixelPtr(tag);
+      assert(spPtr);
+    
+      // Find all the superpixels that are all inside a larger superpixel
+      // and then process the contained elements.
+      
+      // Find overlap between largest superpixels and the known all same superpixels
+      
+      set<int32_t> &otherTagsSet = srmSuperpixelToExactMap[tag];
+      
+      for ( Coord coord : spPtr->coords ) {
+        Vec3b vec = renderedTagsMat.at<Vec3b>(coord.y, coord.x);
+        uint32_t otherTag = Vec3BToUID(vec);
+        
+        if (otherTagsSet.find(otherTag) == otherTagsSet.end()) {
+          otherTagsSet.insert(otherTagsSet.end(), otherTag);
+        }
+        
+        if ((1)) {
+          fprintf(stdout, "coord (%4d,%4d) = 0x%08X aka %8d\n", coord.x, coord.y, otherTag, otherTag);
+        }
+        
+        // Lookup a superpixel with this specific tag just to make sure it exists
+#if defined(DEBUG)
+        Superpixel *otherSpPtr = spImage.getSuperpixelPtr(otherTag);
+        assert(otherSpPtr);
+        assert(otherSpPtr->tag == otherTag);
+#endif // DEBUG
+      }
+      
+      cout << "for SRM superpixel " << tag << " : other tags ";
+      for ( int32_t otherTag : otherTagsSet ) {
+        cout << otherTag << " ";
+      }
+      cout << endl;
+    }
+    
+    // Foreach SRM superpixel determine the superpixels in the
+    // identical tags that correspond to the region and then
+    // select an entire region.
+    
+    for ( int32_t tag : srmSuperpixels ) {
+      set<int32_t> &otherTagsSet = srmSuperpixelToExactMap[tag];
+      
+      cout << "srm superpixels " << tag << " corresponds to other tags : ";
+      for ( int32_t otherTag : otherTagsSet ) {
+        cout << otherTag << " ";
+      }
+      cout << endl;
+      
+      // For the large SRM superpixel detemine the superpixel regions
+      // that
+      
+      Mat regionMat = resultImg.clone();
+      regionMat = (Scalar) 0;
+      
+      int numCoords = 0;
+      
+      for ( int32_t otherTag : otherTagsSet ) {
+        cout << "process superpixels " << otherTag << " from rendered superpixels : ";
+        
+        if (processedSuperpixels.find(otherTag) != processedSuperpixels.end()) {
+          // Already processed this superpixel
+          continue;
+        }
+        
+        Superpixel *spPtr = spImage.getSuperpixelPtr(otherTag);
+        assert(spPtr);
+        
+        Vec3b wVec;
+        wVec[0] = 0xFF;
+        wVec[1] = 0xFF;
+        wVec[2] = 0xFF;
+        
+        for ( Coord c : spPtr->coords ) {
+          regionMat.at<Vec3b>(c.y, c.x) = wVec;
+          numCoords++;
+        }
+        
+        processedSuperpixels.insert(otherTag);
+      }
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_N_" << numCoords << "_tag_" << tag << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, regionMat);
+        cout << "wrote " << fname << endl;
+      }
+      
+    } // end foreach srcSuperpixels
+    
   }
   
   // Done

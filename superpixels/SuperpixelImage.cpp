@@ -1396,6 +1396,30 @@ void SuperpixelImage::reverseFillMatrixFromCoords(Mat &input, bool isGray, int32
   spPtr->reverseFillMatrixFromCoords(input, isGray, tag, output);
 }
 
+// Fill a matrix using the superpixel tag as the RGB value, this method makes it
+// easy to lookup the tag at a specific (X,Y) coordinate.
+
+void SuperpixelImage::fillMatrixWithSuperpixelTags(Mat &outputTagsImg) {
+  // Sort superpixel by size
+  
+  vector<SuperpixelSortStruct> sortedSuperpixels;
+  
+  for ( int32_t tag : superpixels ) {
+    Superpixel *spPtr = getSuperpixelPtr(tag);
+    assert(spPtr);
+    
+    auto &coords = spPtr->coords;
+    
+    Vec3b tagVec = PixelToVec3b(tag);
+    
+    for ( Coord coord : coords ) {
+      int32_t X = coord.x;
+      int32_t Y = coord.y;
+      outputTagsImg.at<Vec3b>(Y, X) = tagVec;
+    }
+  }
+}
+
 // Read RGB values from larger input image based on coords defined for the superpixel
 // and return true only if all the pixels have the exact same value.
 

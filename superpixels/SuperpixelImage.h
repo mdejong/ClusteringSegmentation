@@ -90,6 +90,11 @@ class SuperpixelImage {
   
   void reverseFillMatrixFromCoords(Mat &input, bool isGray, int32_t tag, Mat &output);
   
+  // Fill a matrix using the superpixel tag as the RGB value, this method makes it
+  // easy to lookup the tag at a specific (X,Y) coordinate.
+  
+  void fillMatrixWithSuperpixelTags(Mat &outputTagsImg);
+  
   // true when all pixels in a superpixel are exactly identical
   
   bool isAllSamePixels(Mat &input, int32_t tag);
