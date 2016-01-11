@@ -9,6 +9,8 @@
 using namespace std;
 using namespace cv;
 
+class Coord;
+
 // Convert a vector of 3 bytes into a signed 32bit integer.
 // The values range for a 3 byte tag is 0 -> 0x00FFFFFF and
 // the value -1 is still valid in this case.
@@ -48,5 +50,15 @@ Vec3b PixelToVec3b(uint32_t pixel) {
 // Print SSIM for two images to cout
 
 int printSSIM(Mat inImage1, Mat inImage2);
+
+// Find a single "center" pixel in region of interest matrix. This logic
+// accepts an input matrix that contains binary pixel values (0x0 or 0xFF)
+// and computes a consistent center pixel. When this method returns the
+// region binMat is unchanged. The orderMat is set to the size of the roi and
+// it is filled with distance transformed gray values. Note that this method
+// has to create a buffer zone of 1 pixel so that pixels on the edge have
+// a very small distance.
+
+Coord findRegionCenter(Mat &binMat, cv::Rect roi, Mat &outDistMat, int tag);
 
 #endif // OPENCV_UTIL_H

@@ -2,6 +2,10 @@
 
 #include "OpenCVUtil.h"
 
+#include "Superpixel.h"
+
+#include "vf_DistanceTransform.h"
+
 // Print SSIM for two images to cout
 
 int printSSIM(Mat inImage1, Mat inImage2)
@@ -186,3 +190,428 @@ int printSSIM(Mat inImage1, Mat inImage2)
   
   return 0;
 }
+
+// Find a single "center" pixel in region of interest matrix. This logic
+// accepts an input matrix that contains binary pixel values (0x0 or 0xFF)
+// and computes a consistent center pixel. When this method returns the
+// region binMat is unchanged. The orderMat is set to the size of the roi and
+// it is filled with distance transformed gray values. Note that this method
+// has to create a buffer zone of 1 pixel so that pixels on the edge have
+// a very small distance.
+
+Coord findRegionCenter(Mat &binMat, cv::Rect roi, Mat &outDistMat, int tag)
+{
+  const bool debug = true;
+  const bool debugDumpAllImages = true;
+  
+  assert(binMat.channels() == 1);
+  
+  Point2i center(-1, -1);
+  
+  Mat binROIMat = binMat(roi);
+  
+  outDistMat.create(roi.height, roi.width, CV_8UC1);
+  
+  Mat regionMat(roi.height+2, roi.width+2, CV_8UC1, Scalar(0));
+  
+  assert(regionMat.cols == binROIMat.cols+2);
+  assert(regionMat.rows == binROIMat.rows+2);
+  
+  Mat distMat = regionMat.clone();
+  distMat = Scalar(0);
+  
+  // Copy values from roi into regionMat taking +1 -1 into account so that
+  // distance values have a black border around them
+  
+  Rect borderedROI(1, 1, roi.width, roi.height);
+  
+  Mat regionCopyROIMat = regionMat(borderedROI);
+  
+  assert(regionCopyROIMat.size() == binROIMat.size());
+  
+  binROIMat.copyTo(regionCopyROIMat);
+  
+  if (debug) {
+    cout << "copied ( " << regionCopyROIMat.cols << " x " << regionCopyROIMat.rows << " )" << endl;
+    cout << "into ( " << borderedROI.width << " x " << borderedROI.height << " ) at off " << borderedROI.x << "," << borderedROI.y << endl;
+  }
+  
+  // Dump ROI mat
+  
+  if (debugDumpAllImages) {
+    std::ostringstream stringStream;
+    stringStream << "superpixel_roi_" << tag << ".png";
+    std::string str = stringStream.str();
+    const char *filename = str.c_str();
+    
+    cout << "write " << filename << " ( " << regionMat.cols << " x " << regionMat.rows << " )" << endl;
+    imwrite(filename, regionMat);
+  }
+  
+  // Run distance transform
+  
+  // Get an upper radius bound, basically this is the largest
+  // value that a distance could be for this specific bbox
+  // with a little extra floting point range to adjust for
+  // the case where the number is an exact integer and the
+  // computed distance has a rounding error.
+  
+  // FIXME: Distance transform should support a non-linear distance metric, so that
+  // the caller can pass in a function to do the scaling so that (0,1,2,3) and (254, 255)
+  // could be outside the linear scaling. The edges are much more critical than the
+  // ranges in the middle. For example, a total distance range of 500 could scale a
+  // like a double side log or a single linear stretch from (4, 254). The problem with
+  // the current code is that a very large region could round what should be a 1 edge
+  // down to zero.
+  
+  double radius = round(hypot(regionMat.cols * 0.5, regionMat.rows * 0.5) + 0.5) + 0.01;
+  
+  if (debug) {
+    cout << "calc radius as " << radius << " for " << " ( " << regionMat.cols << " x " << regionMat.rows << " )" << endl;
+  }
+  
+  // Read from regionMat, write distance transformed pixels to distMat
+  
+  vf::DistanceTransform::WhiteTest whiteTest(regionMat);
+  vf::DistanceTransform::OutputDistancePixels distMatOut(distMat, radius);
+  
+  // Use fast ManhattanMetric for distance transform since it seems
+  // to provide better region center estimation than ChessMetric
+  // and it is faster than EuclideanMetric.
+  
+  //vf::DistanceTransform::Meijster::EuclideanMetric metric;
+  vf::DistanceTransform::Meijster::ManhattanMetric metric;
+  
+  vf::DistanceTransform::Meijster::calculate(distMatOut, whiteTest, distMat.cols, distMat.rows, metric);
+  
+  if (debugDumpAllImages) {
+    std::ostringstream stringStream;
+    stringStream << "superpixel_dist_" << tag << ".png";
+    std::string str = stringStream.str();
+    const char *filename = str.c_str();
+    
+    cout << "write " << filename << " ( " << distMat.cols << " x " << distMat.rows << " )" << endl;
+    imwrite(filename, distMat);
+  }
+  
+  // Check the distance transform matrix here, the number of non-zero values must
+  // match the number of white pixels in regionMat. If any funky rounding issues
+  // cause fewer non-zero pixels to appear then the distance transform is not
+  // working as expected since white pixels should have a min dist value of 1.
+  
+#if defined(DEBUG)
+  
+  assert(regionMat.size() == distMat.size());
+  
+  int regionMatNumNonZero = 0;
+  
+  for(int y = 0; y < regionMat.rows; y++) {
+    for(int x = 0; x < regionMat.cols; x++) {
+      uint8_t val = regionMat.at<uint8_t>(y, x);
+      if (val > 0) {
+        regionMatNumNonZero++;
+      }
+    }
+  }
+  
+  int distMatNumNonZero = 0;
+  
+  for(int y = 0; y < distMat.rows; y++) {
+    for(int x = 0; x < distMat.cols; x++) {
+      uint8_t val = distMat.at<uint8_t>(y, x);
+      if (val > 0) {
+        distMatNumNonZero++;
+      }
+    }
+  }
+  
+  assert(regionMatNumNonZero == distMatNumNonZero);
+  
+#endif // DEBUG
+  
+  // Normalize so that the largest value in the distance transform mat becomes 255
+  
+  normalize(distMat, distMat, 0, 255.0, NORM_MINMAX);
+  
+  if (debugDumpAllImages) {
+    std::ostringstream stringStream;
+    stringStream << "superpixel_dist_normalized_" << tag << ".png";
+    std::string str = stringStream.str();
+    const char *filename = str.c_str();
+    
+    cout << "write " << filename << " ( " << distMat.cols << " x " << distMat.rows << " )" << endl;
+    imwrite(filename, distMat);
+  }
+  
+  // Threshold so that only those pixels with the value 255 are left and save into regionMat
+  // This threshold does not change the valus in distMat since those will be returned to
+  // the caller of this function.
+  
+  threshold(distMat, regionMat, 254.0, 255.0, THRESH_BINARY);
+  
+  if (debugDumpAllImages) {
+    std::ostringstream stringStream;
+    stringStream << "superpixel_mask_dist_thresh_max_" << tag << ".png";
+    std::string str = stringStream.str();
+    const char *filename = str.c_str();
+    
+    cout << "write " << filename << " ( " << regionMat.cols << " x " << regionMat.rows << " )" << endl;
+    imwrite(filename, regionMat);
+  }
+  
+  // If the distance transform returns more than 1 pixel with the maximum
+  // threshold value then simply iterate from the top left of the ROI
+  // to find the first non-zero value as use that as the center.
+  
+  int nonZero = countNonZero(regionMat);
+  
+  if (debug) {
+    cout << "found " << nonZero << " non-zero pixels with max thresh" << endl;
+  }
+  
+  assert(nonZero > 0);
+  
+  if (0 && (nonZero > 2)) {
+    // Find bbox of all the pixels still on and then choose the pixel that
+    // is the closest to the center.
+    
+    int maxY = regionMat.rows;
+    int maxX = regionMat.cols;
+    
+    vector<Coord> coords;
+    
+    for(int y = 0; y < maxY; y++) {
+      for(int x = 0; x < maxX; x++) {
+        uint8_t val = regionMat.at<uint8_t>(y, x);
+        if (val > 0) {
+          Coord coord(x, y);
+          coords.push_back(coord);
+          
+          if (debug) {
+            cout << "non-zero coord (" << x << "," << y << ")" << endl;
+          }
+        }
+      }
+    }
+    
+    int32_t originX, originY, width, height;
+    
+    Superpixel::bbox(originX, originY, width, height, coords);
+    
+    // Calculate bbox center coordinate
+    
+    Point2i bboxCenter = Point2i(originX + width/2, originY + height/2);
+    Point2i closestToCenter(-1, -1);
+    
+    // Calculate distance to bbox center
+    
+    double minDist = 0xFFFF;
+    
+    for ( Coord coord : coords ) {
+      int x = coord.x;
+      int y = coord.y;
+      
+      float dist = hypot(float(bboxCenter.x - x), float(bboxCenter.y - y));
+      
+      if (debug) {
+        cout << "dist from (" << x << "," << y << ") to bbox center (" << bboxCenter.x << "," << bboxCenter.y << ") is " << dist << endl;
+      }
+      
+      if (dist < minDist) {
+        closestToCenter = Point2i(x, y);
+        minDist = dist;
+        
+        if (debug) {
+          cout << "new min" << endl;
+        }
+        
+        if (minDist == 0.0) {
+          // Quite the loop once a zero distance has been found
+          break;
+        }
+      }
+    }
+    
+    assert(closestToCenter.x != -1);
+    assert(closestToCenter.y != -1);
+    
+    // Have point out of N possible points that is closest to the bbox center
+    
+    center = closestToCenter;
+  } else if (nonZero > 2) {
+    // Calculate center of mass in terms of the pixels that are on
+    // and the choose an actualy starting coordinate that is closest
+    // to the center coord.
+    
+    int32_t cX = 0;
+    int32_t cY = 0;
+    int32_t N = 0;
+    
+    for (int y = 0; y < regionMat.rows; y++) {
+      for (int x = 0; x < regionMat.cols; x++) {
+        uint8_t val = regionMat.at<uint8_t>(y, x);
+        if (val > 0) {
+          cX += x;
+          cY += y;
+          N += 1;
+        }
+      }
+    }
+    
+    cX = cX / N;
+    cY = cY / N;
+    
+    // If this center of mass coordinate is on, then use it now
+    
+    if (debug) {
+      cout << "center of mass calculated as (" << cX << "," << cY << ")" << endl;
+    }
+    
+    uint8_t isOn = regionMat.at<uint8_t>(cY, cX);
+    
+    if (isOn) {
+      center = Point2i(cX, cY);
+    } else {
+      // Center of mass coordinate is not actually on, could be a shape
+      // with a hole in it. Scan to find the coordinate with the smallest
+      // distance as compared to this center point.
+      
+      vector<Coord> coords;
+      
+      for (int y = 0; y < regionMat.rows; y++) {
+        for (int x = 0; x < regionMat.cols; x++) {
+          uint8_t val = regionMat.at<uint8_t>(y, x);
+          if (val > 0) {
+            Coord coord(x, y);
+            coords.push_back(coord);
+            
+            if (debug) {
+              cout << "non-zero coord (" << x << "," << y << ")" << endl;
+            }
+          }
+        }
+      }
+      
+      Point2i closestToCenter(-1, -1);
+      
+      // Calculate distance to bbox center
+      
+      float minDist = 0xFFFF;
+      
+      if (debug) {
+        cout << "min dist " << minDist << endl;
+      }
+      
+      for ( Coord coord : coords ) {
+        int32_t x = coord.x;
+        int32_t y = coord.y;
+        
+        float dist = hypot(float(cX - x), float(cY - y));
+        
+        if (debug) {
+          cout << "dist from (" << x << "," << y << ") to center of mass (" << cX << "," << cY << ") is " << dist << endl;
+        }
+        
+        if (dist < minDist) {
+          closestToCenter = Point2i(x, y);
+          minDist = dist;
+          
+          if (debug) {
+            cout << "new min" << endl;
+          }
+          
+          if (minDist == 0.0) {
+            // Quite the loop once a zero distance has been found
+            break;
+          }
+        }
+      }
+      
+      assert(closestToCenter.x != -1);
+      assert(closestToCenter.y != -1);
+      
+      // Have point out of N possible points that is closest to the bbox center
+      
+      center = closestToCenter;
+    }
+  } else {
+    // Iterate over all binary values and save the first on pixel if 1 or 2 to choose from
+    
+    int maxY = regionMat.rows;
+    int maxX = regionMat.cols;
+    
+    for(int y = 0; y < maxY; y++) {
+      for(int x = 0; x < maxX; x++) {
+        uint8_t val = regionMat.at<uint8_t>(y, x);
+        if (val > 0) {
+          center = Point2i(x, y);
+          break;
+        }
+      }
+    }
+    assert(center.x != -1);
+  }
+  
+  if (debug) {
+    cout << "found center point (" << center.x << "," << center.y << ") in ROI region of size " << regionMat.rows << " x " << regionMat.cols << endl;
+  }
+  
+  // The center point should not be on the border
+  
+  assert(center.x != 0 && center.x != (regionMat.cols-1));
+  assert(center.y != 0 && center.y != (regionMat.rows-1));
+  
+  center.x -= 1;
+  center.y -= 1;
+  
+  // Adjust
+  
+  // Dump center point image as BGR image over original size image
+  
+  if (debugDumpAllImages) {
+    Mat colorMat(binMat.size(), CV_8UC3);
+    cvtColor(binMat, colorMat, COLOR_GRAY2BGR);
+    
+    Point2i notROICenter(center.x + roi.x, center.y + roi.y);
+    
+    if (debug) {
+      cout << "roi (" << roi.x << "," << roi.y << ") " << roi.width << " x " << roi.height << " in region " << binMat.cols << " x " << binMat.rows << endl;
+      
+      cout << "will write non-ROI center point (" << notROICenter.x << "," << notROICenter.y << ") in size " << colorMat.rows << " x " << colorMat.cols << endl;
+    }
+    
+    colorMat.at<Vec3b>(notROICenter) = Vec3b(0, 0, 0xFF);
+    
+    std::ostringstream stringStream;
+    stringStream << "superpixel_mask_center_" << tag << ".png";
+    std::string str = stringStream.str();
+    const char *filename = str.c_str();
+    
+    cout << "write " << filename << " ( " << colorMat.cols << " x " << colorMat.rows << " )" << endl;
+    imwrite(filename, colorMat);
+  }
+  
+  // Copy the dist values back into distMat taking the border into account
+  
+  Mat distCopyROIMat = distMat(borderedROI);
+  
+  assert(distCopyROIMat.size() == outDistMat.size());
+  
+  distCopyROIMat.copyTo(outDistMat);
+  
+  if (debug) {
+    cout << "copy ROI from dist buffer of size " << borderedROI.width << " x " << borderedROI.height << endl;
+    cout << "copy ROI into out dist buffer of size " << distCopyROIMat.cols << " x " << distCopyROIMat.rows << endl;
+  }
+  
+  // Verify that the region center is in the ROI region
+  
+  assert(center.x >= 0);
+  assert(center.x < distCopyROIMat.cols);
+  assert(center.y >= 0);
+  assert(center.y < distCopyROIMat.rows);
+  
+  Coord centerPair(center.x, center.y);
+  return centerPair;
+}
+

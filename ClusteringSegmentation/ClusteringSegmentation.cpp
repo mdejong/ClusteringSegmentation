@@ -731,6 +731,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     // then it is added to this set.
     
     set<int32_t> processedSuperpixels;
+    
+    vector<int32_t> processedOrder;
 
     for ( int32_t tag : srmSuperpixels ) {
       Superpixel *spPtr = srmSpImage.getSuperpixelPtr(tag);
@@ -748,10 +750,14 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         uint32_t otherTag = Vec3BToUID(vec);
         
         if (otherTagsSet.find(otherTag) == otherTagsSet.end()) {
+          if ((1)) {
+            fprintf(stdout, "coord (%4d,%4d) = found tag 0x%08X aka %8d\n", coord.x, coord.y, otherTag, otherTag);
+          }
+          
           otherTagsSet.insert(otherTagsSet.end(), otherTag);
         }
         
-        if ((1)) {
+        if ((0)) {
           fprintf(stdout, "coord (%4d,%4d) = 0x%08X aka %8d\n", coord.x, coord.y, otherTag, otherTag);
         }
         
@@ -772,7 +778,9 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     
     // Foreach SRM superpixel determine the superpixels in the
     // identical tags that correspond to the region and then
-    // select an entire region.
+    // select an entire region. This search goes from largest
+    // SRM superpixel to smallest and keeps track of superpixels
+    // as they are processed to avoid duplicates.
     
     for ( int32_t tag : srmSuperpixels ) {
       set<int32_t> &otherTagsSet = srmSuperpixelToExactMap[tag];
@@ -783,39 +791,49 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       }
       cout << endl;
       
-      // For the large SRM superpixel detemine the superpixel regions
-      // that
+      // For the large SRM superpixel detemine the superpixel region
+      // via a union with the other tags image.
       
-      Mat regionMat = resultImg.clone();
+      Mat regionMat = Mat(resultImg.rows, resultImg.cols, CV_8UC1);
+
       regionMat = (Scalar) 0;
       
       int numCoords = 0;
       
+      vector<Coord> unprocessedCoords;
+      
       for ( int32_t otherTag : otherTagsSet ) {
-        cout << "process superpixels " << otherTag << " from rendered superpixels : ";
-        
         if (processedSuperpixels.find(otherTag) != processedSuperpixels.end()) {
           // Already processed this superpixel
+          
+          cout << "already processed superpixel " << otherTag << endl;
+          
           continue;
         }
         
         Superpixel *spPtr = spImage.getSuperpixelPtr(otherTag);
         assert(spPtr);
         
-        Vec3b wVec;
-        wVec[0] = 0xFF;
-        wVec[1] = 0xFF;
-        wVec[2] = 0xFF;
+        if ((1)) {
+          cout << "unprocessed superpixel " << otherTag << " with N = " << spPtr->coords.size() << endl;
+        }
         
         for ( Coord c : spPtr->coords ) {
-          regionMat.at<Vec3b>(c.y, c.x) = wVec;
+          regionMat.at<uint8_t>(c.y, c.x) = 0xFF;
+          // Slow bbox calculation simply records all the (X,Y) coords in all the
+          // superpixels and then does a bbox using these coords. A faster method
+          // would be to do a bbox on each superpixel and then save the upper left
+          // and upper right coords only.
+          unprocessedCoords.push_back(c);
           numCoords++;
         }
         
         processedSuperpixels.insert(otherTag);
       }
       
-      {
+      if (numCoords == 0) {
+        cout << "zero unprocessed pixels for SRM superpixel " << tag << endl;
+      } else {
         std::stringstream fnameStream;
         fnameStream << "srm" << "_N_" << numCoords << "_tag_" << tag << ".png";
         string fname = fnameStream.str();
@@ -824,6 +842,95 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         cout << "wrote " << fname << endl;
       }
       
+      // A SRM superpxiel indicates the general region where alike colors exist, need to
+      // expand and minimize the search area in an attempt to identify where the bounds
+      // of a specific object is located.
+      
+      // First find the center superpixel, this is the superpixel that appears to be at
+      // the center of the indicated superpixel region.
+      
+      if (numCoords != 0) {
+        int32_t originX, originY, width, height;
+        Superpixel::bbox(originX, originY, width, height, unprocessedCoords);
+        Rect roi(originX, originY, width, height);
+        
+        cout << "initial roi for tag " << tag << " is (" << originX << "," << originY << ") " << width << " x " << height << endl;
+        
+        if ((1)) {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_roi_" << "0" << ".png";
+          string fname = fnameStream.str();
+          
+          Mat roiInputMat = inputImg(roi);
+          
+          imwrite(fname, roiInputMat);
+          cout << "wrote " << fname << endl;
+        }
+      
+        Mat outDistMat;
+        
+        Coord regionCenterCoord = findRegionCenter(regionMat, roi, outDistMat, tag);
+        
+        cout << "regionCenterCoord " << regionCenterCoord << endl;
+        
+        // Convert region center to root (0,0) coordinates outside the ROI
+        
+        regionCenterCoord.x += originX;
+        regionCenterCoord.y += originY;
+        
+        cout << "absolute regionCenterCoord " << regionCenterCoord << endl;
+        
+        // Use this region center to create an expanding rectangular ROI that captures
+        // the local pixel neighborhood around the object in question.
+        
+        // Possible 1: Expand ROI in term of containing parent, consuming small neighbors
+        // as the ROI is expanded.
+        
+        // Possible 2: Simply get a ROI and use Clustersing to determine where the ROI
+        // most clearly defines a split between N colors.
+        
+        for (int expandStep = 1; expandStep < 8; expandStep++ ) {
+          int halfWidth = width/2;
+          int halfHeight = height/2;
+
+          int expandedX = regionCenterCoord.x - halfWidth - expandStep;
+          int expandedY = regionCenterCoord.y - halfHeight - expandStep;
+          
+          int expandedWidth = (halfWidth + expandStep) * 2;
+          int expandedHeight = (halfHeight + expandStep) * 2;
+          
+          cout << "expanded roi for tag " << tag << " is (" << expandedX << "," << expandedY << ") " << expandedWidth << " x " << expandedHeight << endl;
+          
+          if (expandedX < 0) {
+            break;
+          }
+          if (expandedY < 0) {
+            break;
+          }
+          if (expandedWidth > inputImg.cols) {
+            break;
+          }
+          if (expandedHeight > inputImg.rows) {
+            break;
+          }
+          
+          Rect expandedRoi(expandedX, expandedY, expandedWidth, expandedHeight);
+          
+          Mat roiInputMat = inputImg(expandedRoi);
+          
+          if ((1)) {
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_roi_" << expandStep << ".png";
+            string fname = fnameStream.str();
+            
+            imwrite(fname, roiInputMat);
+            cout << "wrote " << fname << endl;
+            cout << "done";
+          }
+        }
+        
+        
+      }
     } // end foreach srcSuperpixels
     
   }
