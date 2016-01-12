@@ -615,3 +615,24 @@ Coord findRegionCenter(Mat &binMat, cv::Rect roi, Mat &outDistMat, int tag)
   return centerPair;
 }
 
+// Given an input binary Mat (0x0 or 0xFF) perform a dilate() operation that will expand
+// the white region inside a black region. This makes use of a circular operator and
+// an expansion size indicated by the caller.
+
+Mat expandWhiteInRegion(Mat &binMat, int expandNumPixelsSize, int tag)
+{
+  assert(binMat.channels() == 1);
+  
+  Mat outBinMat = binMat.clone();
+ 
+  int dilation_type = MORPH_ELLIPSE;
+  int dilation_size = expandNumPixelsSize;
+  
+  Mat element = getStructuringElement( dilation_type,
+                                      Size( 2*dilation_size + 1, 2*dilation_size+1 ),
+                                      Point( dilation_size, dilation_size ) );
+  
+  dilate( binMat, outBinMat, element );
+  
+  return outBinMat;
+}

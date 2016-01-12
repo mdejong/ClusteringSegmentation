@@ -61,4 +61,10 @@ int printSSIM(Mat inImage1, Mat inImage2);
 
 Coord findRegionCenter(Mat &binMat, cv::Rect roi, Mat &outDistMat, int tag);
 
+// Given an input binary Mat (0x0 or 0xFF) perform a dilate() operation that will expand
+// the white region inside a black region. This makes use of a circular operator and
+// an expansion size indicated by the caller.
+
+Mat expandWhiteInRegion(Mat &binMat, int expandNumPixelsSize, int tag);
+
 #endif // OPENCV_UTIL_H

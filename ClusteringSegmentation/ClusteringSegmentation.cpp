@@ -311,9 +311,18 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
   
   const bool debugOutput = false;
   
-  int numXStepsinWidth = (inputImg.cols >> 2);
+  const int superpixelDim = 4;
+  int blockWidth = inputImg.cols / superpixelDim;
+  if ((inputImg.cols % superpixelDim) != 0) {
+    blockWidth++;
+  }
+  int blockHeight = inputImg.rows / superpixelDim;
+  if ((inputImg.rows % superpixelDim) != 0) {
+    blockHeight++;
+  }
   
-  const int superpixelWidth = 4;
+  assert((blockWidth * superpixelDim) >= inputImg.cols);
+  assert((blockHeight * superpixelDim) >= inputImg.rows);
   
   for(int y = 0; y < inputImg.rows; y++) {
     int yStep = y >> 2;
@@ -321,7 +330,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     for(int x = 0; x < inputImg.cols; x++) {
       int xStep = x >> 2;
 
-      uint32_t tag = (yStep * numXStepsinWidth) + xStep;
+      uint32_t tag = (yStep * blockWidth) + xStep;
       
       if ((debugOutput)) {
         char buffer[1024];
@@ -440,7 +449,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         }
       }
       
-      spImage.scanLargestSuperpixels(largestSuperpixelResults, (superpixelWidth*superpixelWidth)); // min is 16 pixels
+      spImage.scanLargestSuperpixels(largestSuperpixelResults, (superpixelDim*superpixelDim)); // min is 16 pixels
     }
     
  //   int32_t largestSuperpixelTag = largestSuperpixelResults[0];
@@ -791,15 +800,16 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       }
       cout << endl;
       
-      // For the large SRM superpixel detemine the superpixel region
-      // via a union with the other tags image.
+      // For the large SRM superpixel determine the set of superpixels
+      // contains in the region by looking at the other tags image.
       
       Mat regionMat = Mat(resultImg.rows, resultImg.cols, CV_8UC1);
 
       regionMat = (Scalar) 0;
       
       int numCoords = 0;
-      
+
+      vector<int32_t> unprocessedTagsThisSet;
       vector<Coord> unprocessedCoords;
       
       for ( int32_t otherTag : otherTagsSet ) {
@@ -828,7 +838,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           numCoords++;
         }
         
-        processedSuperpixels.insert(otherTag);
+        //processedSuperpixels.insert(otherTag);
+        unprocessedTagsThisSet.push_back(otherTag);
       }
       
       if (numCoords == 0) {
@@ -929,7 +940,117 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           }
         }
         
+        // The same type of logic implemented as a morphological operation in terms of 4x4 blocks
+        // represented as pixels.
         
+        if (numCoords != 0) {
+          Mat morphBlockMat = Mat(blockHeight, blockWidth, CV_8U);
+          morphBlockMat = (Scalar) 0;
+          
+          // Get the first coord for each blok that is indicated as inside the SRM superpixel
+          
+          for ( int32_t otherTag : otherTagsSet ) {
+            if (processedSuperpixels.find(otherTag) != processedSuperpixels.end()) {
+              // Already processed this superpixel
+              
+              cout << "already processed superpixel " << otherTag << endl;
+              
+              continue;
+            }
+            
+            Superpixel *spPtr = spImage.getSuperpixelPtr(otherTag);
+            assert(spPtr);
+            
+            if ((1)) {
+              cout << "unprocessed superpixel " << otherTag << " with N = " << spPtr->coords.size() << endl;
+            }
+            
+            for ( Coord c : spPtr->coords ) {
+              // Convert (X,Y) to block (X,Y)
+              
+              int blockX = c.x / superpixelDim;
+              int blockY = c.y / superpixelDim;
+              
+              cout << "block with tag " << otherTag << " cooresponds to (X,Y) (" << c.x << "," << c.y << ")" << endl;
+              cout << "maps to block (X,Y) (" << blockX << "," << blockY << ")" << endl;
+              
+              // FIXME: optimize for case where (X,Y) is exactly the same as in the previous iteration and avoid
+              // writing to the Mat in that case. This shift is cheap.
+              
+              morphBlockMat.at<uint8_t>(blockY, blockX) = 0xFF;
+              
+              //break;
+            }
+          }
+          
+          Mat expandedBlockMat;
+          
+          for (int expandStep = 0; expandStep < 8; expandStep++ ) {
+            if (expandStep == 0) {
+              expandedBlockMat = morphBlockMat;
+            } else {
+              expandedBlockMat = expandWhiteInRegion(expandedBlockMat, 1, tag);
+            }
+            
+            int nzc = countNonZero(expandedBlockMat);
+            
+            Mat morphBlockMat = Mat(blockHeight, blockWidth, CV_8U);
+            
+            if (nzc == (blockHeight * blockWidth)) {
+              cout << "all pixels in Mat now white " << endl;
+              break;
+            }
+            
+            if ((1)) {
+              std::stringstream fnameStream;
+              fnameStream << "srm" << "_tag_" << tag << "_morph_block_" << expandStep << ".png";
+              string fname = fnameStream.str();
+              
+              imwrite(fname, expandedBlockMat);
+              cout << "wrote " << fname << endl;
+            }
+            
+            // Map morph blocks back to rectangular ROI in original image and extract ROI
+            
+            vector<Point> locations;
+            findNonZero(expandedBlockMat, locations);
+            
+            vector<Coord> minMaxCoords;
+            
+            for ( Point p : locations ) {
+              int actualX = p.x * superpixelDim;
+              int actualY = p.y * superpixelDim;
+              
+              Coord min(actualX, actualY);
+              minMaxCoords.push_back(min);
+              
+              Coord max(actualX+superpixelDim-1, actualY+superpixelDim-1);
+              minMaxCoords.push_back(max);
+            }
+            
+            int32_t originX, originY, width, height;
+            Superpixel::bbox(originX, originY, width, height, minMaxCoords);
+            Rect expandedRoi(originX, originY, width, height);
+            
+            Mat roiInputMat = inputImg(expandedRoi);
+
+            if ((1)) {
+              std::stringstream fnameStream;
+              fnameStream << "srm" << "_tag_" << tag << "_morph_block_input_" << expandStep << ".png";
+              string fname = fnameStream.str();
+              
+              imwrite(fname, roiInputMat);
+              cout << "wrote " << fname << endl;
+            }
+            
+          }
+        }
+        
+        // Mark each superpixel as processed
+        
+        for ( int32_t tag : unprocessedTagsThisSet ) {
+          processedSuperpixels.insert(tag);
+        }
       }
     } // end foreach srcSuperpixels
     
