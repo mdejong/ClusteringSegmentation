@@ -1060,17 +1060,48 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
             }
           }
           
+          // Emit an image that shows the union of all the coords in each
+          // of the superpixels in sizeSortedFilteredSuperpixels.
+          
+          if (1) {
+            Mat tmpResultImg = resultImg.clone();
+            tmpResultImg = (Scalar) 0;
+            
+            for ( int32_t otherTag : sizeSortedFilteredSuperpixels ) {
+              Superpixel *spPtr;
+              spPtr = spImage.getSuperpixelPtr(otherTag);
+              if (spPtr == NULL) {
+                assert(0);
+              }
+              
+              Vec3b whitePixel(0xFF, 0xFF, 0xFF);
+              
+              for ( Coord c : spPtr->coords ) {
+                tmpResultImg.at<Vec3b>(c.y, c.x) = whitePixel;
+              }
+            }
+            
+            std::stringstream fnameStream;
+            fnameStream << "region_match.png";
+            string fname = fnameStream.str();
+            
+            imwrite(fname, tmpResultImg);
+            cout << "wrote " << fname << endl;
+          }
+          
           // Gather all the superpixel ids that are defined in otherTagsSet
           // and merge these superpixels together into one larger superpixel
           // that includes values up to the edge with the containing superpixel.
           
-          for ( int32_t otherTag : sizeSortedFilteredSuperpixels ) {
+          for ( auto it = begin(sizeSortedFilteredSuperpixels); it != end(sizeSortedFilteredSuperpixels) ; ) {
+            int32_t otherTag = *it;
             Superpixel *spPtr = spImage.getSuperpixelPtr(otherTag);
             if (spPtr == NULL) {
               if ((1)) {
                 cout << "already merged superpixel " << otherTag << endl;
               }
               
+              it++;
               continue;
             }
           
@@ -1081,7 +1112,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
             set<int32_t> neighbors = spImage.edgeTable.getNeighborsSet(otherTag);
 
             bool didMerge = false;
-            bool mergedOther = false;
+            //bool mergedOther = false;
             
             for ( int32_t neighborTag : neighbors ) {
               if ( otherTagsSet.find(neighborTag) != otherTagsSet.end() ) {
@@ -1098,8 +1129,13 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
                 
                 spPtr = spImage.getSuperpixelPtr(otherTag);
                 if (spPtr == NULL) {
-                  mergedOther = true;
-                  break;
+                  // Should not ever merge other since regions are being processed in largest to
+                  // smallest order.
+                  
+                  assert(0);
+                  
+                  //mergedOther = true;
+                  //break;
                 }
               }
             }
@@ -1121,8 +1157,15 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
               }
             }
             
-            if (mergedOther) {
-              break;
+            //if (mergedOther) {
+            //  break;
+            //}
+            
+            if (didMerge == false) {
+              // No merge was found, continue with next superpixel
+              it++;
+            } else {
+              // If a merge was done then continue to merge with the current
             }
           }
         }
@@ -1135,6 +1178,14 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       }
     } // end foreach srcSuperpixels
     
+  }
+  
+  // Generate result image after region based merging
+  
+  if (debugWriteIntermediateFiles) {
+    generateStaticColortable(inputImg, spImage);
+    writeTagsWithStaticColortable(spImage, resultImg);
+    imwrite("tags_after_region_merge.png", resultImg);
   }
   
   // Done
