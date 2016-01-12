@@ -720,7 +720,11 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
   if ((1)) {
     // SRM
 
-    double Q = 256.0;
+//    double Q = 16.0;
+//    double Q = 32.0;
+//    double Q = 64.0; // Not too small
+    double Q = 128.0; // keeps small circles together
+//    double Q = 256.0;
 //    double Q = 512.0;
     
     Mat srmTags = generateSRM(inputImg, Q);
@@ -924,6 +928,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         // Possible 2: Simply get a ROI and use Clustersing to determine where the ROI
         // most clearly defines a split between N colors.
         
+        if ((false)) {
+        
         for (int expandStep = 1; expandStep < 8; expandStep++ ) {
           int halfWidth = width/2;
           int halfHeight = height/2;
@@ -960,9 +966,10 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
             
             imwrite(fname, roiInputMat);
             cout << "wrote " << fname << endl;
-            cout << "done";
           }
         }
+          
+        } // if false
         
         // The same type of logic implemented as a morphological operation in terms of 4x4 blocks
         // represented as pixels.
@@ -971,7 +978,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           Mat morphBlockMat = Mat(blockHeight, blockWidth, CV_8U);
           morphBlockMat = (Scalar) 0;
           
-          // Get the first coord for each blok that is indicated as inside the SRM superpixel
+          // Get the first coord for each block that is indicated as inside the SRM superpixel
           
           for ( int32_t otherTag : otherTagsSet ) {
             if (processedSuperpixels.find(otherTag) != processedSuperpixels.end()) {
@@ -1067,6 +1074,81 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
               cout << "wrote " << fname << endl;
             }
             
+          }
+        }
+        
+        // For a superpixel that has a containing parent, process neighbors of the superpixel
+        // that are smaller in order to combine small chunks into a region.
+        
+        // FIXME: a better approach might be to get the largest superpixel, then check
+        // all the neighbors of the large one. Since if it is large then the first
+        // level neighbors will be all the neighbors.
+        
+        if (processedSuperpixels.size() > 0) {
+          
+          cout << "process non-root superpixel " << tag << endl;
+          
+          // Sort superpixels by size and then filter to the onces in otherTagsSet
+          
+          vector<int32_t> sortedSuperpixels = spImage.sortSuperpixelsBySize();
+          vector<int32_t> sizeSortedFilteredSuperpixels;
+          
+          unordered_map<int32_t,int32_t> map;
+          
+          for ( int32_t tag : otherTagsSet ) {
+            map[tag] = tag;
+          }
+          
+          for ( int32_t tag : sortedSuperpixels ) {
+            if (map.count(tag) > 0) {
+              sizeSortedFilteredSuperpixels.push_back(tag);
+            }
+          }
+          
+          // Gather all the superpixel ids that are defined in otherTagsSet
+          // and merge these superpixels together into one larger superpixel
+          // that includes values up to the edge with the containing superpixel.
+          
+          for ( int32_t otherTag : sizeSortedFilteredSuperpixels ) {
+            Superpixel *spPtr = spImage.getSuperpixelPtr(otherTag);
+            if (spPtr == NULL) {
+              if ((1)) {
+                cout << "already merged superpixel " << otherTag << endl;
+              }
+              
+              continue;
+            }
+          
+            if ((1)) {
+              cout << "merge unprocessed superpixel " << otherTag << " with N = " << spPtr->coords.size() << endl;
+            }
+            
+            set<int32_t> neighbors = spImage.edgeTable.getNeighborsSet(otherTag);
+            
+            bool mergedOther = false;
+            
+            for ( int32_t neighborTag : neighbors ) {
+              if ( otherTagsSet.find(neighborTag) != otherTagsSet.end() ) {
+                // Both otherTag and neighborTag are in otherTagsSet
+                
+                if ((1)) {
+                  cout << "merge superpixels " << otherTag << " and " << neighborTag << endl;
+                }
+                
+                SuperpixelEdge edge(otherTag, neighborTag);
+                spImage.mergeEdge(edge);
+                
+                spPtr = spImage.getSuperpixelPtr(otherTag);
+                if (spPtr == NULL) {
+                  mergedOther = true;
+                  break;
+                }
+              }
+            }
+            
+            if (mergedOther) {
+              break;
+            }
           }
         }
         

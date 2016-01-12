@@ -367,6 +367,10 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
   numCoordsA = spAPtr->coords.size();
   numCoordsB = spBPtr->coords.size();
   
+  if (debug) {
+    cout << "numCoordsA : " << numCoordsA << " and numCoordsB : " << numCoordsB << endl;
+  }
+  
   if (numCoordsA >= numCoordsB) {
     // Merged B into A since A is larger
 
@@ -439,6 +443,21 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
     }
   }
   
+#if defined(DEBUG)
+  {
+  // Verify that src is a neighbor of dst
+  assert(srcPtr->tag > 0);
+  
+  bool found = false;
+  for ( int32_t neighborOfDstTag : neighborsOfDst ) {
+    if (neighborOfDstTag == srcPtr->tag) {
+      found = true;
+    }
+  }
+  assert(found);
+  }
+#endif // DEBUG
+  
   // Remove src tag from neighbors of dst set
   
   numRemoved = (int) neighborsOfDst.erase(srcPtr->tag);
@@ -475,6 +494,21 @@ void SuperpixelImage::mergeEdge(SuperpixelEdge &edgeToMerge) {
       cout << neighborTag << endl;
     }
   }
+  
+#if defined(DEBUG)
+  {
+  // Verify that dst is a neighbor of src
+  assert(dstPtr->tag > 0);
+  
+  bool found = false;
+  for ( int32_t neighborOfSrcTag : neighborsOfSrc ) {
+    if (neighborOfSrcTag == dstPtr->tag) {
+      found = true;
+    }
+  }
+  assert(found);
+  }
+#endif // DEBUG
   
   for ( int32_t neighborOfSrcTag : neighborsOfSrc ) {
     if (debug) {
