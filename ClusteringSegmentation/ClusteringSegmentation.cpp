@@ -142,7 +142,7 @@ void dumpQuantImage(string filename, Mat inputImg, uint32_t *pixels) {
 // Dump N x 1 image that contains pixels
 
 static
-void dumpQuantTableImage(string filename, Mat inputImg, uint32_t *colortable, uint32_t numColortableEntries)
+void dumpQuantTableImage(string filename, const Mat &inputImg, uint32_t *colortable, uint32_t numColortableEntries)
 {
   // Write image that contains one color in each row in a N x 1 image
   
@@ -156,7 +156,8 @@ void dumpQuantTableImage(string filename, Mat inputImg, uint32_t *colortable, ui
     clusterCenterPixels.push_back(pixel);
   }
   
-  if ((0)) {
+#if defined(DEBUG)
+  if ((1)) {
     fprintf(stdout, "numClusters %5d\n", numColortableEntries);
     
     unordered_map<uint32_t, uint32_t> seen;
@@ -183,6 +184,7 @@ void dumpQuantTableImage(string filename, Mat inputImg, uint32_t *colortable, ui
     
     assert(numQuantUnique == numColortableEntries);
   }
+#endif // DEBUG
   
   vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(clusterCenterPixels);
   
@@ -480,13 +482,35 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     {
       vector<uint32_t> clusterCenterPixels;
       
-      for ( int i = 0; i < numClusters; i++) {
+      for ( int i = 0; i < numActualClusters; i++) {
         uint32_t pixel = colortable[i];
         clusterCenterPixels.push_back(pixel);
       }
       
+#if defined(DEBUG)
+      if ((1)) {
+        unordered_map<uint32_t, uint32_t> seen;
+        
+        for ( int i = 0; i < numActualClusters; i++ ) {
+          uint32_t pixel;
+          pixel = colortable[i];
+          
+          if (seen.count(pixel) > 0) {
+          } else {
+            // Note that only the first seen index is retained, this means that a repeated
+            // pixel value is treated as a dup.
+            
+            seen[pixel] = i;
+          }
+        }
+        
+        int numQuantUnique = (int)seen.size();
+        assert(numQuantUnique == numActualClusters);
+      }
+#endif // DEBUG
+
       if ((0)) {
-        fprintf(stdout, "numClusters %5d\n", numClusters);
+        fprintf(stdout, "numClusters %5d : numActualClusters %5d \n", numClusters, numActualClusters);
         
         unordered_map<uint32_t, uint32_t> seen;
         
