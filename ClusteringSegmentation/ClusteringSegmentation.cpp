@@ -747,7 +747,6 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       
       unordered_map<uint32_t, uint32_t> pixel_to_quant_count;
       
-      //int numPixels = inputImg.rows * inputImg.cols;
       for (int i = 0; i < numPixels; i++) {
         uint32_t pixel = outPixels[i++];
         pixel_to_quant_count[pixel] += 1;
@@ -773,52 +772,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         uint32_t count = pixel_to_quant_count[pixel];
         
         printf("count table[0x%08X] = %6d\n", pixel, count);
-      }
-      
-      /*
-      
-      // Repeated invocation of quant logic as a method of reducing a 256 table of values
-      // to a smaller N that best splits the global colorspace.
-      
-      uint32_t *quantResultPixels = new uint32_t[numPixels];
-      uint32_t *quantColortable = new uint32_t[numActualClusters];
-      
-      int numClustersThisIteration = numActualClusters - 1;
-      
-      for (int i = 0; i < numActualClusters; i++) {
-        int allPixelsUnique = 0;
-        
-        if (numClustersThisIteration < 2) {
-          break;
-        }
-        
-        uint32_t numActualClusters = numClustersThisIteration;
-        
-        quant_recurse(numPixels, outPixels, quantResultPixels, &numActualClusters, quantColortable, allPixelsUnique );
-       
-        {
-          std::stringstream fnameStream;
-          fnameStream << "quant_output_N" << numClustersThisIteration << ".png";
-          string fname = fnameStream.str();
-          
-          dumpQuantImage(fname, inputImg, quantResultPixels);
-        }
-
-        {
-          std::stringstream fnameTableStream;
-          fnameTableStream << "quant_table_N" << numClustersThisIteration << ".png";
-          string fnameTable = fnameTableStream.str();
-          
-          dumpQuantTableImage(fnameTable, inputImg, quantColortable, numActualClusters);
-        }
-        
-        numClustersThisIteration -= 1;
-      }
-      
-      delete [] quantResultPixels;
-      delete [] quantColortable;
-       
-      */
+      }      
     }
     
     // dealloc
@@ -1304,26 +1258,65 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         
         int numPixels = (int) regionCoords.size();
         
-        uint32_t *pixels = new uint32_t[numPixels];
+        uint32_t *inPixels = new uint32_t[numPixels];
+        uint32_t *outPixels = new uint32_t[numPixels];
         
         for ( int i = 0; i < numPixels; i++ ) {
           Coord c = regionCoords[i];
           Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
           uint32_t pixel = Vec3BToUID(vec);
-          pixels[i] = pixel;
+          inPixels[i] = pixel;
           tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
         }
-
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_morph_masked_input" << ".png";
-        string fname = fnameStream.str();
         
-        imwrite(fname, tmpResultImg);
-        cout << "wrote " << fname << endl;
+        {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_morph_masked_input" << ".png";
+          string fname = fnameStream.str();
+          
+          imwrite(fname, tmpResultImg);
+          cout << "wrote " << fname << endl;
+        }
         
-        delete [] pixels;
-        
-        // Generate quant based on the input
+        {
+          // Generate quant based on the input
+          
+          const int numClusters = 256;
+          
+          cout << "numClusters detected as " << numClusters << endl;
+          
+          uint32_t *colortable = new uint32_t[numClusters];
+          
+          uint32_t numActualClusters = numClusters;
+          
+          int allPixelsUnique = 0;
+          
+          quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
+          
+          // Write quant output where each original pixel is replaced with the closest
+          // colortable entry.
+          
+          {
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_quant_output" << ".png";
+            string fname = fnameStream.str();
+            
+            dumpQuantImage(fname, inputImg, outPixels);
+          }
+          
+          {
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_quant_table" << ".png";
+            string fname = fnameStream.str();
+            
+            dumpQuantTableImage(fname, inputImg, colortable, numActualClusters);
+          }
+          
+          delete [] inPixels;
+          delete [] outPixels;
+          delete [] colortable;
+          
+        }
 
       }
 
