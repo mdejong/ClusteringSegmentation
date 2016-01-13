@@ -1201,7 +1201,82 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       mergeManager.otherTagsSetPtr = &otherTagsSet;
       
       SuperpixelMergeManagerFunc<SRMMergeManager>(mergeManager);
+    }
+    
+    // With the overall merge completed, generate a block Mat
+    // for each large superpixel so that specific pixel values
+    // for the area around the region can be queried.
+    
+    for ( int32_t tag : spImage.sortSuperpixelsBySize() ) {
+      auto &coords = spImage.getSuperpixelPtr(tag)->coords;
       
+      if (coords.size() <= (superpixelDim*superpixelDim)) {
+        // Don't bother with non-expanded blocks
+        break;
+      }
+      
+      Mat expandedBlockMat = expandBlockRegion(tag, coords, 2, blockWidth, blockHeight, superpixelDim);
+      
+      // Map morph blocks back to rectangular ROI in original image and extract ROI
+      
+      vector<Point> locations;
+      findNonZero(expandedBlockMat, locations);
+      
+      vector<Coord> minMaxCoords;
+      
+      for ( Point p : locations ) {
+        int actualX = p.x * superpixelDim;
+        int actualY = p.y * superpixelDim;
+        
+        Coord min(actualX, actualY);
+        minMaxCoords.push_back(min);
+        
+        Coord max(actualX+superpixelDim-1, actualY+superpixelDim-1);
+        minMaxCoords.push_back(max);
+      }
+      
+      int32_t originX, originY, width, height;
+      Superpixel::bbox(originX, originY, width, height, minMaxCoords);
+      Rect expandedRoi(originX, originY, width, height);
+      
+      if ((1)) {
+        Mat roiInputMat = inputImg(expandedRoi);
+        
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_morph_block_input" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, roiInputMat);
+        cout << "wrote " << fname << endl;
+      }
+      
+      if ((1)) {
+        Mat expandedBlockMat(inputImg.rows, inputImg.cols, CV_8U);
+        
+        expandedBlockMat = (Scalar) 0;
+        
+        for ( Point p : locations ) {
+          int actualX = p.x * superpixelDim;
+          int actualY = p.y * superpixelDim;
+          
+          Coord min(actualX, actualY);
+          Coord max(actualX+superpixelDim-1, actualY+superpixelDim-1);
+          
+          for ( int y = min.y; y <= max.y; y++ ) {
+            for ( int x = min.x; x <= max.x; x++ ) {
+              expandedBlockMat.at<uint8_t>(y, x) = 0xFF;
+            }
+          }
+        }
+        
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_morph_block_bw" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, expandedBlockMat);
+        cout << "wrote " << fname << endl;
+      }
+
     }
     
       /*

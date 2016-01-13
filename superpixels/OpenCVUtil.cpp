@@ -636,3 +636,72 @@ Mat expandWhiteInRegion(Mat &binMat, int expandNumPixelsSize, int tag)
   
   return outBinMat;
 }
+
+// Given a superpixel tag that indicates a region segmented into 4x4 squares
+// map (X,Y) coordinates to a minimized Mat representation that can be
+// quickly morphed with minimal CPU and memory usage.
+
+Mat expandBlockRegion(int32_t tag,
+                      const vector<Coord> &coords,
+                      int expandNum,
+                      int blockWidth, int blockHeight,
+                      int superpixelDim)
+{
+  const bool debug = true;
+  const bool debugDumpImages = true;
+  
+  Mat morphBlockMat = Mat(blockHeight, blockWidth, CV_8U);
+  morphBlockMat = (Scalar) 0;
+  
+  // Iterate over input coords and calcualte block coord to activate
+  
+//  int lastOffset = -1;
+  
+  for ( Coord c : coords ) {
+    // Convert (X,Y) to block (X,Y)
+    
+    int blockX = c.x / superpixelDim;
+    int blockY = c.y / superpixelDim;
+    
+    if (debug) {
+      cout << "block with tag " << tag << " cooresponds to (X,Y) (" << c.x << "," << c.y << ")" << endl;
+      cout << "maps to block (X,Y) (" << blockX << "," << blockY << ")" << endl;
+    }
+    
+    // FIXME: optimize for case where (X,Y) is exactly the same as in the previous iteration and avoid
+    // writing to the Mat in that case. This shift is cheap.
+    
+    morphBlockMat.at<uint8_t>(blockY, blockX) = 0xFF;
+  }
+  
+  Mat expandedBlockMat;
+      
+  for (int expandStep = 0; expandStep <= expandNum; expandStep++ ) {
+    if (expandStep == 0) {
+      expandedBlockMat = morphBlockMat;
+    } else {
+      expandedBlockMat = expandWhiteInRegion(expandedBlockMat, 1, tag);
+    }
+    
+    int nzc = countNonZero(expandedBlockMat);
+    
+    if (nzc == (blockHeight * blockWidth)) {
+      if (debug) {
+      cout << "all pixels in Mat now white " << endl;
+      }
+      break;
+    }
+    
+    if (debugDumpImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_morph_block_" << expandStep << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, expandedBlockMat);
+      cout << "wrote " << fname << endl;
+    }
+    
+  } // for expandStep
+  
+  return expandedBlockMat;
+}

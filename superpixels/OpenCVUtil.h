@@ -67,4 +67,14 @@ Coord findRegionCenter(Mat &binMat, cv::Rect roi, Mat &outDistMat, int tag);
 
 Mat expandWhiteInRegion(Mat &binMat, int expandNumPixelsSize, int tag);
 
+// Given a superpixel tag that indicates a region segmented into 4x4 squares
+// map (X,Y) coordinates to a minimized Mat representation that can be
+// quickly morphed with minimal CPU and memory usage.
+
+Mat expandBlockRegion(int32_t tag,
+                      const vector<Coord> &coords,
+                      int expandNum,
+                      int blockWidth, int blockHeight,
+                      int superpixelDim);
+
 #endif // OPENCV_UTIL_H
