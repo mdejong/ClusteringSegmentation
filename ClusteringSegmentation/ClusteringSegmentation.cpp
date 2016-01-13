@@ -1276,6 +1276,57 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         imwrite(fname, expandedBlockMat);
         cout << "wrote " << fname << endl;
       }
+      
+      // Generate a collection of pixels from the blocks included in the
+      // expanded mask.
+      
+      if ((1)) {
+        vector<Coord> regionCoords;
+        regionCoords.reserve(locations.size() * (superpixelDim * superpixelDim));
+        
+        for ( Point p : locations ) {
+          int actualX = p.x * superpixelDim;
+          int actualY = p.y * superpixelDim;
+          
+          Coord min(actualX, actualY);
+          Coord max(actualX+superpixelDim-1, actualY+superpixelDim-1);
+          
+          for ( int y = min.y; y <= max.y; y++ ) {
+            for ( int x = min.x; x <= max.x; x++ ) {
+              Coord c(x, y);
+              regionCoords.push_back(c);
+            }
+          }
+        }
+        
+        Mat tmpResultImg = inputImg.clone();
+        tmpResultImg = Scalar(0,0,0xFF);
+        
+        int numPixels = (int) regionCoords.size();
+        
+        uint32_t *pixels = new uint32_t[numPixels];
+        
+        for ( int i = 0; i < numPixels; i++ ) {
+          Coord c = regionCoords[i];
+          Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+          uint32_t pixel = Vec3BToUID(vec);
+          pixels[i] = pixel;
+          tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+        }
+
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_morph_masked_input" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, tmpResultImg);
+        cout << "wrote " << fname << endl;
+        
+        delete [] pixels;
+        
+        // Generate quant based on the input
+
+      }
+
 
     }
     
