@@ -909,8 +909,6 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     renderedTagsMat = (Scalar) 0;
     
     spImage.fillMatrixWithSuperpixelTags(renderedTagsMat);
-    
-    vector<int32_t> processedOrder;
 
     for ( int32_t tag : srmSuperpixels ) {
       Superpixel *spPtr = srmSpImage.getSuperpixelPtr(tag);
@@ -954,6 +952,61 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       cout << endl;
     } // end foreach srmSuperpixels
     
+    // Loop over the otherTagsSet and find any tags that appear in
+    // multiple regions.
+    
+    if ((1)) {
+      vector<int32_t> tagsToRemove;
+      
+      set<int32_t> allSet;
+      
+      for ( int32_t tag : srmSuperpixels ) {
+        set<int32_t> &otherTagsSet = srmSuperpixelToExactMap[tag];
+        
+        for ( int32_t otherTag : otherTagsSet ) {
+          if (allSet.find(otherTag) != allSet.end()) {
+            tagsToRemove.push_back(otherTag);
+          }
+          allSet.insert(allSet.end(), otherTag);
+        }
+      }
+      
+      for ( int32_t tag : srmSuperpixels ) {
+        set<int32_t> &otherTagsSet = srmSuperpixelToExactMap[tag];
+        
+        for ( int32_t tag : tagsToRemove ) {
+          if ( otherTagsSet.find(tag) != otherTagsSet.end() ) {
+            otherTagsSet.erase(tag);
+          }
+        }
+      }
+      
+      // Dump the removed regions as a mask
+      
+      if (debugWriteIntermediateFiles) {
+        Mat tmpResultImg = resultImg.clone();
+        tmpResultImg = (Scalar) 0;
+        
+        for ( int32_t tag : tagsToRemove ) {
+          Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
+          assert(spPtr);
+          
+          Vec3b whitePixel(0xFF, 0xFF, 0xFF);
+          
+          for ( Coord c : spPtr->coords ) {
+            tmpResultImg.at<Vec3b>(c.y, c.x) = whitePixel;
+          }
+        }
+        
+        std::stringstream fnameStream;
+        fnameStream << "merge_removed_union" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, tmpResultImg);
+        cout << "wrote " << fname << endl;
+      }
+    }
+    
     // Foreach SRM superpixel, find the set of superpixels
     // in the identical tags that correspond to a union of
     // the pixels in the SRM region and the identical region.
@@ -961,11 +1014,13 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     for ( int32_t tag : srmSuperpixels ) {
       set<int32_t> &otherTagsSet = srmSuperpixelToExactMap[tag];
       
+      if ((1)) {
       cout << "srm superpixels " << tag << " corresponds to other tags : ";
       for ( int32_t otherTag : otherTagsSet ) {
         cout << otherTag << " ";
       }
       cout << endl;
+      }
       
       // For the large SRM superpixel determine the set of superpixels
       // contains in the region by looking at the other tags image.
@@ -1008,7 +1063,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         cout << "wrote " << fname << endl;
       }
       
-      if (numCoords != 0) {
+      if (false && (numCoords != 0)) {
         // The same type of logic implemented as a morphological operation in terms of 4x4 blocks
         // represented as pixels.
         
@@ -1116,6 +1171,20 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       generateStaticColortable(inputImg, spImage);
     }
     
+    if (debugWriteIntermediateFiles) {
+      Mat tmpResultImg = resultImg.clone();
+      tmpResultImg = (Scalar) 0;
+      
+      writeTagsWithStaticColortable(spImage, tmpResultImg);
+      
+      std::stringstream fnameStream;
+      fnameStream << "merge_step_" << 0 << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, tmpResultImg);
+      cout << "wrote " << fname << endl;
+    }
+    
     SRMMergeManager mergeManager(spImage, inputImg);
     
     for ( int32_t tag : srmSuperpixels ) {
@@ -1137,51 +1206,6 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     
       /*
       
-      {
-        // For a superpixel that has a containing parent, process neighbors of the superpixel
-        // that are smaller in order to combine small chunks into a region.
-        
-        if (debugWriteIntermediateFiles) {
-          Mat tmpResultImg = resultImg.clone();
-          tmpResultImg = (Scalar) 0;
-          
-          generateStaticColortable(inputImg, spImage);
-          writeTagsWithStaticColortable(spImage, tmpResultImg);
-          
-          std::stringstream fnameStream;
-          fnameStream << "merge_step_" << numSuperpixelMergeStep << ".png";
-          string fname = fnameStream.str();
-          
-          imwrite(fname, tmpResultImg);
-          cout << "wrote " << fname << endl;
-        }
-        
-        if (1) {
-          
-          cout << "process SRM superpixel " << tag << endl;
-          
-          // Sort superpixels by size and then filter to the onces in otherTagsSet
-          
-          // FIXME: Need only sort the superpixels once in the outer loop
-          
-          //vector<int32_t> sortedSuperpixels = spImage.sortSuperpixelsBySize();
-          vector<int32_t> sizeSortedFilteredSuperpixels;
-          
-          unordered_map<int32_t,int32_t> map;
-          
-          for ( int32_t tag : otherTagsSet ) {
-            map[tag] = tag;
-          }
-          
-          for ( int32_t tag : sortedSuperpixels ) {
-            if (map.count(tag) > 0) {
-              sizeSortedFilteredSuperpixels.push_back(tag);
-            }
-          }
-          
-          // Emit an image that shows the union of all the coords in each
-          // of the superpixels in sizeSortedFilteredSuperpixels.
-          
           if (1) {
             Mat tmpResultImg = resultImg.clone();
             tmpResultImg = (Scalar) 0;
@@ -1206,97 +1230,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
             imwrite(fname, tmpResultImg);
             cout << "wrote " << fname << endl;
           }
-          
-          // Gather all the superpixel ids that are defined in otherTagsSet
-          // and merge these superpixels together into one larger superpixel
-          // that includes values up to the edge with the containing superpixel.
-          
-          for ( auto it = begin(sizeSortedFilteredSuperpixels); it != end(sizeSortedFilteredSuperpixels) ; ) {
-            int32_t otherTag = *it;
-            Superpixel *spPtr = spImage.getSuperpixelPtr(otherTag);
-            if (spPtr == NULL) {
-              if ((1)) {
-                cout << "already merged superpixel " << otherTag << endl;
-              }
-              
-              it++;
-              continue;
-            }
-            
-            if ((1)) {
-              cout << "merge unprocessed superpixel " << otherTag << " with N = " << spPtr->coords.size() << endl;
-            }
-            
-            set<int32_t> neighbors = spImage.edgeTable.getNeighborsSet(otherTag);
-            
-            bool didMerge = false;
-            //bool mergedOther = false;
-            
-            for ( int32_t neighborTag : neighbors ) {
-              if ( otherTagsSet.find(neighborTag) != otherTagsSet.end() ) {
-                // Both otherTag and neighborTag are in otherTagsSet
-                
-                if ((1)) {
-                  cout << "merge superpixels " << otherTag << " and " << neighborTag << endl;
-                }
-                
-                SuperpixelEdge edge(otherTag, neighborTag);
-                spImage.mergeEdge(edge);
-                
-                didMerge = true;
-                
-                spPtr = spImage.getSuperpixelPtr(otherTag);
-                if (spPtr == NULL) {
-                  // Should not ever merge other since regions are being processed in largest to
-                  // smallest order.
-                  
-                  assert(0);
-                  
-                  //mergedOther = true;
-                  //break;
-                }
-              }
-            }
-            
-            if (didMerge) {
-              if (debugWriteIntermediateFiles) {
-                Mat tmpResultImg = resultImg.clone();
-                tmpResultImg = (Scalar) 0;
-                
-                writeTagsWithStaticColortable(spImage, tmpResultImg);
-                
-                std::stringstream fnameStream;
-                numSuperpixelMergeStep += 1;
-                fnameStream << "merge_step_" << numSuperpixelMergeStep << ".png";
-                string fname = fnameStream.str();
-                
-                imwrite(fname, tmpResultImg);
-                cout << "wrote " << fname << endl;
-              }
-            }
-            
-            //if (mergedOther) {
-            //  break;
-            //}
-            
-            if (didMerge == false) {
-              // No merge was found, continue with next superpixel
-              it++;
-            } else {
-              // If a merge was done then continue to merge with the current
-            }
-          }
-        }
-        
-        // Mark each superpixel as processed
-        
-        for ( int32_t tag : unprocessedTagsThisSet ) {
-          processedSuperpixels.insert(tag);
-        }
-      }
-      
-      }
-    
+       
     */
 
   }
