@@ -705,3 +705,72 @@ Mat expandBlockRegion(int32_t tag,
   
   return expandedBlockMat;
 }
+
+// Given a Mat that contains quant pixels and a colortable, map the quant
+// pixels to indexes in the colortable. If the asGreyscale) flag is true
+// then each index is assumed to be a byte and is written as a greyscale pixel.
+
+Mat mapQuantPixelsToColortableIndexes(const Mat & inQuantPixels, const vector<uint32_t> &colortable, bool asGreyscale)
+{
+  const bool debugOutput = true;
+  
+  // Map pixels to sorted colortable offset
+  
+  unordered_map<uint32_t, uint32_t> pixel_to_sorted_offset;
+  
+  for (int i = 0; i < colortable.size(); i++) {
+    uint32_t pixel = colortable[i];
+    pixel &= 0x00FFFFFF; // Opaque 24BPP
+    pixel_to_sorted_offset[pixel] = i;
+#if defined(DEBUG)
+    assert(pixel_to_sorted_offset[pixel] <= 0xFF);
+    assert(pixel_to_sorted_offset[pixel] == i);
+#endif // DEBUG
+    
+    if ((debugOutput)) {
+      char buffer[1024];
+      snprintf(buffer, sizeof(buffer), "colortable[%4d] = 0x%08X", i, pixel);
+      cout << buffer << endl;
+    }
+  }
+  
+  Mat quantOutputMat = inQuantPixels.clone();
+  quantOutputMat = (Scalar) 0;
+  
+  for(int y = 0; y < quantOutputMat.rows; y++) {
+    for(int x = 0; x < quantOutputMat.cols; x++) {
+      Vec3b vec = inQuantPixels.at<Vec3b>(y, x);
+      uint32_t pixel = Vec3BToUID(vec);
+      pixel &= 0x00FFFFFF; // Opaque 24BPP
+      
+      auto it = pixel_to_sorted_offset.find(pixel);
+      
+      if (it == pixel_to_sorted_offset.end()) {
+        char buffer[1024];
+        snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is 0x%08X (%d) but this pixel has no matching colortable entry \n", x, y, pixel, pixel);
+        cerr << buffer;
+        assert(0);
+      }
+      
+      uint32_t offset = it->second;
+      
+      if ((debugOutput)) {
+        char buffer[1024];
+        snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is 0x%08X (%d) -> offset %d", x, y, pixel, pixel, offset);
+        cout << buffer << endl;
+      }
+      
+      if (asGreyscale) {
+        assert(offset < 256);
+        uint32_t grayscalePixel = (offset << 16) | (offset << 8) | offset;
+        vec = PixelToVec3b(grayscalePixel);
+      } else {
+        vec = PixelToVec3b(offset);
+      }
+      quantOutputMat.at<Vec3b>(y, x) = vec;
+    }
+  }
+  
+  return quantOutputMat;
+}
+

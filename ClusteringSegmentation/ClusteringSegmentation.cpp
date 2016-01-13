@@ -24,6 +24,7 @@
 #include "Util.h"
 
 #include "quant_util.h"
+#include "DivQuantHeader.h"
 
 #include "MergeSuperpixelImage.h"
 
@@ -111,7 +112,7 @@ int main(int argc, const char** argv) {
 // write the buffer of pixels out as an image in a file.
 
 static
-void dumpQuantImage(string filename, Mat inputImg, uint32_t *pixels) {
+Mat dumpQuantImage(string filename, const Mat &inputImg, uint32_t *pixels) {
   Mat quantOutputMat = inputImg.clone();
   quantOutputMat = (Scalar) 0;
   
@@ -136,7 +137,7 @@ void dumpQuantImage(string filename, Mat inputImg, uint32_t *pixels) {
   
   imwrite(filename, quantOutputMat);
   cout << "wrote " << filename << endl;
-  return;
+  return quantOutputMat;
 }
 
 // Dump N x 1 image that contains pixels
@@ -438,6 +439,24 @@ public:
   
 };
 
+// Return the 8 colors defined for a Crayola crayon box
+
+void get8Crayons(uint32_t *colortable, uint32_t &numColors) {
+  int i = 0;
+  
+  colortable[i++] = 0xFFED0A3F; // red
+  colortable[i++] = 0xFFFBE870; // yellow
+  colortable[i++] = 0xFF0066FF; // blue
+  colortable[i++] = 0xFF3AA655; // green
+  
+  colortable[i++] = 0xFFFF8833; // orange
+  colortable[i++] = 0xFFAF593E; // brown
+  colortable[i++] = 0xFF732E6C; // violet
+  colortable[i++] = 0xFF000000; // black
+  
+  numColors = i;
+}
+
 // Main method that implements the cluster combine logic
 
 bool clusteringCombine(Mat &inputImg, Mat &resultImg)
@@ -685,6 +704,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       
       vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(clusterCenterPixels);
       
+      vector<uint32_t> colortableVec;
+      
       // Once cluster centers have been sorted by 3D color cube distance, emit "centers.png"
       
       Mat sortedQtableOutputMat = Mat(numActualClusters, 1, CV_8UC3);
@@ -693,6 +714,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       for (int i = 0; i < numActualClusters; i++) {
         int si = (int) sortedOffsets[i];
         uint32_t pixel = colortable[si];
+        colortableVec.push_back(pixel);
         Vec3b vec = PixelToVec3b(pixel);
         sortedQtableOutputMat.at<Vec3b>(i, 0) = vec;
       }
@@ -701,43 +723,28 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       imwrite(outQuantTableFilename, sortedQtableOutputMat);
       cout << "wrote " << outQuantTableFilename << endl;
       
-      // Map pixels to sorted colortable offset
+      // Map quant pixels to colortable offsets
       
-      unordered_map<uint32_t, uint32_t> pixel_to_sorted_offset;
+      Mat quantMat = inputImg.clone();
+      quantMat = (Scalar) 0;
       
-      assert(numActualClusters <= 256);
-      
-      for (int i = 0; i < numActualClusters; i++) {
-        int si = (int) sortedOffsets[i];
-        uint32_t pixel = colortable[si];
-        pixel_to_sorted_offset[pixel] = si;
-      }
-      
-      Mat sortedQuantOutputMat = inputImg.clone();
-      sortedQuantOutputMat = (Scalar) 0;
-      
-      pi = 0;
-      for(int y = 0; y < sortedQuantOutputMat.rows; y++) {
-        for(int x = 0; x < sortedQuantOutputMat.cols; x++) {
-          uint32_t pixel = outPixels[pi++];
-          assert(pixel_to_sorted_offset.count(pixel) > 0);
-          uint32_t offset = pixel_to_sorted_offset[pixel];
-          
-          if ((debugOutput)) {
-            char buffer[1024];
-            snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is %d -> offset %d\n", x, y, pixel, offset);
-            cout << buffer;
+      {
+        int pi = 0;
+        for(int y = 0; y < quantMat.rows; y++) {
+          for(int x = 0; x < quantMat.cols; x++) {
+            uint32_t pixel = outPixels[pi++];
+            Vec3b vec = PixelToVec3b(pixel);
+            quantMat.at<Vec3b>(y, x) = vec;
           }
-          
-          assert(offset <= 256);
-          uint32_t grayscalePixel = (offset << 16) | (offset << 8) | offset;
-          Vec3b vec = PixelToVec3b(grayscalePixel);
-          sortedQuantOutputMat.at<Vec3b>(y, x) = vec;
         }
       }
       
+      // Map the quant pixels to indexes into the colortable
+      
+      Mat sortedQuantIndexOutputMat = mapQuantPixelsToColortableIndexes(quantMat, colortableVec, true);
+      
       char *outQuantFilename = (char*)"quant_sorted_offsets.png";
-      imwrite(outQuantFilename, sortedQuantOutputMat);
+      imwrite(outQuantFilename, sortedQuantIndexOutputMat);
       cout << "wrote " << outQuantFilename << endl;
       
       // Create table that maps input pixels to the table of 256 quant pixels,
@@ -773,6 +780,36 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         
         printf("count table[0x%08X] = %6d\n", pixel, count);
       }
+    }
+    
+    // Generate global quant to the 8 colors in the crayon box
+    
+    {
+      uint32_t numColors;
+      
+      get8Crayons(colortable, numColors);
+      
+      map_colors_mps(pixels, numPixels, outPixels, colortable, numColors);
+      
+      // Write quant output where each original pixel is replaced with the closest
+      // colortable entry.
+      
+      Mat quant8Mat = dumpQuantImage("quant_crayon8_output.png", inputImg, outPixels);
+      
+      // Map quant output to indexes
+      
+      vector<uint32_t> colortableVec;
+      
+      for (int i = 0; i < numColors; i++) {
+        uint32_t pixel = colortable[i];
+        colortableVec.push_back(pixel);
+      }
+     
+      Mat sortedQuantIndexOutputMat = mapQuantPixelsToColortableIndexes(quant8Mat, colortableVec, true);
+      
+      char *outQuantFilename = (char*)"quant_crayon8_sorted_offsets.png";
+      imwrite(outQuantFilename, sortedQuantIndexOutputMat);
+      cout << "wrote " << outQuantFilename << endl;
     }
     
     // dealloc

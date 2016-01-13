@@ -77,4 +77,10 @@ Mat expandBlockRegion(int32_t tag,
                       int blockWidth, int blockHeight,
                       int superpixelDim);
 
+// Given a Mat that contains quant pixels and a colortable, map the quant
+// pixels to indexes in the colortable. If the asGreyscale) flag is true
+// then each index is assumed to be a byte and is written as a greyscale pixel.
+
+Mat mapQuantPixelsToColortableIndexes(const Mat & inQuantPixels, const vector<uint32_t> &colortable, bool asGreyscale);
+
 #endif // OPENCV_UTIL_H
