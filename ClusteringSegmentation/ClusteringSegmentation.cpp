@@ -772,7 +772,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         uint32_t count = pixel_to_quant_count[pixel];
         
         printf("count table[0x%08X] = %6d\n", pixel, count);
-      }      
+      }
     }
     
     // dealloc
@@ -1296,13 +1296,25 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           // Write quant output where each original pixel is replaced with the closest
           // colortable entry.
           
+          tmpResultImg = Scalar(0,0,0xFF);
+          
+          for ( int i = 0; i < numPixels; i++ ) {
+            Coord c = regionCoords[i];
+            uint32_t pixel = outPixels[i];
+            Vec3b vec = PixelToVec3b(pixel);
+            tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+          }
+          
           {
             std::stringstream fnameStream;
             fnameStream << "srm" << "_tag_" << tag << "_quant_output" << ".png";
             string fname = fnameStream.str();
             
-            dumpQuantImage(fname, inputImg, outPixels);
+            imwrite(fname, tmpResultImg);
+            cout << "wrote " << fname << endl;
           }
+          
+          // table
           
           {
             std::stringstream fnameStream;
@@ -1320,38 +1332,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
 
       }
 
-
     }
     
-      /*
-      
-          if (1) {
-            Mat tmpResultImg = resultImg.clone();
-            tmpResultImg = (Scalar) 0;
-            
-            for ( int32_t otherTag : sizeSortedFilteredSuperpixels ) {
-              Superpixel *spPtr;
-              spPtr = spImage.getSuperpixelPtr(otherTag);
-              if (spPtr == NULL) {
-                assert(0);
-              }
-              
-              Vec3b whitePixel(0xFF, 0xFF, 0xFF);
-              
-              for ( Coord c : spPtr->coords ) {
-                tmpResultImg.at<Vec3b>(c.y, c.x) = whitePixel;
-              }
-            }
-            
-            std::stringstream fnameStream;
-            fnameStream << "region_match" << "_tag_" << tag << ".png";
-            string fname = fnameStream.str();
-            imwrite(fname, tmpResultImg);
-            cout << "wrote " << fname << endl;
-          }
-       
-    */
-
   }
   
   // Generate result image after region based merging
