@@ -387,7 +387,7 @@ public:
         writeTagsWithStaticColortable(spImage, tmpResultImg);
         
         std::stringstream fnameStream;
-        fnameStream << "merge_step_" << mergeStep << ".png";
+        fnameStream << "merge_global_step_" << mergeStep << ".png";
         string fname = fnameStream.str();
         
         imwrite(fname, tmpResultImg);
@@ -410,6 +410,30 @@ public:
     } else {
       return false;
     }
+  }
+  
+  // This method actually does the merge operation
+  
+  void mergeEdge(SuperpixelEdge &edge) {
+    SuperpixelMergeManager::mergeEdge(edge);
+    
+    if (debugDumpImages) {
+      // Determine if a merge was done on this iter
+      
+      Mat tmpResultImg = inputImg.clone();
+      tmpResultImg = (Scalar) 0;
+      
+      writeTagsWithStaticColortable(spImage, tmpResultImg);
+      
+      std::stringstream fnameStream;
+      fnameStream << "merge_step_" << mergeStep << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, tmpResultImg);
+      cout << "wrote " << fname << endl;
+    }
+    
+    return;
   }
   
 };
