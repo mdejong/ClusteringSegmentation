@@ -49,10 +49,14 @@ public:
   
   void finish() {}
   
+  // Invoked when a valid superpixel tag is being processed
+
+  void startProcessing(int32_t tag) {}
+  
   // When the iterator loop is finished processing a specific superpixel
   // this method is invoked to indicate the superpixel tag.
   
-  void done(int32_t tag) {}
+  void doneProcessing(int32_t tag) {}
   
   // The check method accepts a superpixel tag and returns false
   // if the specific superpixel has already been processed.
@@ -104,6 +108,8 @@ int SuperpixelMergeManagerFunc(T & mergeManager) {
   auto it = begin(mergeManager.superpixels);
   auto endIter = end(mergeManager.superpixels);
   
+  int32_t currentTag = -1;
+  
   for ( ; it != endIter; ) {
     int32_t tag = *it;
     
@@ -128,6 +134,11 @@ int SuperpixelMergeManagerFunc(T & mergeManager) {
       
       ++it;
       continue;
+    }
+    
+    if (tag != currentTag) {
+      currentTag = tag;
+      mergeManager.startProcessing(tag);
     }
     
     // Iterate over all neighbor superpixels and do merge based on criteria
@@ -188,7 +199,7 @@ int SuperpixelMergeManagerFunc(T & mergeManager) {
         cout << "advance iterator from superpixel " << tag << " since no neighbor was merged" << endl;
       }
 
-      mergeManager.done(tag);
+      mergeManager.doneProcessing(tag);
       
       ++it;
     }

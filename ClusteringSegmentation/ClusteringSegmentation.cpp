@@ -307,24 +307,34 @@ public:
   // Other tags is a read-only set of tags that indicate which
   // superpixels were found to be in the region.
   
-  set<int32_t> &otherTagsSet;
+  set<int32_t> *otherTagsSetPtr;
+  
+  // The all sorted list makes it possible to hold the sorted
+  // list across multiple invocations of the merge logic using
+  // the same manager.
+  
+  vector<int32_t> allSortedSuperpixels;
+  
+  int32_t mergeStepAtStart;
   
   // Set to true to enable debug step dump
   const bool debugDumpImages = true;
   
-  SRMMergeManager(SuperpixelImage & _spImage, Mat &_inputImg, set<int32_t> &_otherTagsSet)
-  : SuperpixelMergeManager(_spImage, _inputImg), otherTagsSet(_otherTagsSet)
+  SRMMergeManager(SuperpixelImage & _spImage, Mat &_inputImg)
+  : SuperpixelMergeManager(_spImage, _inputImg), mergeStepAtStart(0)
   {}
   
   // Invoked before the merge operation starts, useful to setup initial
   // state and cache values.
   
   void setup() {
-    vector<int32_t> allSortedSuperpixels = spImage.sortSuperpixelsBySize();
+    if (allSortedSuperpixels.size() == 0) {
+      allSortedSuperpixels = spImage.sortSuperpixelsBySize();
+    }
     
     unordered_map<int32_t,int32_t> map;
     
-    for ( int32_t tag : otherTagsSet ) {
+    for ( int32_t tag : *otherTagsSetPtr ) {
       map[tag] = tag;
     }
     
@@ -353,11 +363,37 @@ public:
     return true;
   }
   
+  // Invoked when a valid superpixel tag is being processed
+  
+  void startProcessing(int32_t tag) {
+    mergeStepAtStart = mergeStep;
+  }
+  
   // When the iterator loop is finished processing a specific superpixel
   // this method is invoked to indicate the superpixel tag.
   
-  void done(int32_t tag) {
+  void doneProcessing(int32_t tag) {
     locked[tag] = mergeStep;
+    
+    if (mergeStepAtStart == mergeStep) {
+      // No merges done for this superpixel
+    } else {
+      if (debugDumpImages) {
+        // Determine if a merge was done on this iter
+        
+        Mat tmpResultImg = inputImg.clone();
+        tmpResultImg = (Scalar) 0;
+        
+        writeTagsWithStaticColortable(spImage, tmpResultImg);
+        
+        std::stringstream fnameStream;
+        fnameStream << "merge_step_" << mergeStep << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, tmpResultImg);
+        cout << "wrote " << fname << endl;
+      }
+    }
   }
   
   // The checkEdge method accepts two superpixel tags, the dst tag
@@ -369,7 +405,7 @@ public:
   bool checkEdge(int32_t dst, int32_t src) {
     // dst was already verified, so just check to see if src is in otherTagsSet
     
-    if ( otherTagsSet.find(src) != otherTagsSet.end() ) {
+    if ( otherTagsSetPtr->find(src) != otherTagsSetPtr->end() ) {
       return true;
     } else {
       return false;
@@ -1052,6 +1088,12 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     // Merge manager will iterate over the superpixels found by
     // doing a union of the SRM regions and the superpixels.
     
+    if (debugWriteIntermediateFiles) {
+      generateStaticColortable(inputImg, spImage);
+    }
+    
+    SRMMergeManager mergeManager(spImage, inputImg);
+    
     for ( int32_t tag : srmSuperpixels ) {
       set<int32_t> &otherTagsSet = srmSuperpixelToExactMap[tag];
       
@@ -1063,7 +1105,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         cout << endl;
       }
       
-      SRMMergeManager mergeManager(spImage, inputImg, otherTagsSet);
+      mergeManager.otherTagsSetPtr = &otherTagsSet;
+      
       SuperpixelMergeManagerFunc<SRMMergeManager>(mergeManager);
       
     }
