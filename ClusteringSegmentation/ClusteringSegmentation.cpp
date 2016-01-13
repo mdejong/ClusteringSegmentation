@@ -294,6 +294,92 @@ Mat generateSRM(Mat &inputImg, double Q)
   return outImg;
 }
 
+// Implement merge of superpixels based on coordinates gather from SRM process
+
+#import "SuperpixelMergeManager.h"
+
+
+class SRMMergeManager : public SuperpixelMergeManager {
+public:
+  // Once a superpixel has been processed it is marked as locked
+  unordered_map<int32_t, int32_t> locked;
+  
+  // Other tags is a read-only set of tags that indicate which
+  // superpixels were found to be in the region.
+  
+  set<int32_t> &otherTagsSet;
+  
+  // Set to true to enable debug step dump
+  const bool debugDumpImages = true;
+  
+  SRMMergeManager(SuperpixelImage & _spImage, Mat &_inputImg, set<int32_t> &_otherTagsSet)
+  : SuperpixelMergeManager(_spImage, _inputImg), otherTagsSet(_otherTagsSet)
+  {}
+  
+  // Invoked before the merge operation starts, useful to setup initial
+  // state and cache values.
+  
+  void setup() {
+    vector<int32_t> allSortedSuperpixels = spImage.sortSuperpixelsBySize();
+    
+    unordered_map<int32_t,int32_t> map;
+    
+    for ( int32_t tag : otherTagsSet ) {
+      map[tag] = tag;
+    }
+    
+    for ( int32_t tag : allSortedSuperpixels ) {
+      if (map.count(tag) > 0) {
+        superpixels.push_back(tag);
+      }
+    }
+    
+    return;
+  }
+  
+  // Invoked at the end of the processing operation
+  
+  void finish() {
+    return;
+  }
+  
+  // The check method accepts a superpixel tag and returns false
+  // if the specific superpixel has already been processed.
+  
+  bool check(int32_t tag) {
+    if (locked.count(tag) > 0) {
+      return false;
+    }
+    return true;
+  }
+  
+  // When the iterator loop is finished processing a specific superpixel
+  // this method is invoked to indicate the superpixel tag.
+  
+  void done(int32_t tag) {
+    locked[tag] = mergeStep;
+  }
+  
+  // The checkEdge method accepts two superpixel tags, the dst tag
+  // indicates the region typically merged into while the src
+  // represents a neighbor of dst that is being checked.
+  // This method should return true if the edge between the superpixels
+  // should be merged and false otherwise.
+  
+  bool checkEdge(int32_t dst, int32_t src) {
+    // dst was already verified, so just check to see if src is in otherTagsSet
+    
+    if ( otherTagsSet.find(src) != otherTagsSet.end() ) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+  
+};
+
+// Main method that implements the cluster combine logic
+
 bool clusteringCombine(Mat &inputImg, Mat &resultImg)
 {
   const bool debugWriteIntermediateFiles = true;
@@ -763,11 +849,6 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     renderedTagsMat = (Scalar) 0;
     
     spImage.fillMatrixWithSuperpixelTags(renderedTagsMat);
-
-    // Once a specific superpixel tag has been processed from renderedTagsMat
-    // then it is added to this set.
-    
-    set<int32_t> processedSuperpixels;
     
     vector<int32_t> processedOrder;
 
@@ -811,15 +892,11 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         cout << otherTag << " ";
       }
       cout << endl;
-    }
+    } // end foreach srmSuperpixels
     
-    // Foreach SRM superpixel determine the superpixels in the
-    // identical tags that correspond to the region and then
-    // select an entire region. This search goes from largest
-    // SRM superpixel to smallest and keeps track of superpixels
-    // as they are processed to avoid duplicates.
-    
-    int numSuperpixelMergeStep = 0;
+    // Foreach SRM superpixel, find the set of superpixels
+    // in the identical tags that correspond to a union of
+    // the pixels in the SRM region and the identical region.
     
     for ( int32_t tag : srmSuperpixels ) {
       set<int32_t> &otherTagsSet = srmSuperpixelToExactMap[tag];
@@ -839,23 +916,14 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       
       int numCoords = 0;
 
-      vector<int32_t> unprocessedTagsThisSet;
       vector<Coord> unprocessedCoords;
       
       for ( int32_t otherTag : otherTagsSet ) {
-        if (processedSuperpixels.find(otherTag) != processedSuperpixels.end()) {
-          // Already processed this superpixel
-          
-          cout << "already processed superpixel " << otherTag << endl;
-          
-          continue;
-        }
-        
         Superpixel *spPtr = spImage.getSuperpixelPtr(otherTag);
         assert(spPtr);
         
         if ((1)) {
-          cout << "unprocessed superpixel " << otherTag << " with N = " << spPtr->coords.size() << endl;
+          cout << "superpixel " << otherTag << " with N = " << spPtr->coords.size() << endl;
         }
         
         for ( Coord c : spPtr->coords ) {
@@ -867,9 +935,6 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           unprocessedCoords.push_back(c);
           numCoords++;
         }
-        
-        //processedSuperpixels.insert(otherTag);
-        unprocessedTagsThisSet.push_back(otherTag);
       }
       
       if (numCoords == 0) {
@@ -883,23 +948,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         cout << "wrote " << fname << endl;
       }
       
-      // A SRM superpxiel indicates the general region where alike colors exist, need to
-      // expand and minimize the search area in an attempt to identify where the bounds
-      // of a specific object is located.
-      
-      // First find the center superpixel, this is the superpixel that appears to be at
-      // the center of the indicated superpixel region.
-      
       if (numCoords != 0) {
-        // Use this region center to create an expanding rectangular ROI that captures
-        // the local pixel neighborhood around the object in question.
-        
-        // Possible 1: Expand ROI in term of containing parent, consuming small neighbors
-        // as the ROI is expanded.
-        
-        // Possible 2: Simply get a ROI and use Clustersing to determine where the ROI
-        // most clearly defines a split between N colors.
-        
         // The same type of logic implemented as a morphological operation in terms of 4x4 blocks
         // represented as pixels.
         
@@ -909,14 +958,6 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         // Get the first coord for each block that is indicated as inside the SRM superpixel
         
         for ( int32_t otherTag : otherTagsSet ) {
-          if (processedSuperpixels.find(otherTag) != processedSuperpixels.end()) {
-            // Already processed this superpixel
-            
-            cout << "already processed superpixel " << otherTag << endl;
-            
-            continue;
-          }
-          
           Superpixel *spPtr = spImage.getSuperpixelPtr(otherTag);
           assert(spPtr);
           
@@ -939,8 +980,6 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
             // writing to the Mat in that case. This shift is cheap.
             
             morphBlockMat.at<uint8_t>(blockY, blockX) = 0xFF;
-            
-            //break;
           }
         }
         
@@ -1006,12 +1045,34 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           
         } // for expandStep
         
+      } // end if numCoords
+      
+    } // end foreach srmSuperpixels
+
+    // Merge manager will iterate over the superpixels found by
+    // doing a union of the SRM regions and the superpixels.
+    
+    for ( int32_t tag : srmSuperpixels ) {
+      set<int32_t> &otherTagsSet = srmSuperpixelToExactMap[tag];
+      
+      if ((1)) {
+        cout << "srm superpixels " << tag << " corresponds to other tags : ";
+        for ( int32_t otherTag : otherTagsSet ) {
+          cout << otherTag << " ";
+        }
+        cout << endl;
+      }
+      
+      SRMMergeManager mergeManager(spImage, inputImg, otherTagsSet);
+      SuperpixelMergeManagerFunc<SRMMergeManager>(mergeManager);
+      
+    }
+    
+      /*
+      
+      {
         // For a superpixel that has a containing parent, process neighbors of the superpixel
         // that are smaller in order to combine small chunks into a region.
-        
-        // FIXME: a better approach might be to get the largest superpixel, then check
-        // all the neighbors of the large one. Since if it is large then the first
-        // level neighbors will be all the neighbors.
         
         if (debugWriteIntermediateFiles) {
           Mat tmpResultImg = resultImg.clone();
@@ -1027,25 +1088,16 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           imwrite(fname, tmpResultImg);
           cout << "wrote " << fname << endl;
         }
-
-        if (false && (processedSuperpixels.size() == 0)) {
-          
-          cout << "process root SRM superpixel " << tag << endl;
-          
-          for ( int32_t tag : otherTagsSet ) {
-            cout << "other tag " << tag << endl;
-          }
-          
-          cout << "done" << endl;
-        } else {
         
-          cout << "process non-root SRM superpixel " << tag << endl;
+        if (1) {
+          
+          cout << "process SRM superpixel " << tag << endl;
           
           // Sort superpixels by size and then filter to the onces in otherTagsSet
           
           // FIXME: Need only sort the superpixels once in the outer loop
           
-          vector<int32_t> sortedSuperpixels = spImage.sortSuperpixelsBySize();
+          //vector<int32_t> sortedSuperpixels = spImage.sortSuperpixelsBySize();
           vector<int32_t> sizeSortedFilteredSuperpixels;
           
           unordered_map<int32_t,int32_t> map;
@@ -1082,9 +1134,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
             }
             
             std::stringstream fnameStream;
-            fnameStream << "region_match.png";
+            fnameStream << "region_match" << "_tag_" << tag << ".png";
             string fname = fnameStream.str();
-            
             imwrite(fname, tmpResultImg);
             cout << "wrote " << fname << endl;
           }
@@ -1104,13 +1155,13 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
               it++;
               continue;
             }
-          
+            
             if ((1)) {
               cout << "merge unprocessed superpixel " << otherTag << " with N = " << spPtr->coords.size() << endl;
             }
             
             set<int32_t> neighbors = spImage.edgeTable.getNeighborsSet(otherTag);
-
+            
             bool didMerge = false;
             //bool mergedOther = false;
             
@@ -1176,8 +1227,11 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           processedSuperpixels.insert(tag);
         }
       }
-    } // end foreach srcSuperpixels
+      
+      }
     
+    */
+
   }
   
   // Generate result image after region based merging
