@@ -1324,6 +1324,138 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
             dumpQuantTableImage(fname, inputImg, colortable, numActualClusters);
           }
           
+          // Generate color sorted clusters
+          
+          {
+            vector<uint32_t> clusterCenterPixels;
+            
+            for ( int i = 0; i < numActualClusters; i++) {
+              uint32_t pixel = colortable[i];
+              clusterCenterPixels.push_back(pixel);
+            }
+            
+#if defined(DEBUG)
+            if ((1)) {
+              unordered_map<uint32_t, uint32_t> seen;
+              
+              for ( int i = 0; i < numActualClusters; i++ ) {
+                uint32_t pixel;
+                pixel = colortable[i];
+                
+                if (seen.count(pixel) > 0) {
+                } else {
+                  // Note that only the first seen index is retained, this means that a repeated
+                  // pixel value is treated as a dup.
+                  
+                  seen[pixel] = i;
+                }
+              }
+              
+              int numQuantUnique = (int)seen.size();
+              assert(numQuantUnique == numActualClusters);
+            }
+#endif // DEBUG
+            
+            if ((0)) {
+              fprintf(stdout, "numClusters %5d : numActualClusters %5d \n", numClusters, numActualClusters);
+              
+              unordered_map<uint32_t, uint32_t> seen;
+              
+              for ( int i = 0; i < numActualClusters; i++ ) {
+                uint32_t pixel;
+                pixel = colortable[i];
+                
+                if (seen.count(pixel) > 0) {
+                  fprintf(stdout, "cmap[%3d] = 0x%08X (DUP of %d)\n", i, pixel, seen[pixel]);
+                } else {
+                  fprintf(stdout, "cmap[%3d] = 0x%08X\n", i, pixel);
+                  
+                  // Note that only the first seen index is retained, this means that a repeated
+                  // pixel value is treated as a dup.
+                  
+                  seen[pixel] = i;
+                }
+              }
+              
+              fprintf(stdout, "cmap contains %3d unique entries\n", (int)seen.size());
+              
+              int numQuantUnique = (int)seen.size();
+              
+              assert(numQuantUnique == numActualClusters);
+            }
+            
+            vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(clusterCenterPixels);
+            
+            // Once cluster centers have been sorted by 3D color cube distance, emit "centers.png"
+            
+            Mat sortedQtableOutputMat = Mat(numActualClusters, 1, CV_8UC3);
+            sortedQtableOutputMat = (Scalar) 0;
+            
+            for (int i = 0; i < numActualClusters; i++) {
+              int si = (int) sortedOffsets[i];
+              uint32_t pixel = colortable[si];
+              Vec3b vec = PixelToVec3b(pixel);
+              sortedQtableOutputMat.at<Vec3b>(i, 0) = vec;
+            }
+           
+            {
+              std::stringstream fnameStream;
+              fnameStream << "srm" << "_tag_" << tag << "_quant_table_sorted" << ".png";
+              string filename = fnameStream.str();
+              
+              char *outQuantTableFilename = (char*) filename.c_str();
+              imwrite(outQuantTableFilename, sortedQtableOutputMat);
+              cout << "wrote " << outQuantTableFilename << endl;
+            }
+            
+            // Map pixels to sorted colortable offset
+            
+            unordered_map<uint32_t, uint32_t> pixel_to_sorted_offset;
+            
+            assert(numActualClusters <= 256);
+            
+            for (int i = 0; i < numActualClusters; i++) {
+              int si = (int) sortedOffsets[i];
+              uint32_t pixel = colortable[si];
+              pixel_to_sorted_offset[pixel] = si;
+            }
+            
+            Mat sortedQuantOutputMat = inputImg.clone();
+            sortedQuantOutputMat = Scalar(0,0,0xFF);
+            
+            for ( int i = 0; i < numPixels; i++ ) {
+              Coord c = regionCoords[i];
+              uint32_t pixel = outPixels[i];
+              
+              assert(pixel_to_sorted_offset.count(pixel) > 0);
+              uint32_t offset = pixel_to_sorted_offset[pixel];
+              
+              if ((debugOutput)) {
+                char buffer[1024];
+                snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is %d -> offset %d\n", c.x, c.y, pixel, offset);
+                cout << buffer;
+              }
+              
+              assert(offset <= 256);
+              uint32_t grayscalePixel = (offset << 16) | (offset << 8) | offset;
+              
+              Vec3b vec = PixelToVec3b(grayscalePixel);
+              sortedQuantOutputMat.at<Vec3b>(c.y, c.x) = vec;
+            }
+            
+            {
+              std::stringstream fnameStream;
+              fnameStream << "srm" << "_tag_" << tag << "_quant_table_offsets" << ".png";
+              string filename = fnameStream.str();
+              
+              char *outQuantFilename = (char*)filename.c_str();
+              imwrite(outQuantFilename, sortedQuantOutputMat);
+              cout << "wrote " << outQuantFilename << endl;
+            }
+          }
+            
+            // dealloc
+          
           delete [] inPixels;
           delete [] outPixels;
           delete [] colortable;
