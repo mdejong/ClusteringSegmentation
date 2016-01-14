@@ -442,30 +442,37 @@ public:
   
 };
 
-// FIXME: basic results seem to get better with gray and white in there, but why not just
-// evenly divide the color cube up by the corners and the 1/2 of each side in 3D?
+// Return evenly divided color cube
 
-// Return the basic colors defined for a Crayola crayon box
+vector<uint32_t> getSubdividedColors() {
+  // 0, 1, 2
+  // 0x00, 0x7F, 0xFF
+  
+  const uint32_t vals[] = { 0, 0xFF/2, 0xFF };
+  const int numSteps = (sizeof(vals) / sizeof(uint32_t));
+  
+  vector<uint32_t> pixels;
+  
+  for (int x = 0; x < numSteps; x++) {
+    for (int y = 0; y < numSteps; y++) {
+      for (int z = 0; z < numSteps; z++) {
+        uint32_t B = vals[x];
+        uint32_t G = vals[y];
+        uint32_t R = vals[z];
 
-void getBasicCrayonColors(uint32_t *colortable, uint32_t &numColors) {
-  int i = 0;
+        assert(x <= 0xFF && y <= 0xFF && z <= 0xFF);
+        uint32_t pixel = (0xFF << 24) | (R << 16) | (G << 8) | B;
+        
+        if ((0)) {
+          fprintf(stdout, "colortable[%4d] = 0x%08X\n", (int)pixels.size()+1, pixel);
+        }
+        
+        pixels.push_back(pixel);
+      }
+    }
+  }
   
-  colortable[i++] = 0xFF000000; // black
-  
-  colortable[i++] = 0xFFED0A3F; // red
-  colortable[i++] = 0xFFFBE870; // yellow
-  colortable[i++] = 0xFF0066FF; // blue
-  colortable[i++] = 0xFF3AA655; // green
-  
-  colortable[i++] = 0xFF7F7F7F; // gray
-  
-  colortable[i++] = 0xFFFF8833; // orange
-  colortable[i++] = 0xFFAF593E; // brown
-  colortable[i++] = 0xFF732E6C; // violet
-  
-  colortable[i++] = 0xFFFFFFFF; // white
-  
-  numColors = i;
+  return pixels;
 }
 
 // Main method that implements the cluster combine logic
@@ -767,9 +774,36 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     // Generate global quant to the 8 colors in the crayon box
     
     {
-      uint32_t numColors;
+      vector<uint32_t> colors = getSubdividedColors();
       
-      getBasicCrayonColors(colortable, numColors);
+      uint32_t numColors = (uint32_t) colors.size();
+      uint32_t *colortable = new uint32_t[numColors];
+      
+      {
+        int i = 0;
+        for ( uint32_t color : colors ) {
+          colortable[i++] = color;
+        }
+      }
+      
+      if ((1)) {
+        Mat pixelsTableMat(1, numColors, CV_8UC3);
+        
+        for (int i = 0; i < numColors; i++) {
+          uint32_t pixel = colortable[i];
+          
+          if ((1)) {
+            fprintf(stdout, "colortable[%4d] = 0x%08X\n", i, pixel);
+          }
+          
+          Vec3b vec = PixelToVec3b(pixel);
+          pixelsTableMat.at<Vec3b>(0, i) = vec;
+        }
+       
+        char *filename = (char*)"quant_table_pixels.png";
+        imwrite(filename, pixelsTableMat);
+        cout << "wrote " << filename << endl;
+      }
       
       map_colors_mps(pixels, numPixels, outPixels, colortable, numColors);
       
@@ -1326,11 +1360,17 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           // Use estimation based on quant to 8 colors to determine the N value for the
           // number of clusters to pass into the kmeans segmentation logic.
           
-          uint32_t numColors = 256;
+          vector<uint32_t> colors = getSubdividedColors();
           
+          uint32_t numColors = (uint32_t) colors.size();
           uint32_t *colortable = new uint32_t[numColors];
           
-          getBasicCrayonColors(colortable, numColors);
+          {
+            int i = 0;
+            for ( uint32_t color : colors ) {
+              colortable[i++] = color;
+            }
+          }
           
           map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
           
