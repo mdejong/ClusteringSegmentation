@@ -747,39 +747,10 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       imwrite(outQuantFilename, sortedQuantIndexOutputMat);
       cout << "wrote " << outQuantFilename << endl;
       
-      // Create table that maps input pixels to the table of 256 quant pixels,
-      // this basically indicates how often certain colors "bunch" up in the
-      // image being scanned. The goal here is to create a simple 1D table
-      // so that a more focused N can be determined for the largest "color" blocks.
+      // Create simpl histogram of quant pixel counts
       
-      unordered_map<uint32_t, uint32_t> pixel_to_quant_count;
-      
-      for (int i = 0; i < numPixels; i++) {
-        uint32_t pixel = outPixels[i++];
-        pixel_to_quant_count[pixel] += 1;
-      }
-      
-      cout << "pixel_to_quant_count() = " << pixel_to_quant_count.size() << endl;
-      
-      if ((0)) {
-        for ( auto it = pixel_to_quant_count.begin(); it != pixel_to_quant_count.end(); ++it) {
-          uint32_t pixel = it->first;
-          uint32_t count = it->second;
-          printf("count table[0x%08X] = %6d\n", pixel, count);
-        }
-      }
-      
-      // This more focused histogram of just 256 values can now be clustered into a smaller
-      // subset of colors in an effort to find the best N or number of clusters to apply
-      // to the original image.
-      
-      for (int i = 0; i < numActualClusters; i++) {
-        int si = (int) sortedOffsets[i];
-        uint32_t pixel = colortable[si];
-        uint32_t count = pixel_to_quant_count[pixel];
-        
-        printf("count table[0x%08X] = %6d\n", pixel, count);
-      }
+//      unordered_map<uint32_t, uint32_t> pixelToCountTable;
+//      generatePixelHistogram(quantMat, pixelToCountTable);
     }
     
     // Generate global quant to the 8 colors in the crayon box
@@ -810,6 +781,20 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       char *outQuantFilename = (char*)"quant_crayon8_sorted_offsets.png";
       imwrite(outQuantFilename, sortedQuantIndexOutputMat);
       cout << "wrote " << outQuantFilename << endl;
+      
+      // Generate histogram from quant pixels
+      
+      unordered_map<uint32_t, uint32_t> pixelToCountTable;
+      
+      generatePixelHistogram(quant8Mat, pixelToCountTable);
+      
+      for ( auto it = begin(pixelToCountTable); it != end(pixelToCountTable); ++it) {
+        uint32_t pixel = it->first;
+        uint32_t count = it->second;
+        
+        printf("count table[0x%08X] = %6d\n", pixel, count);
+      }
+
     }
     
     // dealloc
@@ -1315,6 +1300,89 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           cout << "wrote " << fname << endl;
         }
         
+        
+        // Estimate N before quant call
+        
+        if ((1)) {
+          // Use estimation based on quant to 8 colors to determine the N value for the
+          // number of clusters to pass into the kmeans segmentation logic.
+          
+          uint32_t numColors = 256;
+          
+          uint32_t *colortable = new uint32_t[numColors];
+          
+          get8Crayons(colortable, numColors);
+          
+          map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
+          
+          // Count each quant pixel in outPixels
+          
+          Mat countMat(1, numPixels, CV_8UC3);
+          
+          for (int i = 0; i < numPixels; i++) {
+            uint32_t pixel = outPixels[i];
+            Vec3b vec = PixelToVec3b(pixel);
+            countMat.at<Vec3b>(0, i) = vec;
+          }
+          
+          unordered_map<uint32_t, uint32_t> pixelToCountTable;
+          
+          generatePixelHistogram(countMat, pixelToCountTable);
+          
+          for ( auto it = begin(pixelToCountTable); it != end(pixelToCountTable); ++it) {
+            uint32_t pixel = it->first;
+            uint32_t count = it->second;
+            
+            printf("count table[0x%08X] = %6d\n", pixel, count);
+          }
+          
+          // Dump quant output, each pixel is replaced by color in colortable
+          
+          tmpResultImg = Scalar(0,0,0xFF);
+          
+          for ( int i = 0; i < numPixels; i++ ) {
+            Coord c = regionCoords[i];
+            uint32_t pixel = outPixels[i];
+            Vec3b vec = PixelToVec3b(pixel);
+            tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+          }
+          
+          {
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_quant_output" << ".png";
+            string fname = fnameStream.str();
+            
+            imwrite(fname, tmpResultImg);
+            cout << "wrote " << fname << endl;
+          }
+          
+          // Map quant pixels to colortable offsets
+          
+          vector<uint32_t> colortableVec;
+          
+          for (int i = 0; i < numColors; i++) {
+            uint32_t pixel = colortable[i];
+            colortableVec.push_back(pixel);
+          }
+          
+          // Add phony entry for Red (the mask color)
+          colortableVec.push_back(0x00FF0000);
+          
+          Mat quantOffsetsMat = mapQuantPixelsToColortableIndexes(tmpResultImg, colortableVec, true);
+          
+          {
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_quant_offsets" << ".png";
+            string fname = fnameStream.str();
+            
+            imwrite(fname, quantOffsetsMat);
+            cout << "wrote " << fname << endl;
+          }
+          
+          delete [] colortable;
+        }
+        
+        if ((0))
         {
           // Generate quant based on the input
           
@@ -1490,8 +1558,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
               cout << "wrote " << outQuantFilename << endl;
             }
           }
-            
-            // dealloc
+        
+          // dealloc
           
           delete [] inPixels;
           delete [] outPixels;

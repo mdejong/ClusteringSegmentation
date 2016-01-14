@@ -26,6 +26,17 @@ int32_t Vec3BToUID(Vec3b tag) {
   return tagValS;
 }
 
+static inline
+uint32_t Vec4BToPixel(Vec4b tag) {
+  // B = tagVec[0], G = tagVec[1], R = tagVec[2], A = tagVec[3]
+  uint32_t B = tag[0];
+  uint32_t G = tag[1];
+  uint32_t R = tag[2];
+  uint32_t A = tag[3];
+  uint32_t pixel = (A << 24) | (R << 16) | (G << 8) | B;
+  return pixel;
+}
+
 // Convert a 24bit signed int value to a Scalar
 
 static inline
@@ -82,5 +93,11 @@ Mat expandBlockRegion(int32_t tag,
 // then each index is assumed to be a byte and is written as a greyscale pixel.
 
 Mat mapQuantPixelsToColortableIndexes(const Mat & inQuantPixels, const vector<uint32_t> &colortable, bool asGreyscale);
+
+// Given a Mat that contains pixels count each pixel and return a histogram
+// of the number of times each pixel is found in the image.
+
+void generatePixelHistogram(const Mat & inQuantPixels,
+                            unordered_map<uint32_t, uint32_t> &pixelToCountTable);
 
 #endif // OPENCV_UTIL_H

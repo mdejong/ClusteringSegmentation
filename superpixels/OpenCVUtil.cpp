@@ -706,13 +706,63 @@ Mat expandBlockRegion(int32_t tag,
   return expandedBlockMat;
 }
 
+// Given a Mat that contains pixels count each pixel and return a histogram
+// of the number of times each pixel is found in the image.
+
+void generatePixelHistogram(const Mat & inQuantPixels,
+                            unordered_map<uint32_t, uint32_t> &pixelToCountTable)
+{
+  const bool debugOutput = false;
+  
+  Mat quantOutputMat = inQuantPixels.clone();
+  quantOutputMat = (Scalar) 0;
+  
+  if (inQuantPixels.channels() == 3) {
+    for(int y = 0; y < quantOutputMat.rows; y++) {
+      for(int x = 0; x < quantOutputMat.cols; x++) {
+        Vec3b vec = inQuantPixels.at<Vec3b>(y, x);
+        uint32_t pixel = Vec3BToUID(vec);
+        pixel &= 0x00FFFFFF; // Opaque 24BPP
+        
+        if ((debugOutput)) {
+          char buffer[1024];
+          snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is 0x%08X (%d) -> count %d", x, y, pixel, pixel, pixelToCountTable[pixel]);
+          cout << buffer << endl;
+        }
+        
+        pixelToCountTable[pixel] += 1;
+      }
+    }
+  } else if (inQuantPixels.channels() == 4) {
+    for(int y = 0; y < quantOutputMat.rows; y++) {
+      for(int x = 0; x < quantOutputMat.cols; x++) {
+        Vec4b vec = inQuantPixels.at<Vec4b>(y, x);
+        uint32_t pixel = Vec4BToPixel(vec);
+        
+        if ((debugOutput)) {
+          char buffer[1024];
+          snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is 0x%08X (%d) -> count %d", x, y, pixel, pixel, pixelToCountTable[pixel]);
+          cout << buffer << endl;
+        }
+        
+        pixelToCountTable[pixel] += 1;
+      }
+    }
+    
+  } else {
+    assert(0);
+  }
+  
+  return;
+}
+
 // Given a Mat that contains quant pixels and a colortable, map the quant
 // pixels to indexes in the colortable. If the asGreyscale) flag is true
 // then each index is assumed to be a byte and is written as a greyscale pixel.
 
 Mat mapQuantPixelsToColortableIndexes(const Mat & inQuantPixels, const vector<uint32_t> &colortable, bool asGreyscale)
 {
-  const bool debugOutput = true;
+  const bool debugOutput = false;
   
   // Map pixels to sorted colortable offset
   
