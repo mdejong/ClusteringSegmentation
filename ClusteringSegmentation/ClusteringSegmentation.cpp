@@ -442,20 +442,28 @@ public:
   
 };
 
-// Return the 8 colors defined for a Crayola crayon box
+// FIXME: basic results seem to get better with gray and white in there, but why not just
+// evenly divide the color cube up by the corners and the 1/2 of each side in 3D?
 
-void get8Crayons(uint32_t *colortable, uint32_t &numColors) {
+// Return the basic colors defined for a Crayola crayon box
+
+void getBasicCrayonColors(uint32_t *colortable, uint32_t &numColors) {
   int i = 0;
+  
+  colortable[i++] = 0xFF000000; // black
   
   colortable[i++] = 0xFFED0A3F; // red
   colortable[i++] = 0xFFFBE870; // yellow
   colortable[i++] = 0xFF0066FF; // blue
   colortable[i++] = 0xFF3AA655; // green
   
+  colortable[i++] = 0xFF7F7F7F; // gray
+  
   colortable[i++] = 0xFFFF8833; // orange
   colortable[i++] = 0xFFAF593E; // brown
   colortable[i++] = 0xFF732E6C; // violet
-  colortable[i++] = 0xFF000000; // black
+  
+  colortable[i++] = 0xFFFFFFFF; // white
   
   numColors = i;
 }
@@ -761,14 +769,14 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     {
       uint32_t numColors;
       
-      get8Crayons(colortable, numColors);
+      getBasicCrayonColors(colortable, numColors);
       
       map_colors_mps(pixels, numPixels, outPixels, colortable, numColors);
       
       // Write quant output where each original pixel is replaced with the closest
       // colortable entry.
       
-      Mat quant8Mat = dumpQuantImage("quant_crayon8_output.png", inputImg, outPixels);
+      Mat quant8Mat = dumpQuantImage("quant_crayon_output.png", inputImg, outPixels);
       
       // Map quant output to indexes
       
@@ -781,7 +789,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
      
       Mat sortedQuantIndexOutputMat = mapQuantPixelsToColortableIndexes(quant8Mat, colortableVec, true);
       
-      char *outQuantFilename = (char*)"quant_crayon8_sorted_offsets.png";
+      char *outQuantFilename = (char*)"quant_crayon_sorted_offsets.png";
       imwrite(outQuantFilename, sortedQuantIndexOutputMat);
       cout << "wrote " << outQuantFilename << endl;
       
@@ -1322,7 +1330,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           
           uint32_t *colortable = new uint32_t[numColors];
           
-          get8Crayons(colortable, numColors);
+          getBasicCrayonColors(colortable, numColors);
           
           map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
           
