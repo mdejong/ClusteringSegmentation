@@ -318,8 +318,11 @@ public:
   
   int32_t mergeStepAtStart;
   
-  // Set to true to enable debug step dump
+  // Set to true to enable debug global step dump
   const bool debugDumpImages = true;
+  
+  // Set to true to enable debug step dump
+  const bool debugDumpEachStepImages = false;
   
   SRMMergeManager(SuperpixelImage & _spImage, Mat &_inputImg)
   : SuperpixelMergeManager(_spImage, _inputImg), mergeStepAtStart(0)
@@ -418,7 +421,7 @@ public:
   void mergeEdge(SuperpixelEdge &edge) {
     SuperpixelMergeManager::mergeEdge(edge);
     
-    if (debugDumpImages) {
+    if (debugDumpEachStepImages) {
       // Determine if a merge was done on this iter
       
       Mat tmpResultImg = inputImg.clone();
@@ -1208,6 +1211,14 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         minMaxCoords.push_back(min);
         
         Coord max(actualX+superpixelDim-1, actualY+superpixelDim-1);
+        
+        if (max.x > inputImg.cols-1) {
+          max.x = inputImg.cols-1;
+        }
+        if (max.y > inputImg.rows-1) {
+          max.y = inputImg.rows-1;
+        }
+        
         minMaxCoords.push_back(max);
       }
       
