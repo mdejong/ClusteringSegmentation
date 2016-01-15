@@ -445,11 +445,19 @@ public:
 // Return evenly divided color cube
 
 vector<uint32_t> getSubdividedColors() {
-  // 0, 1, 2
-  // 0x00, 0x7F, 0xFF
+  //    63    64    65    63
+  // 0     1     2     3     4
+  // 0x00, 0x3F, 0x7F, 0xC0, 0xFF
+  // 0     63    127   192   255
   
-  const uint32_t vals[] = { 0, 0xFF/2, 0xFF };
+  const uint32_t vals[] = { 0, 0xFF/4, 0xFF/2, 0xFF-(0xFF/4), 0xFF };
   const int numSteps = (sizeof(vals) / sizeof(uint32_t));
+
+  if ((0)) {
+    for (int i = 0; i < numSteps; i++) {
+      fprintf(stdout, "i %4d : %4d : di %4d\n", i, vals[i], (i == 0 ? 0 : (vals[i] - vals[i-1])));
+    }
+  }
   
   vector<uint32_t> pixels;
   
@@ -973,6 +981,11 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       cout << endl;
     } // end foreach srmSuperpixels
     
+    
+    // FIXME: very very small srm superpixels, like say 2x8 or a small long region might not need to be processed
+    // since a larger region may expand and then cover the sliver at the end of a region. But, in that case
+    // the expansion should mark a given superpixel as processed. See Yin/Yang for issue near top right
+    
     // Loop over the otherTagsSet and find any tags that appear in
     // multiple regions.
     
@@ -1440,6 +1453,12 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           
           delete [] colortable;
         }
+        
+        // Choice of N for splitting the masked area. Need 1 for the surrounding area, possibly
+        // more if background is more than 1 color. But, need to select the other "target" color
+        // to split from the background by looking at the density of the colors in (X,Y) terms.
+        // For example, a dense patch of green should be seen as +1 over a surrounding gradient
+        // even if there are more colors in the gradient but they are spread out.
         
         if ((0))
         {
