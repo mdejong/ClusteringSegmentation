@@ -2134,12 +2134,6 @@
         min = absDelta;
         mini = j;
       }
-      
-      if (d < 0) {
-        
-      } else {
-        
-      }
     }
     
     //fprintf(stdout, "for %3d : deltas (%d %d %d %d %d) : min d %d : min offset %d\n", i, delta[0], delta[1], delta[2], delta[3], delta[4], min, mini);
@@ -2156,6 +2150,62 @@
   }
 
   //fprintf(stdout, "totalCount %d\n", totalCount);
+  
+  XCTAssert(totalCount == 256, @"filtered");
+  
+  return;
+}
+
+- (void)testSegmentColorCube2 {
+  vector<uint32_t> filtered(4);
+
+  // Divide so that coordinates in (0, 255) range get
+  // evenly split into 4 buckets.
+  
+  filtered[0] = 0;
+  filtered[1] = 127;
+  filtered[2] = 128;
+  filtered[3] = 255;
+  
+  // Foreach number in the range 0 -> 255 check the bin that
+  // would qualify as the closest match. Each bin should contain
+  // the same number of matches.
+  
+  unordered_map<int, int> map;
+  
+  int delta[filtered.size()];
+  
+  for ( int i = 0; i < 256; i++ ) {
+    
+    int min = 256;
+    int mini;
+    
+    for ( int j = 0; j < filtered.size(); j++ ) {
+      int f = filtered[j];
+      int d = i - f;
+      delta[j] = d;
+      int absDelta = d < 0 ? -d : d;
+      
+      if (absDelta < min) {
+        min = absDelta;
+        mini = j;
+      }
+    }
+    
+    fprintf(stdout, "for %3d : deltas (%d %d %d %d) : min d %d : min offset %d\n", i, delta[0], delta[1], delta[2], delta[3], min, mini);
+    
+    map[mini] += 1;
+  }
+  
+  int totalCount = 0;
+  
+  for ( auto &pair : map ) {
+    fprintf(stdout, "%d -> %d\n", pair.first, pair.second);
+    
+    totalCount += pair.second;
+  }
+  
+  fprintf(stdout, "totalCount %d\n", totalCount);
   
   XCTAssert(totalCount == 256, @"filtered");
   

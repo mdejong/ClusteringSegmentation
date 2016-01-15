@@ -827,16 +827,17 @@ Mat mapQuantPixelsToColortableIndexes(const Mat & inQuantPixels, const vector<ui
 // Return evenly divided color cube
 
 vector<uint32_t> getSubdividedColors() {
-  // 0 < 64     = 64
-  // 64 < 128   = 64
-  // 128 < 192  = 64
-  // 192 <= 255 = 64
-  
-  //    62    64    65    64
-  //    63    64    65    63
+  // quant ranges:
+  //
+  // 0 <- (0,31)    = 32
+  // 1 <- (32,95)   = 64
+  // 2 <- (96,159)  = 64
+  // 3 <- (160,223) = 64
+  // 4 <- (224,255) = 32
+  //
   // 0     1     2     3     4
-  // 0x00, 0x3F, 0x7F, 0xC0, 0xFF
-  // 0     63    127   192   255
+  // 0x00, 0x3F, 0x7F, 0xBE, 0xFF
+  // 0     63    127   191   255
   
   const uint32_t vals[] = { 0, 63, 127, 191, 255 };
   const int numSteps = (sizeof(vals) / sizeof(uint32_t));
@@ -859,7 +860,7 @@ vector<uint32_t> getSubdividedColors() {
         assert(x <= 0xFF && y <= 0xFF && z <= 0xFF);
         uint32_t pixel = (0xFF << 24) | (R << 16) | (G << 8) | B;
         
-        if ((1)) {
+        if ((0)) {
           fprintf(stdout, "colortable[%4d] = 0x%08X\n", (int)pixels.size(), pixel);
         }
         
