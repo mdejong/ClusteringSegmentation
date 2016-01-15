@@ -491,6 +491,9 @@ vector<uint32_t> getSubdividedColors() {
 typedef struct {
   // What is the overall most common pixel that the region would quant to
   uint32_t regionQuantPixel;
+  
+  // Counts for each pixel in the block
+  unordered_map<uint32_t, uint32_t> pixelToCountTable;
 } HistogramForBlock;
 
 void genHistogramsForBlocks(const Mat &inputImg,
@@ -566,6 +569,9 @@ void genHistogramsForBlocks(const Mat &inputImg,
       Coord max(actualX+superpixelDim-1, actualY+superpixelDim-1);
       
       vector<uint32_t> pixelsThisBlock;
+      
+      bool isAllSamePixel = true;
+      uint32_t firstPixel = 0x0;
 
       for (int y = actualY; y <= max.y; y++) {
         for (int x = actualX; x <= max.x; x++) {
@@ -586,6 +592,11 @@ void genHistogramsForBlocks(const Mat &inputImg,
           uint32_t pi = (y * width) + x;
           uint32_t quantPixel = outPixels[pi];
           
+          if (y == actualY && x == actualX) {
+            // First pixel in block
+            firstPixel = quantPixel;
+          }
+          
           if ((debugOutput)) {
             char buffer[1024];
             snprintf(buffer, sizeof(buffer), "for (%4d,%4d) offset is %d pixel is 0x%08X\n", x, y, pi, quantPixel);
@@ -593,52 +604,81 @@ void genHistogramsForBlocks(const Mat &inputImg,
           }
           
           pixelsThisBlock.push_back(quantPixel);
+          
+          if (isAllSamePixel) {
+            if (quantPixel != firstPixel) {
+              isAllSamePixel = false;
+            }
+          }
         }
       }
       
-      // Stats to determine which output pixel to use
-      
-      uint32_t pixel;
-      
-      uint32_t sumB = 0;
-      uint32_t sumG = 0;
-      uint32_t sumR = 0;
-      
-      uint32_t countB = 0;
-      uint32_t countG = 0;
-      uint32_t countR = 0;
-      
-      for ( uint32_t qp : pixelsThisBlock ) {
-        sumB += qp & 0xFF;
-        countB++;
-        sumG += (qp >> 8) & 0xFF;
-        countG++;
-        sumR += (qp >> 16) & 0xFF;
-        countR++;
-      }
-      
-      uint32_t aveB = sumB / countB;
-      uint32_t aveG = sumG / countG;
-      uint32_t aveR = sumR / countR;
-      
-      assert(aveB <= 0xFF);
-      assert(aveG <= 0xFF);
-      assert(aveR <= 0xFF);
-      pixel = (aveR << 16) | (aveG << 8) | (aveB);
-      
-      Vec3b vec = PixelToVec3b(pixel);
-      blockMat.at<Vec3b>(by, bx) = vec;
-      
-      // Add an entry to the histogram based on the root coord in the
-      // upper left hand of the block.
+      // Examine each quant pixel value in pixelsThisBlock and determine which quant pixel best
+      // represents this block. Note that coord is the upper left coord in the block.
       
       HistogramForBlock &hfb = blockMap[blockC];
       
-      hfb.regionQuantPixel = pixel;
+      unordered_map<uint32_t, uint32_t> &pixelToCountTable = hfb.pixelToCountTable;
+      
+      uint32_t maxPixel = 0x0;
+      
+      if (isAllSamePixel) {
+        // Optimized common case where all pixels are exactly the same value
+        
+        maxPixel = pixelsThisBlock[0];
+        
+        pixelToCountTable[maxPixel] = (uint32_t)pixelsThisBlock.size();
+        
+        if ((debugOutput)) {
+          char buffer[1024];
+          snprintf(buffer, sizeof(buffer), "all pixels in block optimized case for pixel 0x%08X\n", maxPixel);
+          cout << buffer;
+        }
+      } else {
+        
+        for ( uint32_t qp : pixelsThisBlock ) {
+          if ((debugOutput)) {
+            char buffer[1024];
+            snprintf(buffer, sizeof(buffer), "histogram pixel 0x%08X\n", qp);
+            cout << buffer;
+          }
+          
+          pixelToCountTable[qp] += 1;
+        }
+        
+        int maxCount = 0;
+        
+        for ( auto it = begin(pixelToCountTable); it != end(pixelToCountTable); ++it) {
+          uint32_t pixel = it->first;
+          uint32_t count = it->second;
+          
+          if ((debugOutput)) {
+          printf("count table[0x%08X] = %6d\n", pixel, count);
+          }
+          
+          if (count > maxCount) {
+            maxCount = count;
+            maxPixel = pixel;
+          }
+        }
+        
+        // FIXME: if these are anywhere close, then do a stddev and choose one that is way
+        // larger than the others. But if really close then choose no specific pixel.
+        
+        if ((debugOutput)) {
+          printf("maxCount %5d : maxPixel 0x%08X\n", maxCount, maxPixel);
+          printf("done\n");
+        }
+      }
+      
+      hfb.regionQuantPixel = maxPixel;
+      
+      Vec3b vec = PixelToVec3b(maxPixel);
+      blockMat.at<Vec3b>(by, bx) = vec;
     }
   }
   
-  {
+  if (dumpOutputImages) {
     char *filename = (char*) "block_quant_output.png";
     imwrite(filename, blockMat);
     cout << "wrote " << filename << endl;
