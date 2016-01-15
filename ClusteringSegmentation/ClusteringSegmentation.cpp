@@ -119,13 +119,13 @@ Mat dumpQuantImage(string filename, const Mat &inputImg, uint32_t *pixels) {
   const bool debugOutput = false;
   
   int pi = 0;
-  for(int y = 0; y < quantOutputMat.rows; y++) {
-    for(int x = 0; x < quantOutputMat.cols; x++) {
+  for (int y = 0; y < quantOutputMat.rows; y++) {
+    for (int x = 0; x < quantOutputMat.cols; x++) {
       uint32_t pixel = pixels[pi++];
       
       if ((debugOutput)) {
         char buffer[1024];
-        snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is %d\n", x, y, pixel);
+        snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is 0x%08X\n", x, y, pixel);
         cout << buffer;
       }
       
@@ -483,6 +483,174 @@ vector<uint32_t> getSubdividedColors() {
   return pixels;
 }
 
+// Generate a histogram for each block of 4x4 pixels in the input image.
+// This logic maps input pixels to an even quant division of the color cube
+// so that comparison based on the pixel frequency is easy on a region
+// by region basis.
+
+typedef struct {
+  // What is the overall most common pixel that the region would quant to
+  uint32_t regionQuantPixel;
+} HistogramForBlock;
+
+void genHistogramsForBlocks(const Mat &inputImg,
+                            unordered_map<Coord, HistogramForBlock> &blockMap,
+                            int blockWidth,
+                            int blockHeight,
+                            int superpixelDim)
+{
+  const bool debugOutput = true;
+  const bool dumpOutputImages = true;
+
+  uint32_t width = inputImg.cols;
+  uint32_t height = inputImg.rows;
+  
+  uint32_t numPixels = width * height;
+  uint32_t *inPixels = new uint32_t[numPixels];
+  uint32_t *outPixels = new uint32_t[numPixels]();
+  
+  int pi = 0;
+  for(int y = 0; y < height; y++) {
+    for(int x = 0; x < width; x++) {
+      Vec3b vec = inputImg.at<Vec3b>(y, x);
+      uint32_t pixel = Vec3BToUID(vec);
+      
+      if ((debugOutput)) {
+        char buffer[1024];
+        snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is 0x%08X\n", x, y, pixel);
+        cout << buffer;
+      }
+      
+      inPixels[pi++] = pixel;
+    }
+  }
+  
+  vector<uint32_t> quantColors = getSubdividedColors();
+  uint32_t numColors = (uint32_t) quantColors.size();
+  uint32_t *colortable = new uint32_t[numColors];
+  
+  {
+    int i = 0;
+    for ( uint32_t color : quantColors ) {
+      colortable[i++] = color;
+    }
+  }
+  
+  map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
+  
+  if (dumpOutputImages) {
+    Mat quantMat = dumpQuantImage("block_quant_full_output.png", inputImg, outPixels);
+  }
+  
+  // Allocate Mat where a single quant value is selected for each block. Iterate over
+  // each block and query the coordinates associated with a specific block.
+  
+  Mat blockMat = Mat(blockHeight, blockWidth, CV_8UC3);
+  blockMat = (Scalar) 0;
+  
+  pi = 0;
+  for(int by = 0; by < blockMat.rows; by++) {
+    for(int bx = 0; bx < blockMat.cols; bx++) {
+      Coord blockC(bx, by);
+      
+      if ((debugOutput)) {
+        char buffer[1024];
+        snprintf(buffer, sizeof(buffer), "block (%4d,%4d)", bx, by);
+        cout << buffer << endl;
+      }
+      
+      int actualX = blockC.x * superpixelDim;
+      int actualY = blockC.y * superpixelDim;
+      
+      Coord min(actualX, actualY);
+      Coord max(actualX+superpixelDim-1, actualY+superpixelDim-1);
+      
+      vector<uint32_t> pixelsThisBlock;
+
+      for (int y = actualY; y <= max.y; y++) {
+        for (int x = actualX; x <= max.x; x++) {
+          if ((debugOutput) && false) {
+            char buffer[1024];
+            snprintf(buffer, sizeof(buffer), "(%4d,%4d)", x, y);
+            cout << buffer << endl;
+          }
+          
+          if (x >= width-1) {
+            continue;
+          }
+          if (y >= height-1) {
+            continue;
+          }
+          
+          Coord c(x, y);
+          uint32_t pi = (y * width) + x;
+          uint32_t quantPixel = outPixels[pi];
+          
+          if ((debugOutput)) {
+            char buffer[1024];
+            snprintf(buffer, sizeof(buffer), "for (%4d,%4d) offset is %d pixel is 0x%08X\n", x, y, pi, quantPixel);
+            cout << buffer;
+          }
+          
+          pixelsThisBlock.push_back(quantPixel);
+        }
+      }
+      
+      // Stats to determine which output pixel to use
+      
+      uint32_t pixel;
+      
+      uint32_t sumB = 0;
+      uint32_t sumG = 0;
+      uint32_t sumR = 0;
+      
+      uint32_t countB = 0;
+      uint32_t countG = 0;
+      uint32_t countR = 0;
+      
+      for ( uint32_t qp : pixelsThisBlock ) {
+        sumB += qp & 0xFF;
+        countB++;
+        sumG += (qp >> 8) & 0xFF;
+        countG++;
+        sumR += (qp >> 16) & 0xFF;
+        countR++;
+      }
+      
+      uint32_t aveB = sumB / countB;
+      uint32_t aveG = sumG / countG;
+      uint32_t aveR = sumR / countR;
+      
+      assert(aveB <= 0xFF);
+      assert(aveG <= 0xFF);
+      assert(aveR <= 0xFF);
+      pixel = (aveR << 16) | (aveG << 8) | (aveB);
+      
+      Vec3b vec = PixelToVec3b(pixel);
+      blockMat.at<Vec3b>(by, bx) = vec;
+      
+      // Add an entry to the histogram based on the root coord in the
+      // upper left hand of the block.
+      
+      HistogramForBlock &hfb = blockMap[blockC];
+      
+      hfb.regionQuantPixel = pixel;
+    }
+  }
+  
+  {
+    char *filename = (char*) "block_quant_output.png";
+    imwrite(filename, blockMat);
+    cout << "wrote " << filename << endl;
+  }
+
+  delete [] colortable;
+  delete [] inPixels;
+  delete [] outPixels;
+  
+  return;
+}
+
 // Main method that implements the cluster combine logic
 
 bool clusteringCombine(Mat &inputImg, Mat &resultImg)
@@ -777,6 +945,12 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       
 //      unordered_map<uint32_t, uint32_t> pixelToCountTable;
 //      generatePixelHistogram(quantMat, pixelToCountTable);
+    }
+    
+    {
+      unordered_map<Coord, HistogramForBlock> blockMap;
+      
+      genHistogramsForBlocks(inputImg, blockMap, blockWidth, blockHeight, superpixelDim);
     }
     
     // Generate global quant to the 8 colors in the crayon box
