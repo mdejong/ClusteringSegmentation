@@ -442,47 +442,6 @@ public:
   
 };
 
-// Return evenly divided color cube
-
-vector<uint32_t> getSubdividedColors() {
-  //    63    64    65    63
-  // 0     1     2     3     4
-  // 0x00, 0x3F, 0x7F, 0xC0, 0xFF
-  // 0     63    127   192   255
-  
-  const uint32_t vals[] = { 0, 0xFF/4, 0xFF/2, 0xFF-(0xFF/4), 0xFF };
-  const int numSteps = (sizeof(vals) / sizeof(uint32_t));
-
-  if ((0)) {
-    for (int i = 0; i < numSteps; i++) {
-      fprintf(stdout, "i %4d : %4d : di %4d\n", i, vals[i], (i == 0 ? 0 : (vals[i] - vals[i-1])));
-    }
-  }
-  
-  vector<uint32_t> pixels;
-  
-  for (int x = 0; x < numSteps; x++) {
-    for (int y = 0; y < numSteps; y++) {
-      for (int z = 0; z < numSteps; z++) {
-        uint32_t B = vals[x];
-        uint32_t G = vals[y];
-        uint32_t R = vals[z];
-
-        assert(x <= 0xFF && y <= 0xFF && z <= 0xFF);
-        uint32_t pixel = (0xFF << 24) | (R << 16) | (G << 8) | B;
-        
-        if ((0)) {
-          fprintf(stdout, "colortable[%4d] = 0x%08X\n", (int)pixels.size()+1, pixel);
-        }
-        
-        pixels.push_back(pixel);
-      }
-    }
-  }
-  
-  return pixels;
-}
-
 // Generate a histogram for each block of 4x4 pixels in the input image.
 // This logic maps input pixels to an even quant division of the color cube
 // so that comparison based on the pixel frequency is easy on a region

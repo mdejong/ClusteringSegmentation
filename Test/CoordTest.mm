@@ -16,6 +16,8 @@
 #include "SuperpixelEdgeFuncs.h"
 #include "MergeSuperpixelImage.h"
 
+#include "OpenCVUtil.h"
+
 #import <XCTest/XCTest.h>
 
 @interface CoordTest : XCTestCase
@@ -2074,6 +2076,88 @@
   tmp = cThree;
   tmp -= cTwo;
   XCTAssert(tmp.x == 1 && tmp.y == 2, @"coord");
+  
+  return;
+}
+
+// Test case for color quant logic in OpenCVUtil.cpp that attempts
+// to subdivide the color cube into even segments
+
+- (void)testSegmentColorCube {
+  vector<uint32_t> vec = getSubdividedColors();
+  
+  XCTAssert(vec.size() == 125, @"getSubdividedColors");
+  
+  vector<uint32_t> filtered;
+  
+  for ( uint32_t pixel : vec ) {
+    uint32_t RG = pixel & 0x00FFFF00;
+    if (RG == 0) {
+      filtered.push_back(pixel & 0xFF);
+    }
+  }
+  
+  XCTAssert(filtered.size() == 5, @"filtered");
+  
+//   colortable[   0] = 0xFF000000
+//   colortable[   1] = 0xFF00003F
+//   colortable[   2] = 0xFF00007F
+//   colortable[   3] = 0xFF0000BF
+//   colortable[   4] = 0xFF0000FF
+  
+  XCTAssert(filtered[0] == 0, @"filtered");
+  XCTAssert(filtered[1] == 63, @"filtered");
+  XCTAssert(filtered[2] == 127, @"filtered");
+  XCTAssert(filtered[3] == 191, @"filtered");
+  XCTAssert(filtered[4] == 255, @"filtered");
+  
+  // Foreach number in the range 0 -> 255 check the bin that
+  // would qualify as the closest match. Each bin should contain
+  // the same number of matches.
+  
+  unordered_map<int, int> map;
+  
+  int delta[5];
+  
+  for ( int i = 0; i < 256; i++ ) {
+
+    int min = 256;
+    int mini;
+    
+    for ( int j = 0; j < 5; j++ ) {
+      int f = filtered[j];
+      int d = i - f;
+      delta[j] = d;
+      int absDelta = d < 0 ? -d : d;
+      
+      if (absDelta < min) {
+        min = absDelta;
+        mini = j;
+      }
+      
+      if (d < 0) {
+        
+      } else {
+        
+      }
+    }
+    
+    //fprintf(stdout, "for %3d : deltas (%d %d %d %d %d) : min d %d : min offset %d\n", i, delta[0], delta[1], delta[2], delta[3], delta[4], min, mini);
+    
+    map[mini] += 1;
+  }
+  
+  int totalCount = 0;
+  
+  for ( auto &pair : map ) {
+    fprintf(stdout, "%d -> %d\n", pair.first, pair.second);
+    
+    totalCount += pair.second;
+  }
+
+  //fprintf(stdout, "totalCount %d\n", totalCount);
+  
+  XCTAssert(totalCount == 256, @"filtered");
   
   return;
 }

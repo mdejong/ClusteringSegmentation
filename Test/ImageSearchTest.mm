@@ -890,7 +890,7 @@ void writeTagsWithGraytable(SuperpixelImage &spImage, Mat &origImg, Mat &resultI
     imwrite("maze4_tags.png", mazeTagsImg);
   }
   
-  MergeSuperpixelImage spImage;
+  SuperpixelImage spImage;
   
   bool worked = SuperpixelImage::parse(mazeTagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
@@ -912,7 +912,7 @@ void writeTagsWithGraytable(SuperpixelImage &spImage, Mat &origImg, Mat &resultI
   
   int mergeStep = 0;
   
-  mergeStep = spImage.mergeBackprojectSuperpixels(mazeImg, 0, mergeStep, BACKPROJECT_HIGH_FIVE);
+  mergeStep = MergeSuperpixelImage::mergeBackprojectSuperpixels(spImage, mazeImg, 0, mergeStep, BACKPROJECT_HIGH_FIVE);
   
   if (debugDumpImage) {
     Mat resultImg;
@@ -1031,7 +1031,7 @@ void writeTagsWithGraytable(SuperpixelImage &spImage, Mat &origImg, Mat &resultI
     imwrite("maze5_tags.png", mazeTagsImg);
   }
   
-  MergeSuperpixelImage spImage;
+  SuperpixelImage spImage;
   
   bool worked = SuperpixelImage::parse(mazeTagsImg, spImage);
   XCTAssert(worked, @"SuperpixelImage parse");
@@ -1053,7 +1053,7 @@ void writeTagsWithGraytable(SuperpixelImage &spImage, Mat &origImg, Mat &resultI
   
   int mergeStep = 0;
   
-  mergeStep = spImage.mergeBackprojectSuperpixels(mazeImg, 0, mergeStep, BACKPROJECT_HIGH_FIVE);
+  mergeStep = MergeSuperpixelImage::mergeBackprojectSuperpixels(spImage, mazeImg, 0, mergeStep, BACKPROJECT_HIGH_FIVE);
   
   if (debugDumpImage) {
     Mat resultImg;

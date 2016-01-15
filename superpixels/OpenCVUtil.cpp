@@ -824,3 +824,49 @@ Mat mapQuantPixelsToColortableIndexes(const Mat & inQuantPixels, const vector<ui
   return quantOutputMat;
 }
 
+// Return evenly divided color cube
+
+vector<uint32_t> getSubdividedColors() {
+  // 0 < 64     = 64
+  // 64 < 128   = 64
+  // 128 < 192  = 64
+  // 192 <= 255 = 64
+  
+  //    62    64    65    64
+  //    63    64    65    63
+  // 0     1     2     3     4
+  // 0x00, 0x3F, 0x7F, 0xC0, 0xFF
+  // 0     63    127   192   255
+  
+  const uint32_t vals[] = { 0, 63, 127, 191, 255 };
+  const int numSteps = (sizeof(vals) / sizeof(uint32_t));
+  
+  if ((0)) {
+    for (int i = 0; i < numSteps; i++) {
+      fprintf(stdout, "i %4d : %4d : di %4d\n", i, vals[i], (i == -1 ? 0 : (vals[i] - vals[i-1])));
+    }
+  }
+  
+  vector<uint32_t> pixels;
+  
+  for (int x = 0; x < numSteps; x++) {
+    for (int y = 0; y < numSteps; y++) {
+      for (int z = 0; z < numSteps; z++) {
+        uint32_t B = vals[z];
+        uint32_t G = vals[y];
+        uint32_t R = vals[x];
+        
+        assert(x <= 0xFF && y <= 0xFF && z <= 0xFF);
+        uint32_t pixel = (0xFF << 24) | (R << 16) | (G << 8) | B;
+        
+        if ((1)) {
+          fprintf(stdout, "colortable[%4d] = 0x%08X\n", (int)pixels.size(), pixel);
+        }
+        
+        pixels.push_back(pixel);
+      }
+    }
+  }
+  
+  return pixels;
+}

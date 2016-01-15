@@ -100,4 +100,6 @@ Mat mapQuantPixelsToColortableIndexes(const Mat & inQuantPixels, const vector<ui
 void generatePixelHistogram(const Mat & inQuantPixels,
                             unordered_map<uint32_t, uint32_t> &pixelToCountTable);
 
+vector<uint32_t> getSubdividedColors();
+
 #endif // OPENCV_UTIL_H

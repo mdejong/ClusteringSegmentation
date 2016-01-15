@@ -51,9 +51,11 @@
   const int numClusters = 1;
   uint32_t colortable[numClusters];
   
+  int allPixelsUnique = 1;
+  
   uint32_t numActualClusters = numClusters;
   
-  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable );
+  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
   
   XCTAssert(numActualClusters == 1, @"colortable");
   XCTAssert(colortable[0] == 0x00000000, @"colortable");
@@ -84,9 +86,11 @@
   const int numClusters = 2;
   uint32_t colortable[numClusters];
   
+  int allPixelsUnique = 1;
+  
   uint32_t numActualClusters = numClusters;
   
-  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable );
+  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
   
   XCTAssert(numActualClusters == 2, @"colortable");
   
@@ -121,10 +125,12 @@
   
   const int numClusters = 3;
   uint32_t colortable[numClusters];
+
+  int allPixelsUnique = 1;
   
   uint32_t numActualClusters = numClusters;
   
-  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable );
+  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
   
   XCTAssert(numActualClusters == 3, @"colortable");
   
@@ -156,9 +162,11 @@
   const int numClusters = 2;
   uint32_t colortable[numClusters];
   
+  int allPixelsUnique = 1;
+  
   uint32_t numActualClusters = numClusters;
   
-  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable );
+  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
   
   XCTAssert(numActualClusters == 2, @"colortable");
   
@@ -198,9 +206,11 @@
   const int numClusters = 4;
   uint32_t colortable[numClusters];
   
+  int allPixelsUnique = 1;
+  
   uint32_t numActualClusters = numClusters;
   
-  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable );
+  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
   
   XCTAssert(numActualClusters == numClusters, @"colortable");
   XCTAssert(colortable[0] == 0x00A14D48, @"colortable");
@@ -241,9 +251,11 @@
   const int numClusters = 16;
   uint32_t colortable[numClusters];
   
+  int allPixelsUnique = 1;
+  
   uint32_t numActualClusters = numClusters;
   
-  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable );
+  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
   
   XCTAssert(numActualClusters == numClusters, @"colortable");
   
