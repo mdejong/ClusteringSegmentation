@@ -448,3 +448,55 @@ uint32_t my_adler32(
   
   return result;
 }
+
+// Sort keys in histogram like table in terms of the count
+
+static
+bool CompareKeySizePairFunc (pair<uint32_t,uint32_t> &elem1, pair<uint32_t,uint32_t> &elem2) {
+  uint32_t size1 = elem1.second;
+  uint32_t size2 = elem2.second;
+  return (size1 < size2);
+}
+
+static
+bool CompareKeySizePairFuncBigToSmall (pair<uint32_t,uint32_t> &elem1, pair<uint32_t,uint32_t> &elem2) {
+  uint32_t size1 = elem1.second;
+  uint32_t size2 = elem2.second;
+  return (size2 < size1);
+}
+
+vector<uint32_t>
+sort_keys_by_count(unordered_map<uint32_t, uint32_t> &pixelToCountTable, bool biggestToSmallest)
+{
+  vector<pair<uint32_t,uint32_t> > sizePairs;
+
+  for ( auto &pair : pixelToCountTable ) {
+    uint32_t pixel = pair.first;
+    uint32_t count = pair.second;
+    
+    std::pair<uint32_t,uint32_t> sp;
+    
+    sp.first = pixel;
+    sp.second = count;
+    
+    sizePairs.push_back(sp);
+    
+    //fprintf(stdout, "0x%08X (%d) -> %d\n", pixel, pixel, count);
+  }
+
+  if (biggestToSmallest) {
+    sort(begin(sizePairs), end(sizePairs), CompareKeySizePairFuncBigToSmall);
+  } else {
+    sort(begin(sizePairs), end(sizePairs), CompareKeySizePairFunc);
+  }
+
+  vector<uint32_t> keys;
+  
+  for ( auto &pair : sizePairs ) {
+    keys.push_back(pair.first);
+    
+    //fprintf(stdout, "0x%08X -> %d\n", pair.first, pair.second);
+  }
+  
+  return keys;
+}

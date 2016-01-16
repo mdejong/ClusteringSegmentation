@@ -824,7 +824,7 @@ Mat mapQuantPixelsToColortableIndexes(const Mat & inQuantPixels, const vector<ui
   return quantOutputMat;
 }
 
-// Return evenly divided color cube
+// Return color cube with divided by 5 points along each axis.
 
 vector<uint32_t> getSubdividedColors() {
   // quant ranges:
@@ -870,4 +870,58 @@ vector<uint32_t> getSubdividedColors() {
   }
   
   return pixels;
+}
+
+// Vote for pixels that have neighbors that are the exact same value, this method examines each
+// pixel by getting the 8 connected neighbors and recoring a vote for a given pixel when it has
+// a neighbor that is exactly the same.
+
+void vote_for_identical_neighbors(const Mat &inImage,
+                                  unordered_map<uint32_t, uint32_t> &pixelToNumVotesMap)
+{
+  const bool debugOutput = true;
+  
+  assert(inImage.channels() == 3);
+  
+  int width = inImage.cols;
+  int height = inImage.rows;
+  
+  for(int y = 0; y < height; y++) {
+    for(int x = 0; x < width; x++) {
+      Vec3b vec = inImage.at<Vec3b>(y, x);
+      uint32_t pixel = Vec3BToUID(vec);
+      
+      if ((debugOutput)) {
+        char buffer[1024];
+        snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is 0x%08X (%d)", x, y, pixel, pixel);
+        cout << buffer << endl;
+      }
+      
+      Coord centerCoord(x, y);
+      vector<Coord> neighbors = get8Neighbors(centerCoord, width, height);
+      
+      int neighborCount = 0;
+      
+      for ( Coord c : neighbors ) {
+        Vec3b neighborVec = inImage.at<Vec3b>(c.y, c.x);
+        uint32_t neighborPixel = Vec3BToUID(neighborVec);
+        
+        if (pixel == neighborPixel) {
+          neighborCount += 1;
+        }
+      }
+      
+      if ((debugOutput)) {
+        char buffer[1024];
+        snprintf(buffer, sizeof(buffer), "for (%4d,%4d) neighborCount is %d", x, y, neighborCount);
+        cout << buffer << endl;
+      }
+      
+      if (neighborCount > 0) {
+        pixelToNumVotesMap[pixel] += neighborCount;
+      }
+    }
+  }
+  
+  return;
 }

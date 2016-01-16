@@ -455,7 +455,7 @@ typedef struct {
   unordered_map<uint32_t, uint32_t> pixelToCountTable;
 } HistogramForBlock;
 
-void genHistogramsForBlocks(const Mat &inputImg,
+Mat genHistogramsForBlocks(const Mat &inputImg,
                             unordered_map<Coord, HistogramForBlock> &blockMap,
                             int blockWidth,
                             int blockHeight,
@@ -647,7 +647,7 @@ void genHistogramsForBlocks(const Mat &inputImg,
   delete [] inPixels;
   delete [] outPixels;
   
-  return;
+  return blockMat;
 }
 
 // Main method that implements the cluster combine logic
@@ -939,20 +939,29 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       char *outQuantFilename = (char*)"quant_sorted_offsets.png";
       imwrite(outQuantFilename, sortedQuantIndexOutputMat);
       cout << "wrote " << outQuantFilename << endl;
-      
-      // Create simpl histogram of quant pixel counts
-      
-//      unordered_map<uint32_t, uint32_t> pixelToCountTable;
-//      generatePixelHistogram(quantMat, pixelToCountTable);
     }
     
     {
       unordered_map<Coord, HistogramForBlock> blockMap;
       
+      Mat blockMat =
       genHistogramsForBlocks(inputImg, blockMap, blockWidth, blockHeight, superpixelDim);
+      
+      unordered_map<uint32_t, uint32_t> pixelToNumVotesMap;
+      
+      vote_for_identical_neighbors(blockMat, pixelToNumVotesMap);
+
+      vector<uint32_t> sortedPixelKeys = sort_keys_by_count(pixelToNumVotesMap, true);
+      
+      for ( uint32_t pixel : sortedPixelKeys ) {
+        uint32_t count = pixelToNumVotesMap[pixel];
+        fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixel, pixel, count);
+      }
+      
+      fprintf(stdout, "done\n");
     }
     
-    // Generate global quant to the 8 colors in the crayon box
+    // Generate global quant to spaced subdivisions
     
     {
       vector<uint32_t> colors = getSubdividedColors();

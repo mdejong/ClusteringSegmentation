@@ -100,6 +100,15 @@ Mat mapQuantPixelsToColortableIndexes(const Mat & inQuantPixels, const vector<ui
 void generatePixelHistogram(const Mat & inQuantPixels,
                             unordered_map<uint32_t, uint32_t> &pixelToCountTable);
 
+// Return color cube with divided by 5 points along each axis.
+
 vector<uint32_t> getSubdividedColors();
+
+// Vote for pixels that have neighbors that are the exact same value, this method examines each
+// pixel by getting the 8 connected neighbors and recoring a vote for a given pixel when it has
+// a neighbor that is exactly the same.
+
+void vote_for_identical_neighbors(const Mat &inImage,
+                                  unordered_map<uint32_t, uint32_t> &pixelToNumVotesMap);
 
 #endif // OPENCV_UTIL_H

@@ -149,4 +149,9 @@ uint32_t closestToPixel(const vector<uint32_t> &pixels, const uint32_t closeToPi
 
 vector<uint32_t> generate_cluster_walk_on_center_dist(const vector<uint32_t> &clusterCenterPixels);
 
+// Sort keys in histogram like table in terms of the count
+
+vector<uint32_t>
+sort_keys_by_count(unordered_map<uint32_t, uint32_t> &pixelToCountTable, bool biggestToSmallest);
+
 #endif // SUPERPIXEL_UTIL_H

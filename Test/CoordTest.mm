@@ -2212,4 +2212,36 @@
   return;
 }
 
+// Test case for color quant logic in OpenCVUtil.cpp that attempts
+// to subdivide the color cube into even segments
+
+- (void)testIdenticalNeighbors1 {
+  
+  NSArray *pixelsArr = @[
+                         @(0), @(0), @(0),
+                         @(1), @(1), @(1),
+                         @(2), @(2), @(3),
+                         ];
+  
+  Mat tagsImg(3, 3, CV_MAKETYPE(CV_8U, 3));
+  
+  [self.class fillImageWithPixels:pixelsArr img:tagsImg];
+  
+  unordered_map<uint32_t, uint32_t> pixelToNumVotesMap;
+  
+  vote_for_identical_neighbors(tagsImg, pixelToNumVotesMap);
+  
+  for ( auto &pair : pixelToNumVotesMap ) {
+    fprintf(stdout, "%d -> %d\n", pair.first, pair.second);
+  }
+
+  XCTAssert(pixelToNumVotesMap.size() == 3, @"size");
+  
+  XCTAssert(pixelToNumVotesMap[0] == 4, @"votes");
+  XCTAssert(pixelToNumVotesMap[1] == 4, @"votes");
+  XCTAssert(pixelToNumVotesMap[2] == 2, @"votes");
+  
+  return;
+}
+
 @end
