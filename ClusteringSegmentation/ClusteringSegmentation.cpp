@@ -30,6 +30,8 @@
 
 #include "srm.h"
 
+#include "Util.h"
+
 using namespace cv;
 using namespace std;
 
@@ -1670,9 +1672,12 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           }
           
           if (1) {
-            char *filename = (char*) "block_mask.png";
-            imwrite(filename, blockMaskMat);
-            cout << "wrote " << filename << endl;
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_block_mask" << ".png";
+            string fname = fnameStream.str();
+            
+            imwrite(fname, blockMaskMat);
+            cout << "wrote " << fname << endl;
           }
           
           // Count neighbors that share a quant pixel value after conversion to blocks
@@ -1691,19 +1696,76 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           }
           
           fprintf(stdout, "done\n");
-        }
-        
-        // Choice of N for splitting the masked area. Need 1 for the surrounding area, possibly
-        // more if background is more than 1 color. But, need to select the other "target" color
-        // to split from the background by looking at the density of the colors in (X,Y) terms.
-        // For example, a dense patch of green should be seen as +1 over a surrounding gradient
-        // even if there are more colors in the gradient but they are spread out.
-        
-        if ((0))
-        {
+          
+          // Estimate N
+          
+          // Choice of N for splitting the masked area. Need 1 for the surrounding area, possibly
+          // more if background is more than 1 color. But, need to select the other "target" color
+          // to split from the background by looking at the density of the colors in (X,Y) terms.
+          // For example, a dense patch of green should be seen as +1 over a surrounding gradient
+          // even if there are more colors in the gradient but they are spread out.
+          
+          float mean, stddev;
+          
+          vector<float> floatSizes;
+          
+          for ( uint32_t pixel : sortedPixelKeys ) {
+            uint32_t count = pixelToNumVotesMap[pixel];
+            
+            floatSizes.push_back(count);
+          }
+          
+          sample_mean(floatSizes, &mean);
+          sample_mean_delta_squared_div(floatSizes, mean, &stddev);
+          
+          if (1) {
+            char buffer[1024];
+            
+            snprintf(buffer, sizeof(buffer), "mean %0.4f stddev %0.4f", mean, stddev);
+            cout << (char*)buffer << endl;
+            
+            snprintf(buffer, sizeof(buffer), "1 stddev %0.4f", (mean + (stddev * 0.5f * 1.0f)));
+            cout << (char*)buffer << endl;
+            
+            snprintf(buffer, sizeof(buffer), "2 stddev %0.4f", (mean + (stddev * 0.5f * 2.0f)));
+            cout << (char*)buffer << endl;
+            
+            snprintf(buffer, sizeof(buffer), "3 stddev %0.4f", (mean + (stddev * 0.5f * 3.0f)));
+            cout << (char*)buffer << endl;
+            
+            snprintf(buffer, sizeof(buffer), "-1 stddev %0.4f", (mean - (stddev * 0.5f * 1.0f)));
+            cout << (char*)buffer << endl;
+            
+            snprintf(buffer, sizeof(buffer), "-2 stddev %0.4f", (mean - (stddev * 0.5f * 2.0f)));
+            cout << (char*)buffer << endl;
+          }
+          
+          // 1 for the background
+          // 1 for the most common color group
+          
+          int N = 1;
+          
+          // Anything larger than 1 standard dev is likely to be a cluster of alike pixels
+          
+          float upOneStddev = (mean + (stddev * 0.5f * 1.0f));
+          
+          int countAbove = 0;
+          
+          for ( float floatSize : floatSizes ) {
+            if (floatSize >= upOneStddev) {
+              countAbove += 1;
+            }
+          }
+          
+          N += countAbove;
+          //N = N * 2;
+          N = N * 4;
+          
+//          fprintf(stdout, "N = %5d\n", N);
+
           // Generate quant based on the input
           
-          const int numClusters = 256;
+          const int numClusters = N;
           
           cout << "numClusters detected as " << numClusters << endl;
           
@@ -1778,7 +1840,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
             }
 #endif // DEBUG
             
-            if ((0)) {
+            if ((1)) {
               fprintf(stdout, "numClusters %5d : numActualClusters %5d \n", numClusters, numActualClusters);
               
               unordered_map<uint32_t, uint32_t> seen;
@@ -1813,11 +1875,30 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
             Mat sortedQtableOutputMat = Mat(numActualClusters, 1, CV_8UC3);
             sortedQtableOutputMat = (Scalar) 0;
             
+            vector<uint32_t> sortedColortable;
+            
             for (int i = 0; i < numActualClusters; i++) {
               int si = (int) sortedOffsets[i];
               uint32_t pixel = colortable[si];
               Vec3b vec = PixelToVec3b(pixel);
               sortedQtableOutputMat.at<Vec3b>(i, 0) = vec;
+              
+              sortedColortable.push_back(pixel);
+            }
+            
+            // Generate histogram based on the sorted quant pixels
+            
+            {
+              unordered_map<uint32_t, uint32_t> pixelToQuantCountTable;
+              
+              generatePixelHistogram(tmpResultImg, pixelToQuantCountTable);
+              
+              for ( uint32_t pixel : sortedColortable ) {
+                uint32_t count = pixelToQuantCountTable[pixel];
+                uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
+                fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixelNoAlpha, pixelNoAlpha, count);
+              }
+              fprintf(stdout, "done\n");
             }
            
             {

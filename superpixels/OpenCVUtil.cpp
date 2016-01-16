@@ -880,7 +880,7 @@ void vote_for_identical_neighbors(unordered_map<uint32_t, uint32_t> &pixelToNumV
                                   const Mat &inImage,
                                   const Mat &inMaskImage)
 {
-  const bool debugOutput = true;
+  const bool debugOutput = false;
   
   assert(inImage.channels() == 3);
   assert(inMaskImage.channels() == 1);
