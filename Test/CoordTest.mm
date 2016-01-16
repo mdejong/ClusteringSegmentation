@@ -2223,13 +2223,16 @@
                          @(2), @(2), @(3),
                          ];
   
-  Mat tagsImg(3, 3, CV_MAKETYPE(CV_8U, 3));
+  Mat tagsImg(3, 3, CV_8UC3);
+  Mat maskImg(3, 3, CV_8UC1);
+  
+  maskImg = (Scalar) 0xFF;
   
   [self.class fillImageWithPixels:pixelsArr img:tagsImg];
   
   unordered_map<uint32_t, uint32_t> pixelToNumVotesMap;
   
-  vote_for_identical_neighbors(tagsImg, pixelToNumVotesMap);
+  vote_for_identical_neighbors(pixelToNumVotesMap, tagsImg, maskImg);
   
   for ( auto &pair : pixelToNumVotesMap ) {
     fprintf(stdout, "%d -> %d\n", pair.first, pair.second);

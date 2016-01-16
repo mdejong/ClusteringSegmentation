@@ -108,7 +108,8 @@ vector<uint32_t> getSubdividedColors();
 // pixel by getting the 8 connected neighbors and recoring a vote for a given pixel when it has
 // a neighbor that is exactly the same.
 
-void vote_for_identical_neighbors(const Mat &inImage,
-                                  unordered_map<uint32_t, uint32_t> &pixelToNumVotesMap);
+void vote_for_identical_neighbors(unordered_map<uint32_t, uint32_t> &pixelToNumVotesMap,
+                                  const Mat &inImage,
+                                  const Mat &inMaskImage);
 
 #endif // OPENCV_UTIL_H

@@ -461,7 +461,7 @@ Mat genHistogramsForBlocks(const Mat &inputImg,
                             int blockHeight,
                             int superpixelDim)
 {
-  const bool debugOutput = true;
+  const bool debugOutput = false;
   const bool dumpOutputImages = true;
 
   uint32_t width = inputImg.cols;
@@ -941,15 +941,21 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       cout << "wrote " << outQuantFilename << endl;
     }
     
+    // Quant to known evenly spaced matrix
+    
     {
       unordered_map<Coord, HistogramForBlock> blockMap;
       
       Mat blockMat =
       genHistogramsForBlocks(inputImg, blockMap, blockWidth, blockHeight, superpixelDim);
       
+      Mat blockMaskMat(blockMat.rows, blockMat.cols, CV_8UC1);
+      
+      blockMaskMat = (Scalar) 0xFF;
+      
       unordered_map<uint32_t, uint32_t> pixelToNumVotesMap;
       
-      vote_for_identical_neighbors(blockMat, pixelToNumVotesMap);
+      vote_for_identical_neighbors(pixelToNumVotesMap, blockMat, blockMaskMat);
 
       vector<uint32_t> sortedPixelKeys = sort_keys_by_count(pixelToNumVotesMap, true);
       
@@ -1548,9 +1554,6 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           cout << "wrote " << fname << endl;
         }
         
-        
-        // Estimate N before quant call
-        
         if ((1)) {
           // Use estimation based on quant to 8 colors to determine the N value for the
           // number of clusters to pass into the kmeans segmentation logic.
@@ -1634,6 +1637,60 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           }
           
           delete [] colortable;
+        }
+        
+        
+        // Estimate the number of clusters to use in a quant operation by
+        // mapping the input pixels through an even quant table and then
+        // convert to blocks that represent the quant regions. This logic
+        // counts quant pixels that are next to other quant pixels such
+        // that dense areas that quant to the same pixel are promoted to
+        // a high count.
+        
+        // MOMO
+        
+        if (1) {
+          
+          unordered_map<Coord, HistogramForBlock> blockMap;
+          
+          Mat blockMat =
+          genHistogramsForBlocks(inputImg, blockMap, blockWidth, blockHeight, superpixelDim);
+          
+          // Generate mask Mat that is the same dimensions as blockMat but contains just one
+          // byte for each pixel and acts as a mask. The white pixels indicate the blocks
+          // that are included in the mask.
+          
+          Mat blockMaskMat(blockMat.rows, blockMat.cols, CV_8U);
+          blockMaskMat= (Scalar) 0;
+          
+          for ( Point p : locations ) {
+            int blockX = p.x;
+            int blockY = p.y;
+            blockMaskMat.at<uint8_t>(blockY, blockX) = 0xFF;
+          }
+          
+          if (1) {
+            char *filename = (char*) "block_mask.png";
+            imwrite(filename, blockMaskMat);
+            cout << "wrote " << filename << endl;
+          }
+          
+          // Count neighbors that share a quant pixel value after conversion to blocks
+          
+          unordered_map<uint32_t, uint32_t> pixelToNumVotesMap;
+          
+          // FIXME: Add ability to pass a block mask here.
+          
+          vote_for_identical_neighbors(pixelToNumVotesMap, blockMat, blockMaskMat);
+          
+          vector<uint32_t> sortedPixelKeys = sort_keys_by_count(pixelToNumVotesMap, true);
+          
+          for ( uint32_t pixel : sortedPixelKeys ) {
+            uint32_t count = pixelToNumVotesMap[pixel];
+            fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixel, pixel, count);
+          }
+          
+          fprintf(stdout, "done\n");
         }
         
         // Choice of N for splitting the masked area. Need 1 for the surrounding area, possibly

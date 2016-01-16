@@ -876,18 +876,31 @@ vector<uint32_t> getSubdividedColors() {
 // pixel by getting the 8 connected neighbors and recoring a vote for a given pixel when it has
 // a neighbor that is exactly the same.
 
-void vote_for_identical_neighbors(const Mat &inImage,
-                                  unordered_map<uint32_t, uint32_t> &pixelToNumVotesMap)
+void vote_for_identical_neighbors(unordered_map<uint32_t, uint32_t> &pixelToNumVotesMap,
+                                  const Mat &inImage,
+                                  const Mat &inMaskImage)
 {
   const bool debugOutput = true;
   
   assert(inImage.channels() == 3);
+  assert(inMaskImage.channels() == 1);
   
   int width = inImage.cols;
   int height = inImage.rows;
   
   for(int y = 0; y < height; y++) {
     for(int x = 0; x < width; x++) {
+      uint8_t maskOn = inMaskImage.at<uint8_t>(y, x);
+      if (maskOn == 0x0) {
+        if ((debugOutput)) {
+          char buffer[1024];
+          snprintf(buffer, sizeof(buffer), "for (%4d,%4d) center coord mask is off", x, y);
+          cout << buffer << endl;
+        }
+        
+        continue;
+      }
+      
       Vec3b vec = inImage.at<Vec3b>(y, x);
       uint32_t pixel = Vec3BToUID(vec);
       
@@ -903,6 +916,18 @@ void vote_for_identical_neighbors(const Mat &inImage,
       int neighborCount = 0;
       
       for ( Coord c : neighbors ) {
+        uint8_t maskOn = inMaskImage.at<uint8_t>(c.y, c.x);
+        
+        if (maskOn == 0x0) {
+          if ((debugOutput)) {
+            char buffer[1024];
+            snprintf(buffer, sizeof(buffer), "for (%4d,%4d) neighbor coord mask is off", c.x, c.y);
+            cout << buffer << endl;
+          }
+          
+          continue;
+        }
+        
         Vec3b neighborVec = inImage.at<Vec3b>(c.y, c.x);
         uint32_t neighborPixel = Vec3BToUID(neighborVec);
         
