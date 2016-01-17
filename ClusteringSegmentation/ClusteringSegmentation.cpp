@@ -1760,10 +1760,9 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
             // peaks in the distribution.
 
             int N = 0;
-            
+          vector<uint32_t> peakPixels;
+          
             {
-              vector<uint32_t> peakPixels;
-              
               // FIXME: dynamically allocate buffers to fit input size ?
               
               double*     data[2];
@@ -1847,11 +1846,14 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
               
               for(i = 0; i < absorp_count; ++i) {
                 int offset = absorp_peaks[i];
-                fprintf(stdout, "%5d : 5d,5d\n", offset, (int)data[0][offset],(int)data[1][offset]);
+                fprintf(stdout, "%5d : %5d,%5d\n", offset, (int)data[0][offset],(int)data[1][offset]);
               }
               
               free(data[0]);
               free(data[1]);
+              
+              // FIXME: if there seems to be just 1 peak, then it is likely that the other
+              // points are another color range. Just assume N = 2 in that case ?
 
               N = (int) peakPixels.size();
               
@@ -2120,6 +2122,74 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
               imwrite(outQuantFilename, sortedQuantOutputMat);
               cout << "wrote " << outQuantFilename << endl;
             }
+          }
+          
+          // Determine which cluster center is nearest to the peak pixels and use
+          // that info to generate new cluster centers that are exactly at the
+          // peak value. This means that the peak pixels will quant exactly and the
+          // nearby cluster value will get the nearby but not exactly on pixels.
+          // This should clearly separate the flat pixels from the gradient pixels.
+          
+          {
+            unordered_map<uint32_t, uint32_t> pixelToQuantCountTable;
+            
+            for (int i = 0; i < numActualClusters; i++) {
+              uint32_t pixel = colortable[i];
+              pixelToQuantCountTable[pixel] = i;
+            }
+            
+            for ( uint32_t pixel : peakPixels ) {
+              pixelToQuantCountTable[pixel] = 0;
+            }
+            
+            int numColors = (int)pixelToQuantCountTable.size();
+            uint32_t *colortable = new uint32_t[numColors];
+            
+            {
+              int i = 0;
+              for ( auto &pair : pixelToQuantCountTable ) {
+                uint32_t key = pair.first;
+                colortable[i] = key & 0x00FFFFFF;
+                i++;
+              }
+            }
+            
+            {
+              std::stringstream fnameStream;
+              fnameStream << "srm" << "_tag_" << tag << "_quant_table2" << ".png";
+              string fname = fnameStream.str();
+              
+              dumpQuantTableImage(fname, inputImg, colortable, numColors);
+            }
+            
+            map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
+            
+            // Dump quant output, each pixel is replaced by color in colortable
+            
+            tmpResultImg = Scalar(0,0,0xFF);
+            
+            for ( int i = 0; i < numPixels; i++ ) {
+              Coord c = regionCoords[i];
+              uint32_t pixel = outPixels[i];
+              Vec3b vec;
+              // vec = PixelToVec3b(pixel);
+              if (pixel == 0x0) {
+                vec = PixelToVec3b(pixel);
+              } else {
+                vec = PixelToVec3b(0xFFFFFFFF);
+              }
+              tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+            }
+            
+            {
+              std::stringstream fnameStream;
+              fnameStream << "srm" << "_tag_" << tag << "_quant_output2" << ".png";
+              string fname = fnameStream.str();
+              
+              imwrite(fname, tmpResultImg);
+              cout << "wrote " << fname << endl;
+            }
+
           }
         
           // dealloc
