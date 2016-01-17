@@ -1899,6 +1899,23 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
                 fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixelNoAlpha, pixelNoAlpha, count);
               }
               fprintf(stdout, "done\n");
+              
+              // Dump the data as a CSV file, with int value and hex rep of int value for readability
+              
+              std::stringstream fnameStream;
+              fnameStream << "srm" << "_tag_" << tag << "_quant_table_sorted" << ".csv";
+              string fname = fnameStream.str();
+              
+              FILE *fout = fopen(fname.c_str(), "w+");
+              
+              for ( uint32_t pixel : sortedColortable ) {
+                uint32_t count = pixelToQuantCountTable[pixel];
+                uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
+                fprintf(fout, "0x%08X,%d,%d\n", pixelNoAlpha, pixelNoAlpha, count);
+              }
+              
+              fclose(fout);
+              cout << "wrote " << fname << endl;
             }
            
             {
