@@ -30,6 +30,8 @@
 
 #include "srm.h"
 
+#include "peakdetect.h"
+
 #include "Util.h"
 
 using namespace cv;
@@ -1700,7 +1702,6 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           // Instead of a stddev type of approach, use grap peak logic to examine the counts
           // and select the peaks in the distrobution.
           
-          {
             vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(sortedPixelKeys);
             
             // Once cluster centers have been sorted by 3D color cube distance, emit "centers.png"
@@ -1754,8 +1755,110 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
               imwrite(outQuantTableFilename, sortedQtableOutputMat);
               cout << "wrote " << outQuantTableFilename << endl;
             }
+            
+            // Use peak detection logic to examine the 1D histogram in sorted order so as to find the
+            // peaks in the distribution.
 
-          }
+            int N = 0;
+            
+            {
+              vector<uint32_t> peakPixels;
+              
+              // FIXME: dynamically allocate buffers to fit input size ?
+              
+              double*     data[2];
+//              double      row[2];
+              
+#define MAX_PEAK    256
+              
+              int         emi_peaks[MAX_PEAK];
+              int         absorp_peaks[MAX_PEAK];
+              
+              int         emi_count = 0;
+              int         absorp_count = 0;
+              
+              double      delta = 1e-6;
+              int         emission_first = 0;
+              
+              int numDataPoints = (int) sortedColortable.size();
+              
+              assert(numDataPoints <= 256);
+              
+              data[0] = (double*) malloc(sizeof(double) * MAX_PEAK);
+              data[1] = (double*) malloc(sizeof(double) * MAX_PEAK);
+              
+              memset(data[0], 0, sizeof(double) * MAX_PEAK);
+              memset(data[1], 0, sizeof(double) * MAX_PEAK);
+              
+              int i = 0;
+              
+              i += 1;
+              
+              for ( uint32_t pixel : sortedColortable ) {
+                uint32_t count = pixelToNumVotesMap[pixel];
+                uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
+                
+                data[0][i] = pixelNoAlpha;
+                //data[0][i] = i;
+                data[1][i] = count;
+                
+                if ((0)) {
+                  fprintf(stderr, "pixel %05d : 0x%08X = %d\n", i, pixelNoAlpha, count);
+                }
+                
+                i += 1;
+              }
+              
+              // +1 at the end of the samples
+              i += 1;
+              
+              // Print the input data with zeros at the front and the back
+              
+              for ( int j = 0; j < i; j++ ) {
+                uint32_t pixelNoAlpha = data[0][j];
+                uint32_t count = data[1][j];
+                
+                if ((1)) {
+                  fprintf(stderr, "pixel %05d : 0x%08X = %d\n", j, pixelNoAlpha, count);
+                }
+              }
+              
+              if(detect_peak(data[1], i,
+                             emi_peaks, &emi_count, MAX_PEAK,
+                             absorp_peaks, &absorp_count, MAX_PEAK,
+                             delta, emission_first))
+              {
+                fprintf(stderr, "There are too many peaks.\n");
+                exit(1);
+              }
+              
+              fprintf(stdout, "num emi_peaks %d\n", emi_count);
+              fprintf(stdout, "num absorp_peaks %d\n", absorp_count);
+              
+              for(i = 0; i < emi_count; ++i) {
+                int offset = emi_peaks[i];
+                fprintf(stdout, "%5d : %5d,%5d\n", offset, (int)data[0][offset], (int)data[1][offset]);
+                
+                uint32_t pixel = (uint32_t) round(data[0][offset]);
+                peakPixels.push_back(pixel);
+              }
+              
+              puts("");
+              
+              for(i = 0; i < absorp_count; ++i) {
+                int offset = absorp_peaks[i];
+                fprintf(stdout, "%5d : 5d,5d\n", offset, (int)data[0][offset],(int)data[1][offset]);
+              }
+              
+              free(data[0]);
+              free(data[1]);
+
+              N = (int) peakPixels.size();
+              
+              N = N * 4;
+            }
+          
+          /*
           
           // Estimate N
           
@@ -1822,6 +1925,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           N = N * 4;
           
 //          fprintf(stdout, "N = %5d\n", N);
+           
+          */
 
           // Generate quant based on the input
           

@@ -756,9 +756,9 @@
 		3CCD1AE21C4B1FF500DBC550 /* peakdetect */ = {
 			isa = PBXGroup;
 			children = (
-				3CCD1AE31C4B1FF500DBC550 /* LICENSE */,
-				3CCD1AE41C4B1FF500DBC550 /* peakdetect.c */,
 				3CCD1AE51C4B1FF500DBC550 /* peakdetect.h */,
+				3CCD1AE41C4B1FF500DBC550 /* peakdetect.c */,
+				3CCD1AE31C4B1FF500DBC550 /* LICENSE */,
 			);
 			path = peakdetect;
 			sourceTree = "<group>";
