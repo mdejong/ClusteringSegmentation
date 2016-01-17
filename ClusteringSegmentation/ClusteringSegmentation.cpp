@@ -1697,6 +1697,66 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           
           fprintf(stdout, "done\n");
           
+          // Instead of a stddev type of approach, use grap peak logic to examine the counts
+          // and select the peaks in the distrobution.
+          
+          {
+            vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(sortedPixelKeys);
+            
+            // Once cluster centers have been sorted by 3D color cube distance, emit "centers.png"
+            
+            int numPoints = (int) sortedOffsets.size();
+            
+            Mat sortedQtableOutputMat = Mat(numPoints, 1, CV_8UC3);
+            sortedQtableOutputMat = (Scalar) 0;
+            
+            vector<uint32_t> sortedColortable;
+            
+            for (int i = 0; i < numPoints; i++) {
+              int si = (int) sortedOffsets[i];
+              uint32_t pixel = sortedPixelKeys[si];
+              Vec3b vec = PixelToVec3b(pixel);
+              sortedQtableOutputMat.at<Vec3b>(i, 0) = vec;
+              
+              sortedColortable.push_back(pixel);
+            }
+            
+            for ( uint32_t pixel : sortedColortable ) {
+              uint32_t count = pixelToNumVotesMap[pixel];
+              fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixel, pixel, count);
+            }
+            
+            fprintf(stdout, "done\n");
+            
+            // Dump sorted pixel data as a CSV file, with int value and hex rep of int value for readability
+            
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_quant_table_sorted" << ".csv";
+            string fname = fnameStream.str();
+            
+            FILE *fout = fopen(fname.c_str(), "w+");
+            
+            for ( uint32_t pixel : sortedColortable ) {
+              uint32_t count = pixelToNumVotesMap[pixel];
+              uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
+              fprintf(fout, "%d,0x%08X,%d\n", pixelNoAlpha, pixelNoAlpha, count);
+            }
+            
+            fclose(fout);
+            cout << "wrote " << fname << endl;
+            
+            {
+              std::stringstream fnameStream;
+              fnameStream << "srm" << "_tag_" << tag << "_block_mask_sorted" << ".png";
+              string filename = fnameStream.str();
+              
+              char *outQuantTableFilename = (char*) filename.c_str();
+              imwrite(outQuantTableFilename, sortedQtableOutputMat);
+              cout << "wrote " << outQuantTableFilename << endl;
+            }
+
+          }
+          
           // Estimate N
           
           // Choice of N for splitting the masked area. Need 1 for the surrounding area, possibly
@@ -1899,23 +1959,6 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
                 fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixelNoAlpha, pixelNoAlpha, count);
               }
               fprintf(stdout, "done\n");
-              
-              // Dump the data as a CSV file, with int value and hex rep of int value for readability
-              
-              std::stringstream fnameStream;
-              fnameStream << "srm" << "_tag_" << tag << "_quant_table_sorted" << ".csv";
-              string fname = fnameStream.str();
-              
-              FILE *fout = fopen(fname.c_str(), "w+");
-              
-              for ( uint32_t pixel : sortedColortable ) {
-                uint32_t count = pixelToQuantCountTable[pixel];
-                uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
-                fprintf(fout, "0x%08X,%d,%d\n", pixelNoAlpha, pixelNoAlpha, count);
-              }
-              
-              fclose(fout);
-              cout << "wrote " << fname << endl;
             }
            
             {
