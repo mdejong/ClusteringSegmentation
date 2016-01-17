@@ -49,6 +49,19 @@ Mat genHistogramsForBlocks(const Mat &inputImg,
 
 Mat generateSRM(Mat &inputImg, double Q);
 
+
+// Given a tag indicating a superpixel generate a mask that captures the region in terms of
+// exact pixels. This method returns a Mat that indicate a boolean region mask where 0xFF
+// means that the pixel is inside the indicated region.
+
+Mat
+captureRegionMask(SuperpixelImage &spImage,
+                  const Mat & inputImg,
+                  int32_t tag,
+                  int blockWidth,
+                  int blockHeight,
+                  int superpixelDim);
+
 // Implement merge of superpixels based on coordinates gather from SRM process
 
 #import "SuperpixelMergeManager.h"
