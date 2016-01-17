@@ -647,7 +647,7 @@ Mat expandBlockRegion(int32_t tag,
                       int blockWidth, int blockHeight,
                       int superpixelDim)
 {
-  const bool debug = true;
+  const bool debug = false;
   const bool debugDumpImages = true;
   
   Mat morphBlockMat = Mat(blockHeight, blockWidth, CV_8U);

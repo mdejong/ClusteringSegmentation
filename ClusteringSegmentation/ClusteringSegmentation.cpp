@@ -97,6 +97,8 @@ int main(int argc, const char** argv) {
     exit(1);
   }
   
+  assert(inputImg.channels() == 3);
+  
   Mat resultImg;
   
   bool worked = clusteringCombine(inputImg, resultImg);
@@ -1040,6 +1042,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         printf("count table[0x%08X] = %6d\n", pixel, count);
       }
 
+      printf("done\n");
     }
     
     // dealloc
