@@ -18,6 +18,8 @@
 
 #include "OpenCVUtil.h"
 
+//#include "ClusteringSegmentation.hpp"
+
 #import <XCTest/XCTest.h>
 
 @interface CoordTest : XCTestCase
