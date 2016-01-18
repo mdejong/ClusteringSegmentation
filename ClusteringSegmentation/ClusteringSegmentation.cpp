@@ -124,7 +124,7 @@ void dumpQuantTableImage(string filename, const Mat &inputImg, uint32_t *colorta
 
 // Generate a tags Mat from the original input pixels based on SRM algo.
 
-Mat generateSRM(Mat &inputImg, double Q)
+Mat generateSRM(const Mat &inputImg, double Q)
 {
   // SRM
   
@@ -172,6 +172,9 @@ Mat generateSRM(Mat &inputImg, double Q)
   Mat outImg = inputImg.clone();
   outImg = (Scalar) 0;
   
+  bool foundWhitePixel = false;
+  uint32_t largestNonWhitePixel = 0x0;
+  
   i = 0;
   for(int y = 0; y < outImg.rows; y++) {
     for(int x = 0; x < outImg.cols; x++) {
@@ -196,6 +199,52 @@ Mat generateSRM(Mat &inputImg, double Q)
       vec[2] = R;
       
       outImg.at<Vec3b>(y, x) = vec;
+      
+      if (B == 0xFF && G == 0xFF && R == 0xFF) {
+        foundWhitePixel = true;
+      } else {
+        uint32_t pixel = (R << 16) | (G << 8) | (B);
+        if (pixel > largestNonWhitePixel) {
+          largestNonWhitePixel = pixel;
+        }
+      }
+    }
+  }
+  
+  if (foundWhitePixel) {
+    // SRM output must not include the special case of color 0xFFFFFFFF since the
+    // implicit +1 during paring would overflow the int value. Simply find an unused
+    // near white color and use that instead.
+    
+    uint32_t nonWhitePixel = 0x00FFFFFF;
+    
+    nonWhitePixel -= 1;
+    
+    while (1) {
+      if (nonWhitePixel != largestNonWhitePixel) {
+        break;
+      }
+    }
+    
+    // nonWhitePixel now contains an unused pixel value
+    
+    Vec3b nonWhitePixelVec = PixelToVec3b(nonWhitePixel);
+    
+    if ((debugOutput)) {
+      char buffer[1024];
+      snprintf(buffer, sizeof(buffer), "rewrite white pixel 0x%08X as 0x%08X\n", 0x00FFFFFF, nonWhitePixel);
+      cout << buffer;
+    }
+    
+    for(int y = 0; y < outImg.rows; y++) {
+      for(int x = 0; x < outImg.cols; x++) {
+        Vec3b vec = outImg.at<Vec3b>(y, x);
+        uint32_t pixel = Vec3BToUID(vec);
+        if (pixel == 0x00FFFFFF) {
+          vec = nonWhitePixelVec;
+          outImg.at<Vec3b>(y, x) = vec;
+        }
+      }
     }
   }
   
@@ -228,7 +277,7 @@ Mat genHistogramsForBlocks(const Mat &inputImg,
                            int superpixelDim)
 {
   const bool debugOutput = false;
-  const bool dumpOutputImages = true;
+  const bool dumpOutputImages = false;
   
   uint32_t width = inputImg.cols;
   uint32_t height = inputImg.rows;
@@ -293,9 +342,16 @@ Mat genHistogramsForBlocks(const Mat &inputImg,
       Coord min(actualX, actualY);
       Coord max(actualX+superpixelDim-1, actualY+superpixelDim-1);
       
+      if ((debugOutput)) {
+        char buffer[1024];
+        snprintf(buffer, sizeof(buffer), "block min (%4d,%4d) max (%4d,%4d)", min.x, min.y, max.x, max.y);
+        cout << buffer << endl;
+      }
+      
       vector<uint32_t> pixelsThisBlock;
       
       bool isAllSamePixel = true;
+      bool isFirstPixelSet = false;
       uint32_t firstPixel = 0x0;
       
       for (int y = actualY; y <= max.y; y++) {
@@ -306,10 +362,10 @@ Mat genHistogramsForBlocks(const Mat &inputImg,
             cout << buffer << endl;
           }
           
-          if (x >= width-1) {
+          if (x > width-1) {
             continue;
           }
-          if (y >= height-1) {
+          if (y > height-1) {
             continue;
           }
           
@@ -317,9 +373,14 @@ Mat genHistogramsForBlocks(const Mat &inputImg,
           uint32_t pi = (y * width) + x;
           uint32_t quantPixel = outPixels[pi];
           
-          if (y == actualY && x == actualX) {
+          if (!isFirstPixelSet) {
             // First pixel in block
+            isFirstPixelSet = true;
             firstPixel = quantPixel;
+            
+            if (debugOutput) {
+              cout << "detected first pixel in block at " << x << "," << y << endl;
+            }
           }
           
           if ((debugOutput)) {
@@ -337,6 +398,12 @@ Mat genHistogramsForBlocks(const Mat &inputImg,
           }
         }
       }
+      
+      if (debugOutput) {
+        cout << "isAllSamePixel " << isAllSamePixel << " isFirstPixelSet " << isFirstPixelSet << " num pixelsThisBlock " << pixelsThisBlock.size() << endl;
+      }
+      
+      assert(isFirstPixelSet && pixelsThisBlock.size() > 0);
       
       // Examine each quant pixel value in pixelsThisBlock and determine which quant pixel best
       // represents this block. Note that coord is the upper left coord in the block.
@@ -494,9 +561,12 @@ captureRegionMask(SuperpixelImage &spImage,
   }
   
   if (debugDumpImages) {
-    Mat expandedBlockMat(inputImg.rows, inputImg.cols, CV_8U);
+    int width = inputImg.cols;
+    int height = inputImg.rows;
     
-    expandedBlockMat = (Scalar) 0;
+    Mat tmpExpandedBlockMat(height, width, CV_8U);
+    
+    tmpExpandedBlockMat = (Scalar) 0;
     
     for ( Point p : locations ) {
       int actualX = p.x * superpixelDim;
@@ -507,7 +577,15 @@ captureRegionMask(SuperpixelImage &spImage,
       
       for ( int y = min.y; y <= max.y; y++ ) {
         for ( int x = min.x; x <= max.x; x++ ) {
-          expandedBlockMat.at<uint8_t>(y, x) = 0xFF;
+          
+          if (x > width-1) {
+            continue;
+          }
+          if (y > height-1) {
+            continue;
+          }
+          
+          tmpExpandedBlockMat.at<uint8_t>(y, x) = 0xFF;
         }
       }
     }
@@ -516,7 +594,7 @@ captureRegionMask(SuperpixelImage &spImage,
     fnameStream << "srm" << "_tag_" << tag << "_morph_block_bw" << ".png";
     string fname = fnameStream.str();
     
-    imwrite(fname, expandedBlockMat);
+    imwrite(fname, tmpExpandedBlockMat);
     cout << "wrote " << fname << endl;
   }
   
@@ -524,6 +602,9 @@ captureRegionMask(SuperpixelImage &spImage,
   // expanded mask.
   
   if ((1)) {
+    int width = inputImg.cols;
+    int height = inputImg.rows;
+    
     vector<Coord> regionCoords;
     regionCoords.reserve(locations.size() * (superpixelDim * superpixelDim));
     
@@ -537,6 +618,14 @@ captureRegionMask(SuperpixelImage &spImage,
       for ( int y = min.y; y <= max.y; y++ ) {
         for ( int x = min.x; x <= max.x; x++ ) {
           Coord c(x, y);
+          
+          if (x > width-1) {
+            continue;
+          }
+          if (y > height-1) {
+            continue;
+          }
+          
           regionCoords.push_back(c);
         }
       }
@@ -1144,10 +1233,12 @@ captureRegionMask(SuperpixelImage &spImage,
         
         for (int i = 0; i < numActualClusters; i++) {
           uint32_t pixel = colortable[i];
+          pixel = pixel & 0x00FFFFFF;
           pixelToQuantCountTable[pixel] = i;
         }
         
         for ( uint32_t pixel : peakPixels ) {
+          pixel = pixel & 0x00FFFFFF;
           pixelToQuantCountTable[pixel] = 0;
         }
         
@@ -1158,7 +1249,8 @@ captureRegionMask(SuperpixelImage &spImage,
           int i = 0;
           for ( auto &pair : pixelToQuantCountTable ) {
             uint32_t key = pair.first;
-            colortable[i] = key & 0x00FFFFFF;
+            assert(key == (key & 0x00FFFFFF)); // verify alpha is zero
+            colortable[i] = key;
             i++;
           }
         }

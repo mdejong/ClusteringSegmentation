@@ -47,8 +47,7 @@ Mat genHistogramsForBlocks(const Mat &inputImg,
 
 // Generate a tags Mat from the original input pixels based on SRM algo.
 
-Mat generateSRM(Mat &inputImg, double Q);
-
+Mat generateSRM(const Mat &inputImg, double Q);
 
 // Given a tag indicating a superpixel generate a mask that captures the region in terms of
 // exact pixels. This method returns a Mat that indicate a boolean region mask where 0xFF
