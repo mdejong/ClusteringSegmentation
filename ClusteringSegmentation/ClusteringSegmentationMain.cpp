@@ -905,6 +905,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         
         imwrite(fname, maskMat);
         cout << "wrote " << fname << endl;
+        cout << "";
       }
 
     }

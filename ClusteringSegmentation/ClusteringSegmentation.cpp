@@ -496,7 +496,7 @@ captureRegionMask(SuperpixelImage &spImage,
                   int superpixelDim,
                   Mat &outBlockMask)
 {
-  const bool debug = false;
+  const bool debug = true;
   const bool debugDumpImages = true;
   
   if (debug) {
@@ -959,6 +959,12 @@ captureRegionMask(SuperpixelImage &spImage,
         
         N = (int) peakPixels.size();
         
+        // Min N must be at least 1 at this point
+        
+        if (N < 2) {
+          N = 2;
+        }
+        
         N = N * 4;
       }
       
@@ -1270,6 +1276,16 @@ captureRegionMask(SuperpixelImage &spImage,
           dumpQuantTableImage(fname, inputImg, colortable, numColors);
         }
         
+        for ( int i = 0; i < numColors; i++) {
+          uint32_t pixel = colortable[i];
+          fprintf(stdout, "colortable[%5d] = 0x%08X\n", i, pixel);
+        }
+        
+        // Run input pixels through closest color quant logic using the
+        // generated colortable. Note that the colortable should be
+        // split such that one range of the colortable should be seen
+        // as "inside" while the other range is "outside".
+        
         map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
         
         // Dump quant output, each pixel is replaced by color in colortable
@@ -1278,6 +1294,10 @@ captureRegionMask(SuperpixelImage &spImage,
         
         for ( int i = 0; i < numPixels; i++ ) {
           Coord c = regionCoords[i];
+          
+          // FIXME: need to identify the "inside" color and then deselect all others.
+          // The "inside" one is typically the largest cound inside the "in" region.
+          
           uint32_t pixel = outPixels[i];
           Vec3b vec;
           // vec = PixelToVec3b(pixel);
