@@ -574,6 +574,10 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       imwrite("srm_tags.png", tmpResultImg);
     }
     
+    // Fill with UID+1
+    
+//    srmSpImage.fillMatrixWithSuperpixelTags(srmTags);
+    
     cout << "srm generated superpixels N = " << srmSpImage.superpixels.size() << endl;
     
     // Scan the largest superpixel regions in largest to smallest order and find
@@ -746,7 +750,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         cout << "wrote " << fname << endl;
       }
       
-      if (false && (numCoords != 0)) {
+      if ((false) && (numCoords != 0)) {
         // The same type of logic implemented as a morphological operation in terms of 4x4 blocks
         // represented as pixels.
         

@@ -483,6 +483,260 @@ Mat genHistogramsForBlocks(const Mat &inputImg,
   return blockMat;
 }
 
+// Given input pixels and a range of coordinates (gathered from a region mask), determine
+// a quant table that gives good quant results. This estimation determines the number of
+// pixels and the actual cluster centers for different cases.
+
+bool
+estimateClusterCenters(const Mat & inputImg,
+                       int32_t tag,
+                       const vector<Coord> &regionCoords,
+                       vector<uint32_t> &clusterCenters)
+{
+  const bool debug = true;
+  const bool debugDumpImages = true;
+  
+  bool isVeryClose = false;
+  
+  if (debug) {
+    cout << "estimateClusterCenters" << endl;
+  }
+  
+  // Quant to evenly spaced grid to get estimate for number of clusters N
+  
+  vector<uint32_t> subdividedColors = getSubdividedColors();
+  
+  uint32_t numColors = (uint32_t) subdividedColors.size();
+  uint32_t *colortable = new uint32_t[numColors];
+  
+  {
+    int i = 0;
+    for ( uint32_t color : subdividedColors ) {
+      colortable[i++] = color;
+    }
+  }
+  
+  // Copy input pixels into array that can be passed to map_colors_mps()
+  
+  uint32_t numPixels = (uint32_t)regionCoords.size();
+  uint32_t *inPixels = new uint32_t[numPixels];
+  uint32_t *outPixels = new uint32_t[numPixels];
+  
+  for ( int i = 0; i < numPixels; i++ ) {
+    Coord c = regionCoords[i];
+    Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+    uint32_t pixel = Vec3BToUID(vec);
+    inPixels[i] = pixel;
+  }
+  
+  map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
+  
+  // Count each quant pixel in outPixels
+  
+  Mat countMat(1, numPixels, CV_8UC3);
+  
+  for (int i = 0; i < numPixels; i++) {
+    uint32_t pixel = outPixels[i];
+    Vec3b vec = PixelToVec3b(pixel);
+    countMat.at<Vec3b>(0, i) = vec;
+  }
+  
+  unordered_map<uint32_t, uint32_t> outPixelToCountTable;
+  
+  generatePixelHistogram(countMat, outPixelToCountTable);
+  
+  if (debug) {
+    for ( auto it = begin(outPixelToCountTable); it != end(outPixelToCountTable); ++it) {
+      uint32_t pixel = it->first;
+      uint32_t count = it->second;
+      
+      printf("count table[0x%08X] = %6d\n", pixel, count);
+    }
+  }
+  
+  // Dump quant output, each pixel is replaced by color in colortable
+  
+  if (debugDumpImages) {
+    
+    Mat tmpResultImg = inputImg.clone();
+    tmpResultImg = Scalar(0,0,0xFF);
+    
+    for ( int i = 0; i < numPixels; i++ ) {
+      Coord c = regionCoords[i];
+      uint32_t pixel = outPixels[i];
+      Vec3b vec = PixelToVec3b(pixel);
+      tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+    }
+    
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_quant_est_output" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, tmpResultImg);
+      cout << "wrote " << fname << endl;
+    }
+  }
+  
+  // Map quant pixels to colortable offsets
+  
+  if (debugDumpImages) {
+    vector<uint32_t> colortableVec;
+    
+    for (int i = 0; i < numColors; i++) {
+      uint32_t pixel = colortable[i];
+      colortableVec.push_back(pixel);
+    }
+    
+    Mat tmpResultImg = inputImg.clone();
+    tmpResultImg = Scalar(0,0,0xFF);
+    
+    // Add phony entry for Red (the mask color)
+    colortableVec.push_back(0x00FF0000);
+    
+    Mat quantOffsetsMat = mapQuantPixelsToColortableIndexes(tmpResultImg, colortableVec, true);
+    
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_quant_est_offsets" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, quantOffsetsMat);
+      cout << "wrote " << fname << endl;
+    }
+  }
+  
+  // Check for the trivial case where the total number of pixels
+  // is smallish and the pixels are quite a distance apart. This
+  // can be detected by detecting the case when there are few
+  // total pixels and the total number of quant pixels is the
+  // same as the number of unique original original pixels.
+  
+  unordered_map<uint32_t, uint32_t> inUniqueTable;
+  unordered_map<uint32_t, uint32_t> outUniqueTable;
+  
+  for ( int i = 0; i < numPixels; i++ ) {
+    uint32_t pixel = inPixels[i];
+    inUniqueTable[pixel] += 1;
+  }
+  
+  for ( int i = 0; i < numPixels; i++ ) {
+    uint32_t pixel = outPixels[i];
+    outUniqueTable[pixel] += 1;
+  }
+  
+  bool doClustering = true;
+  
+  if (inUniqueTable.size() < 32 && outUniqueTable.size() < 32) {
+    if (debug) {
+      int i = 0;
+      for ( auto it = begin(inUniqueTable); it != end(inUniqueTable); ++it) {
+        uint32_t pixel = it->first;
+        uint32_t count = it->second;
+        
+        printf(" inUniqueTable[%5d] : 0x%08X -> %d\n", i, pixel, count);
+      }
+      for ( auto it = begin(outUniqueTable); it != end(outUniqueTable); ++it) {
+        uint32_t pixel = it->first;
+        uint32_t count = it->second;
+        
+        printf("outUniqueTable[%5d] : 0x%08X -> %d\n", i, pixel, count);
+      }
+    }
+    
+    if (inUniqueTable.size() == outUniqueTable.size()) {
+      if (debug) {
+        cout << "estimateClusterCenters return since small num in pixels is exact maping for size " << inUniqueTable.size() << endl;
+      }
+
+      for ( auto &pair : inUniqueTable ) {
+        uint32_t pixel = pair.first;
+        clusterCenters.push_back(pixel);
+      }
+      
+      doClustering = false;
+      isVeryClose = true;
+    }
+  }
+  
+  if (doClustering) {
+    
+    // Generate a clustering using the estimated number of clusters found by doing
+    // the quant to an evenly spaced grid.
+    
+    uint32_t numActualClusters = numColors;
+    
+    int allPixelsUnique = 0;
+    
+    quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
+    
+    if (debugDumpImages) {
+      Mat tmpResultImg = inputImg.clone();
+      tmpResultImg = Scalar(0,0,0xFF);
+      
+      for ( int i = 0; i < numPixels; i++ ) {
+        Coord c = regionCoords[i];
+        uint32_t pixel = outPixels[i];
+        Vec3b vec = PixelToVec3b(pixel);
+        tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+      }
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_quant_est2_output" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, tmpResultImg);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    // table
+    
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_quant_est2_table" << ".png";
+      string fname = fnameStream.str();
+      
+      dumpQuantTableImage(fname, inputImg, colortable, numActualClusters);
+    }
+    
+    unordered_map<uint32_t, uint32_t> inToOutTable;
+    
+    for ( int i = 0; i < numPixels; i++ ) {
+      uint32_t inPixel = inPixels[i];
+      uint32_t outPixel = outPixels[i];
+      inToOutTable[inPixel] = outPixel;
+    }
+    
+    // Process each unique pixel in outUniqueTable and lookup the difference
+    // from the input pixel to the output pixel.
+    
+    for ( auto &pair : inToOutTable ) {
+      uint32_t inPixel = pair.first;
+      uint32_t outPixel = pair.second;
+      
+      // Determine the delta for each component
+      
+      uint32_t deltaPixel = predict_trivial_component_sub(inPixel, outPixel);
+      
+      if (debug) {
+        printf("unique pixel delta 0x%08X -> 0x%08X = 0x%08X\n", inPixel, outPixel, deltaPixel);
+      }
+    }
+    
+    
+    //  clusterCenters.push_back();
+    
+  } // end doClustering if block
+  
+  delete [] colortable;
+  delete [] inPixels;
+  delete [] outPixels;
+  
+  return isVeryClose;
+}
+
+
 // Given a tag indicating a superpixel generate a mask that captures the region in terms of
 // exact pixels. This method returns a Mat that indicate a boolean region mask where 0xFF
 // means that the pixel is inside the indicated region.
@@ -662,91 +916,126 @@ captureRegionMask(SuperpixelImage &spImage,
       cout << "wrote " << fname << endl;
     }
     
-    if ((1)) {
-      // Use estimation based on quant to 8 colors to determine the N value for the
-      // number of clusters to pass into the kmeans segmentation logic.
-      
-      vector<uint32_t> colors = getSubdividedColors();
-      
-      uint32_t numColors = (uint32_t) colors.size();
-      uint32_t *colortable = new uint32_t[numColors];
-      
-      {
-        int i = 0;
-        for ( uint32_t color : colors ) {
-          colortable[i++] = color;
-        }
+    // Quant to evenly spaced grid to get estimate for number of clusters N
+    
+    vector<uint32_t> colors = getSubdividedColors();
+    
+    uint32_t numColors = (uint32_t) colors.size();
+    uint32_t *colortable = new uint32_t[numColors];
+    
+    {
+      int i = 0;
+      for ( uint32_t color : colors ) {
+        colortable[i++] = color;
       }
+    }
+    
+    map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
+    
+    // Count each quant pixel in outPixels
+    
+    Mat countMat(1, numPixels, CV_8UC3);
+    
+    for (int i = 0; i < numPixels; i++) {
+      uint32_t pixel = outPixels[i];
+      Vec3b vec = PixelToVec3b(pixel);
+      countMat.at<Vec3b>(0, i) = vec;
+    }
+    
+    unordered_map<uint32_t, uint32_t> outPixelToCountTable;
+    
+    generatePixelHistogram(countMat, outPixelToCountTable);
+    
+    for ( auto it = begin(outPixelToCountTable); it != end(outPixelToCountTable); ++it) {
+      uint32_t pixel = it->first;
+      uint32_t count = it->second;
       
-      map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
+      printf("count table[0x%08X] = %6d\n", pixel, count);
+    }
+    
+    // Dump quant output, each pixel is replaced by color in colortable
+    
+    tmpResultImg = Scalar(0,0,0xFF);
+    
+    for ( int i = 0; i < numPixels; i++ ) {
+      Coord c = regionCoords[i];
+      uint32_t pixel = outPixels[i];
+      Vec3b vec = PixelToVec3b(pixel);
+      tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+    }
+    
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_quant_output" << ".png";
+      string fname = fnameStream.str();
       
-      // Count each quant pixel in outPixels
+      imwrite(fname, tmpResultImg);
+      cout << "wrote " << fname << endl;
+    }
+    
+    // Map quant pixels to colortable offsets
+    
+    vector<uint32_t> colortableVec;
+    
+    for (int i = 0; i < numColors; i++) {
+      uint32_t pixel = colortable[i];
+      colortableVec.push_back(pixel);
+    }
+    
+    // Add phony entry for Red (the mask color)
+    colortableVec.push_back(0x00FF0000);
+    
+    Mat quantOffsetsMat = mapQuantPixelsToColortableIndexes(tmpResultImg, colortableVec, true);
+    
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_quant_offsets" << ".png";
+      string fname = fnameStream.str();
       
-      Mat countMat(1, numPixels, CV_8UC3);
+      imwrite(fname, quantOffsetsMat);
+      cout << "wrote " << fname << endl;
+    }
+    
+    delete [] colortable;
+    
+    
+    // Invoke util method
+    
+    vector<uint32_t> estClusterCenters;
+    
+    bool isVeryClose = estimateClusterCenters(inputImg, tag, regionCoords, estClusterCenters);
+    
+    if (isVeryClose) {
+      // In this case the pixels are from a very small colortable or all the entries
+      // are so close together that one can assume that the colors are very simple
+      // and can be represented by quant that uses the original colors as a colortable.
       
-      for (int i = 0; i < numPixels; i++) {
-        uint32_t pixel = outPixels[i];
-        Vec3b vec = PixelToVec3b(pixel);
-        countMat.at<Vec3b>(0, i) = vec;
-      }
-      
-      unordered_map<uint32_t, uint32_t> pixelToCountTable;
-      
-      generatePixelHistogram(countMat, pixelToCountTable);
-      
-      for ( auto it = begin(pixelToCountTable); it != end(pixelToCountTable); ++it) {
-        uint32_t pixel = it->first;
-        uint32_t count = it->second;
-        
-        printf("count table[0x%08X] = %6d\n", pixel, count);
-      }
-      
-      // Dump quant output, each pixel is replaced by color in colortable
-      
-      tmpResultImg = Scalar(0,0,0xFF);
+      // Vote inside/outside for each pixel after we know what colortable entry a specific
+      // pixel is associated with.
       
       for ( int i = 0; i < numPixels; i++ ) {
         Coord c = regionCoords[i];
+        
+        // FIXME: need to identify the "inside" color and then deselect all others.
+        // The "inside" one is typically the largest cound inside the "in" region.
+        
         uint32_t pixel = outPixels[i];
-        Vec3b vec = PixelToVec3b(pixel);
+        Vec3b vec;
+        // vec = PixelToVec3b(pixel);
+        if (pixel == 0x0) {
+          vec = PixelToVec3b(pixel);
+        } else {
+          vec = PixelToVec3b(0xFFFFFFFF);
+        }
         tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
-      }
-      
-      {
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_quant_output" << ".png";
-        string fname = fnameStream.str();
         
-        imwrite(fname, tmpResultImg);
-        cout << "wrote " << fname << endl;
+        if (pixel == 0x0) {
+          // No-op when pixel is not on
+        } else {
+          outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
+        }
       }
-      
-      // Map quant pixels to colortable offsets
-      
-      vector<uint32_t> colortableVec;
-      
-      for (int i = 0; i < numColors; i++) {
-        uint32_t pixel = colortable[i];
-        colortableVec.push_back(pixel);
-      }
-      
-      // Add phony entry for Red (the mask color)
-      colortableVec.push_back(0x00FF0000);
-      
-      Mat quantOffsetsMat = mapQuantPixelsToColortableIndexes(tmpResultImg, colortableVec, true);
-      
-      {
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_quant_offsets" << ".png";
-        string fname = fnameStream.str();
-        
-        imwrite(fname, quantOffsetsMat);
-        cout << "wrote " << fname << endl;
-      }
-      
-      delete [] colortable;
     }
-    
     
     // Estimate the number of clusters to use in a quant operation by
     // mapping the input pixels through an even quant table and then
@@ -755,9 +1044,7 @@ captureRegionMask(SuperpixelImage &spImage,
     // that dense areas that quant to the same pixel are promoted to
     // a high count.
     
-    // MOMO
-    
-    if (1) {
+    if (!isVeryClose) {
       
       unordered_map<Coord, HistogramForBlock> blockMap;
       
@@ -1326,6 +1613,8 @@ captureRegionMask(SuperpixelImage &spImage,
         }
         
       }
+      
+      // FIXME: leaking memory currently
       
       // dealloc
       

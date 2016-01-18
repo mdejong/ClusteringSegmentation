@@ -154,4 +154,13 @@ vector<uint32_t> generate_cluster_walk_on_center_dist(const vector<uint32_t> &cl
 vector<uint32_t>
 sort_keys_by_count(unordered_map<uint32_t, uint32_t> &pixelToCountTable, bool biggestToSmallest);
 
+// Trivial sub operation via (pixel - prev) for each
+// component. Returns the prediction error.
+
+uint32_t predict_trivial_component_sub(uint32_t pixel, uint32_t prevPixel);
+
+// Reverse a trivial prediction, returns the pixel.
+
+uint32_t predict_trivial_component_add(uint32_t prevPixel, uint32_t residual);
+
 #endif // SUPERPIXEL_UTIL_H

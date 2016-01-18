@@ -371,7 +371,7 @@ Coord findRegionCenter(Mat &binMat, cv::Rect roi, Mat &outDistMat, int tag)
   
   assert(nonZero > 0);
   
-  if (0 && (nonZero > 2)) {
+  if ((0) && (nonZero > 2)) {
     // Find bbox of all the pixels still on and then choose the pixel that
     // is the closest to the center.
     

@@ -7,6 +7,14 @@
 
 using namespace std;
 
+#define RSHIFT_MASK(num, shift, mask) ((num >> shift) & mask)
+
+#define MASK_LSHIFT(num, mask, shift) ((num & mask) << shift)
+
+#define BOOL int
+#define FALSE 0
+#define TRUE 1
+
 // mean of N values
 
 void sample_mean(vector<float> &values, float *meanPtr) {
@@ -499,4 +507,130 @@ sort_keys_by_count(unordered_map<uint32_t, uint32_t> &pixelToCountTable, bool bi
   }
   
   return keys;
+}
+
+// Simple signed subtraction of each component in a pixel by comparing the
+// current pixel to the one directly on the left.
+
+static inline
+uint32_t component_sub_8by4(uint32_t *samplesPtr,
+                            uint32_t *decodedSamplesPtr,
+                            uint32_t width,
+                            uint32_t offset,
+                            BOOL doSub) {
+  const BOOL debug = FALSE;
+  
+  BOOL readDecoded = (decodedSamplesPtr != NULL);
+  
+  // indexes must be signed so that they can be negative at top or left edge
+  
+  int leftOffset = offset - 1;
+  
+#if defined(IS_OBJC)
+  if (debug) {
+    NSLog(@"SUB samplesi=%d, lefti=%d, doSub=%d, readDecoded=%d", offset, leftOffset, (int)doSub, (int)readDecoded);
+  }
+#endif // IS_OBJC
+  
+  uint32_t samples;
+  uint32_t leftSamples;
+  
+  samples = samplesPtr[offset];
+  
+  if (leftOffset < 0) {
+    leftSamples = 0x0;
+  } else {
+    if (!readDecoded) {
+      leftSamples = samplesPtr[leftOffset];
+    } else {
+      leftSamples = decodedSamplesPtr[leftOffset];
+    }
+  }
+  
+  uint8_t left_c3 = RSHIFT_MASK(leftSamples, 24, 0xFF);
+  uint8_t left_c2 = RSHIFT_MASK(leftSamples, 16, 0xFF);
+  uint8_t left_c1 = RSHIFT_MASK(leftSamples, 8, 0xFF);
+  uint8_t left_c0 = RSHIFT_MASK(leftSamples, 0, 0xFF);
+  
+  uint8_t c3 = RSHIFT_MASK(samples, 24, 0xFF);
+  uint8_t c2 = RSHIFT_MASK(samples, 16, 0xFF);
+  uint8_t c1 = RSHIFT_MASK(samples, 8, 0xFF);
+  uint8_t c0 = RSHIFT_MASK(samples, 0, 0xFF);
+  
+#if defined(IS_OBJC)
+  if (debug) {
+    NSLog(@"left_c3=%d, left_c2=%d, left_c1=%d, left_c0=%d", left_c3, left_c2, left_c1, left_c0);
+    NSLog(@"c3=%d, c2=%d, c1=%d, c0=%d", c3, c2, c1, c0);
+  }
+#else
+  if (debug) {
+    fprintf(stdout, "left_c3=%d, left_c2=%d, left_c1=%d, left_c0=%d\n", left_c3, left_c2, left_c1, left_c0);
+    fprintf(stdout, "c3=%d, c2=%d, c1=%d, c0=%d\n", c3, c2, c1, c0);
+  }
+#endif // IS_OBJC
+  
+  uint32_t r3, r2, r1, r0;
+  
+  if (doSub) {
+    r3 = (c3 - left_c3);
+    r2 = (c2 - left_c2);
+    r1 = (c1 - left_c1);
+    r0 = (c0 - left_c0);
+  } else {
+    r3 = (c3 + left_c3);
+    r2 = (c2 + left_c2);
+    r1 = (c1 + left_c1);
+    r0 = (c0 + left_c0);
+  }
+  
+#if defined(IS_OBJC)
+  if (debug) {
+    NSLog(@"r3=%d, r2=%d, r1=%d, r0=%d", r3, r2, r1, r0);
+  }
+#endif // IS_OBJC
+  
+  //#if defined(DEBUG)
+  //  assert(r3 <= 0xFF);
+  //  assert(r2 <= 0xFF);
+  //  assert(r1 <= 0xFF);
+  //  assert(r0 <= 0xFF);
+  //#endif // DEBUG
+  
+  // Mask to 8bit value and shift into component position
+  
+  uint32_t components =
+  MASK_LSHIFT(r3, 0xFF, 24) |
+  MASK_LSHIFT(r2, 0xFF, 16) |
+  MASK_LSHIFT(r1, 0xFF, 8) |
+  MASK_LSHIFT(r0, 0xFF, 0);
+  
+#if defined(IS_OBJC)
+  if (debug) {
+    NSLog(@"r word 0x%0.8X", components);
+  }
+#endif // IS_OBJC
+  
+  return components;
+}
+
+// Trivial sub operation via (pixel - prev) for each
+// component. Returns the prediction error.
+
+uint32_t predict_trivial_component_sub(uint32_t pixel, uint32_t prevPixel)
+{
+  uint32_t mat[2];
+  mat[0] = prevPixel;
+  mat[1] = pixel;
+  return component_sub_8by4(mat, NULL, 2, 1, 1);
+}
+
+// Reverse a trivial prediction, returns the pixel.
+
+uint32_t predict_trivial_component_add(uint32_t prevPixel, uint32_t residual)
+{
+  uint32_t mat[2];
+  mat[0] = residual;
+  mat[1] = prevPixel;
+  uint32_t pixel = component_sub_8by4(mat, mat, 2, 1, 0);
+  return pixel;
 }
