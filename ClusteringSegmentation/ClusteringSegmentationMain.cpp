@@ -890,13 +890,14 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     // for each large superpixel so that specific pixel values
     // for the area around the region can be queried.
     
+    Mat maskMat(inputImg.rows, inputImg.cols, CV_8UC1);
+    
     for ( int32_t tag : spImage.sortSuperpixelsBySize() ) {
-
-      Mat maskMat = captureRegionMask(spImage, inputImg, tag, blockWidth, blockHeight, superpixelDim);
       
-      int nzc = countNonZero(maskMat);
+      bool maskWritten =
+      captureRegionMask(spImage, inputImg, tag, blockWidth, blockHeight, superpixelDim, maskMat);
       
-      if ((1) && (nzc > 0))
+      if (maskWritten)
       {
         std::stringstream fnameStream;
         fnameStream << "srm" << "_tag_" << tag << "_region_mask" << ".png";

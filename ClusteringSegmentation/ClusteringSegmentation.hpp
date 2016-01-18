@@ -53,13 +53,14 @@ Mat generateSRM(const Mat &inputImg, double Q);
 // exact pixels. This method returns a Mat that indicate a boolean region mask where 0xFF
 // means that the pixel is inside the indicated region.
 
-Mat
+bool
 captureRegionMask(SuperpixelImage &spImage,
                   const Mat & inputImg,
                   int32_t tag,
                   int blockWidth,
                   int blockHeight,
-                  int superpixelDim);
+                  int superpixelDim,
+                  Mat &outBlockMask);
 
 // Implement merge of superpixels based on coordinates gather from SRM process
 

@@ -487,13 +487,14 @@ Mat genHistogramsForBlocks(const Mat &inputImg,
 // exact pixels. This method returns a Mat that indicate a boolean region mask where 0xFF
 // means that the pixel is inside the indicated region.
 
-Mat
+bool
 captureRegionMask(SuperpixelImage &spImage,
-                       const Mat & inputImg,
-                       int32_t tag,
-                       int blockWidth,
-                       int blockHeight,
-                       int superpixelDim)
+                  const Mat & inputImg,
+                  int32_t tag,
+                  int blockWidth,
+                  int blockHeight,
+                  int superpixelDim,
+                  Mat &outBlockMask)
 {
   const bool debug = false;
   const bool debugDumpImages = true;
@@ -502,8 +503,9 @@ captureRegionMask(SuperpixelImage &spImage,
     cout << "captureRegionMask" << endl;
   }
   
-  Mat mask(inputImg.rows, inputImg.cols, CV_8UC1);
-  mask = (Scalar) 0;
+  assert(outBlockMask.rows == inputImg.rows);
+  assert(outBlockMask.cols == inputImg.cols);
+  assert(outBlockMask.channels() == 1);
   
   auto &coords = spImage.getSuperpixelPtr(tag)->coords;
   
@@ -514,8 +516,12 @@ captureRegionMask(SuperpixelImage &spImage,
       cout << "captureRegionMask : region indicated by tag " << tag << " is too small to process" << endl;
     }
     
-    return mask;
+    return false;
   }
+
+  // Init mask after possible early return
+  
+  outBlockMask = (Scalar) 0;
   
   Mat expandedBlockMat = expandBlockRegion(tag, coords, 2, blockWidth, blockHeight, superpixelDim);
   
@@ -1285,7 +1291,7 @@ captureRegionMask(SuperpixelImage &spImage,
           if (pixel == 0x0) {
             // No-op when pixel is not on
           } else {
-            mask.at<uint8_t>(c.y, c.x) = 0xFF;
+            outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
           }
         }
         
@@ -1315,7 +1321,7 @@ captureRegionMask(SuperpixelImage &spImage,
     cout << "return captureRegionMask" << endl;
   }
   
-  return mask;
+  return true;
 }
 
 
