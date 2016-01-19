@@ -56,6 +56,7 @@ Mat generateSRM(const Mat &inputImg, double Q);
 bool
 captureRegionMask(SuperpixelImage &spImage,
                   const Mat & inputImg,
+                  const Mat & srmTags,
                   int32_t tag,
                   int blockWidth,
                   int blockHeight,

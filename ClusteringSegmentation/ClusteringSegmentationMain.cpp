@@ -576,7 +576,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     
     // Fill with UID+1
     
-//    srmSpImage.fillMatrixWithSuperpixelTags(srmTags);
+    srmSpImage.fillMatrixWithSuperpixelTags(srmTags);
     
     cout << "srm generated superpixels N = " << srmSpImage.superpixels.size() << endl;
     
@@ -896,10 +896,12 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     
     Mat maskMat(inputImg.rows, inputImg.cols, CV_8UC1);
     
-    for ( int32_t tag : spImage.sortSuperpixelsBySize() ) {
+    auto spVec = spImage.sortSuperpixelsBySize();
+    
+    for ( int32_t tag : spVec ) {
       
       bool maskWritten =
-      captureRegionMask(spImage, inputImg, tag, blockWidth, blockHeight, superpixelDim, maskMat);
+      captureRegionMask(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, maskMat);
       
       if (maskWritten)
       {

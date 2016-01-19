@@ -576,33 +576,28 @@ estimateClusterCenters(const Mat & inputImg,
       imwrite(fname, tmpResultImg);
       cout << "wrote " << fname << endl;
     }
-  }
-  
-  // Map quant pixels to colortable offsets
-  
-  if (debugDumpImages) {
-    vector<uint32_t> colortableVec;
-    
-    for (int i = 0; i < numColors; i++) {
-      uint32_t pixel = colortable[i];
-      colortableVec.push_back(pixel);
-    }
-    
-    Mat tmpResultImg = inputImg.clone();
-    tmpResultImg = Scalar(0,0,0xFF);
-    
-    // Add phony entry for Red (the mask color)
-    colortableVec.push_back(0x00FF0000);
-    
-    Mat quantOffsetsMat = mapQuantPixelsToColortableIndexes(tmpResultImg, colortableVec, true);
-    
+
     {
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_quant_est_offsets" << ".png";
-      string fname = fnameStream.str();
+      vector<uint32_t> colortableVec;
       
-      imwrite(fname, quantOffsetsMat);
-      cout << "wrote " << fname << endl;
+      for (int i = 0; i < numColors; i++) {
+        uint32_t pixel = colortable[i];
+        colortableVec.push_back(pixel);
+      }
+      
+      // Add phony entry for Red (the mask color)
+      colortableVec.push_back(0x00FF0000);
+      
+      Mat quantOffsetsMat = mapQuantPixelsToColortableIndexes(tmpResultImg, colortableVec, true);
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_quant_est_offsets" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, quantOffsetsMat);
+        cout << "wrote " << fname << endl;
+      }
     }
   }
   
@@ -744,6 +739,7 @@ estimateClusterCenters(const Mat & inputImg,
 bool
 captureRegionMask(SuperpixelImage &spImage,
                   const Mat & inputImg,
+                  const Mat & srmTags,
                   int32_t tag,
                   int blockWidth,
                   int blockHeight,
@@ -891,29 +887,49 @@ captureRegionMask(SuperpixelImage &spImage,
       }
     }
     
-    Mat tmpResultImg = inputImg.clone();
-    tmpResultImg = Scalar(0,0,0xFF);
+//    Mat tmpResultImg = inputImg.clone();
+//    tmpResultImg = Scalar(0,0,0xFF);
     
     int numPixels = (int) regionCoords.size();
     
     uint32_t *inPixels = new uint32_t[numPixels];
     uint32_t *outPixels = new uint32_t[numPixels];
     
+    // This array of pixels correspond to inPixels/outPixels but
+    // it stores the srm tag that corresponds to a specific tag.
+    
+//    uint32_t *srmPixels = new uint32_t[numPixels];
+    
     for ( int i = 0; i < numPixels; i++ ) {
       Coord c = regionCoords[i];
+      
       Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
       uint32_t pixel = Vec3BToUID(vec);
       inPixels[i] = pixel;
-      tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+      
+//      Vec3b srmVec = srmTags.at<Vec3b>(c.y, c.x);
+//      uint32_t srmTag = Vec3BToUID(srmVec);
+//      srmPixels[i] = srmTag;
     }
     
-    {
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_morph_masked_input" << ".png";
-      string fname = fnameStream.str();
+    if (debugDumpImages) {
+      Mat tmpResultImg = inputImg.clone();
+      tmpResultImg = Scalar(0,0,0xFF);
       
-      imwrite(fname, tmpResultImg);
-      cout << "wrote " << fname << endl;
+      for ( int i = 0; i < numPixels; i++ ) {
+        Coord c = regionCoords[i];
+        Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+        tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+      }
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_morph_masked_input" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, tmpResultImg);
+        cout << "wrote " << fname << endl;
+      }
     }
     
     // Quant to evenly spaced grid to get estimate for number of clusters N
@@ -955,45 +971,48 @@ captureRegionMask(SuperpixelImage &spImage,
     
     // Dump quant output, each pixel is replaced by color in colortable
     
-    tmpResultImg = Scalar(0,0,0xFF);
-    
-    for ( int i = 0; i < numPixels; i++ ) {
-      Coord c = regionCoords[i];
-      uint32_t pixel = outPixels[i];
-      Vec3b vec = PixelToVec3b(pixel);
-      tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
-    }
-    
-    {
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_quant_output" << ".png";
-      string fname = fnameStream.str();
+    if (debugDumpImages) {
+      Mat tmpResultImg = inputImg.clone();
+      tmpResultImg = Scalar(0,0,0xFF);
       
-      imwrite(fname, tmpResultImg);
-      cout << "wrote " << fname << endl;
-    }
-    
-    // Map quant pixels to colortable offsets
-    
-    vector<uint32_t> colortableVec;
-    
-    for (int i = 0; i < numColors; i++) {
-      uint32_t pixel = colortable[i];
-      colortableVec.push_back(pixel);
-    }
-    
-    // Add phony entry for Red (the mask color)
-    colortableVec.push_back(0x00FF0000);
-    
-    Mat quantOffsetsMat = mapQuantPixelsToColortableIndexes(tmpResultImg, colortableVec, true);
-    
-    {
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_quant_offsets" << ".png";
-      string fname = fnameStream.str();
+      for ( int i = 0; i < numPixels; i++ ) {
+        Coord c = regionCoords[i];
+        uint32_t pixel = outPixels[i];
+        Vec3b vec = PixelToVec3b(pixel);
+        tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+      }
       
-      imwrite(fname, quantOffsetsMat);
-      cout << "wrote " << fname << endl;
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_quant_output" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, tmpResultImg);
+        cout << "wrote " << fname << endl;
+      }
+    
+      // Map quant pixels to colortable offsets
+    
+      vector<uint32_t> colortableVec;
+      
+      for (int i = 0; i < numColors; i++) {
+        uint32_t pixel = colortable[i];
+        colortableVec.push_back(pixel);
+      }
+      
+      // Add phony entry for Red (the mask color)
+      colortableVec.push_back(0x00FF0000);
+      
+      Mat quantOffsetsMat = mapQuantPixelsToColortableIndexes(tmpResultImg, colortableVec, true);
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_quant_offsets" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, quantOffsetsMat);
+        cout << "wrote " << fname << endl;
+      }
     }
     
     delete [] colortable;
@@ -1013,6 +1032,197 @@ captureRegionMask(SuperpixelImage &spImage,
       // Vote inside/outside for each pixel after we know what colortable entry a specific
       // pixel is associated with.
       
+      unordered_map<uint32_t, uint32_t> mapSrcPixelToSRMTag;
+      
+//      for ( int i = 0; i < numPixels; i++ ) {
+//        Coord c = regionCoords[i];
+//        Vec3b vec = srmTags.at<Vec3b>(c.y, c.x);
+//        uint32_t srmTag = Vec3BToUID(vec);
+//        //regionPixels.push_back();
+//        //regionPixels[srcTag] += 1;
+//        //map[srcTag] += 1;
+//        
+//        uint32_t inPixel = inPixels[i];
+//        mapSrcPixelToSRMTag[inPixel] = srmTag;
+//      }
+      
+      // Iterate over the coords and gather up srmTags that correspond
+      // to the area indicated by tags
+      
+      for ( Coord c : coords ) {
+        Vec3b srmVec = srmTags.at<Vec3b>(c.y, c.x);
+        uint32_t srmTag = Vec3BToUID(srmVec);
+        
+        Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+        uint32_t pixel = Vec3BToUID(vec);
+        
+        mapSrcPixelToSRMTag[pixel] = srmTag;
+      }
+
+      for ( auto &pair : mapSrcPixelToSRMTag ) {
+        uint32_t pixel = pair.first;
+        uint32_t srmTag = pair.second;
+        printf("pixel->srmTag table[0x%08X] = 0x%08X\n", pixel, srmTag);
+      }
+      
+      if (debugDumpImages) {
+        Mat tmpResultImg = inputImg.clone();
+        tmpResultImg = Scalar(0,0,0);
+        
+        for ( Coord c : coords ) {
+          Vec3b srmVec = srmTags.at<Vec3b>(c.y, c.x);
+          uint32_t srmTag = Vec3BToUID(srmVec);
+          
+          Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+          uint32_t pixel = Vec3BToUID(vec);
+          
+          tmpResultImg.at<Vec3b>(c.y, c.x) = srmVec;
+        }
+        
+        {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_srm_region_tags" << ".png";
+          string fname = fnameStream.str();
+          
+          imwrite(fname, tmpResultImg);
+          cout << "wrote " << fname << endl;
+          cout << "";
+        }
+      }
+      
+      // Quant the region pixels to the provided cluster centers
+
+//      for ( uint32_t pixel : estClusterCenters ) {}
+      
+      // Generate quant based on the input
+      
+      int numColors = (uint32_t) estClusterCenters.size();
+      uint32_t numActualClusters = numColors;
+
+      uint32_t *colortable = new uint32_t[numActualClusters];
+      
+      int allPixelsUnique = 0;
+      
+      quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
+      
+      // Write quant output where each original pixel is replaced with the closest
+      // colortable entry.
+      
+      if (debugDumpImages) {
+        Mat tmpResultImg = inputImg.clone();
+        tmpResultImg = Scalar(0,0,0xFF);
+        
+        for ( int i = 0; i < numPixels; i++ ) {
+          Coord c = regionCoords[i];
+          uint32_t pixel = outPixels[i];
+          Vec3b vec = PixelToVec3b(pixel);
+          tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+        }
+        
+        {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_quant_inside_output" << ".png";
+          string fname = fnameStream.str();
+          
+          imwrite(fname, tmpResultImg);
+          cout << "wrote " << fname << endl;
+        }
+        
+        {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_quant_inside_table" << ".png";
+          string fname = fnameStream.str();
+          
+          dumpQuantTableImage(fname, inputImg, colortable, numColors);
+        }
+        
+        vector<uint32_t> colortableVec;
+        
+        for (int i = 0; i < numColors; i++) {
+          uint32_t pixel = colortable[i];
+          colortableVec.push_back(pixel);
+        }
+        
+        // Add phony entry for Red (the mask color)
+        colortableVec.push_back(0x00FF0000);
+        
+        Mat quantOffsetsMat = mapQuantPixelsToColortableIndexes(tmpResultImg, colortableVec, true);
+        
+        {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_quant_inside_offsets" << ".png";
+          string fname = fnameStream.str();
+          
+          imwrite(fname, quantOffsetsMat);
+          cout << "wrote " << fname << endl;
+        }
+        
+        // Find the indexes that are considered "inside" the shape
+        
+        typedef struct {
+          int inside;
+          int outside;
+        } InsideOutside;
+        
+        // srmTags
+        
+        //quantOffsetsMat = Scalar(0x0, 0x0, 0xFF);
+        
+        // FIXME: for each pixel value, lookup the inside/outside value
+        
+        unordered_map<uint32_t, uint32_t> srmTagInsideCount;
+        
+        for ( int i = 0; i < numPixels; i++ ) {
+          Coord c = regionCoords[i];
+          //uint32_t outPixel = outPixels[i];
+          
+          // Get UID from src tags
+          Vec3b vec = quantOffsetsMat.at<Vec3b>(c.y, c.x);
+          uint32_t offsetPixel = Vec3BToUID(vec);
+          offsetPixel = offsetPixel & 0xFF;
+          
+          //Vec3b vec = srmTags.at<Vec3b>(c.y, c.x);
+          //uint32_t srmPixel = Vec3BToUID(vec);
+          
+          //srmTagInsideCount[srmPixel] += 1;
+          srmTagInsideCount[offsetPixel] += 1;
+          
+          //map[srcTag] += 1;
+        }
+        
+        for ( auto &pair : srmTagInsideCount ) {
+          uint32_t pixel = pair.first;
+          uint32_t count = pair.second;
+          printf("count table[0x%08X] = %6d\n", pixel, count);
+        }
+        
+        for ( int i = 0; i < numPixels; i++ ) {
+          Coord c = regionCoords[i];
+          uint32_t outPixel = outPixels[i];
+          
+          if (srmTagInsideCount.count(outPixel) > 0) {
+            Vec3b vec(0xFF, 0xFF, 0xFF);
+            quantOffsetsMat.at<Vec3b>(c.y, c.x) = vec;
+          }
+        }
+        
+        {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_quant_inside2_offsets" << ".png";
+          string fname = fnameStream.str();
+          
+          imwrite(fname, quantOffsetsMat);
+          cout << "wrote " << fname << endl;
+        }
+      }
+      
+      delete [] colortable;
+      
+      // Grab the output 
+      
+      // srmTags
+      
+      /*
       for ( int i = 0; i < numPixels; i++ ) {
         Coord c = regionCoords[i];
         
@@ -1035,6 +1245,7 @@ captureRegionMask(SuperpixelImage &spImage,
           outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
         }
       }
+       */
     }
     
     // Estimate the number of clusters to use in a quant operation by
@@ -1342,32 +1553,35 @@ captureRegionMask(SuperpixelImage &spImage,
       // Write quant output where each original pixel is replaced with the closest
       // colortable entry.
       
-      tmpResultImg = Scalar(0,0,0xFF);
-      
-      for ( int i = 0; i < numPixels; i++ ) {
-        Coord c = regionCoords[i];
-        uint32_t pixel = outPixels[i];
-        Vec3b vec = PixelToVec3b(pixel);
-        tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
-      }
-      
-      {
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_quant_output" << ".png";
-        string fname = fnameStream.str();
+      if (debugDumpImages) {
+        Mat tmpResultImg = inputImg.clone();
+        tmpResultImg = Scalar(0,0,0xFF);
         
-        imwrite(fname, tmpResultImg);
-        cout << "wrote " << fname << endl;
-      }
-      
-      // table
-      
-      {
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_quant_table" << ".png";
-        string fname = fnameStream.str();
+        for ( int i = 0; i < numPixels; i++ ) {
+          Coord c = regionCoords[i];
+          uint32_t pixel = outPixels[i];
+          Vec3b vec = PixelToVec3b(pixel);
+          tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+        }
         
-        dumpQuantTableImage(fname, inputImg, colortable, numActualClusters);
+        {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_quant_output" << ".png";
+          string fname = fnameStream.str();
+          
+          imwrite(fname, tmpResultImg);
+          cout << "wrote " << fname << endl;
+        }
+        
+        // table
+        
+        {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_quant_table" << ".png";
+          string fname = fnameStream.str();
+          
+          dumpQuantTableImage(fname, inputImg, colortable, numActualClusters);
+        }
       }
       
       // Generate color sorted clusters
@@ -1450,18 +1664,18 @@ captureRegionMask(SuperpixelImage &spImage,
         
         // Generate histogram based on the sorted quant pixels
         
-        {
-          unordered_map<uint32_t, uint32_t> pixelToQuantCountTable;
-          
-          generatePixelHistogram(tmpResultImg, pixelToQuantCountTable);
-          
-          for ( uint32_t pixel : sortedColortable ) {
-            uint32_t count = pixelToQuantCountTable[pixel];
-            uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
-            fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixelNoAlpha, pixelNoAlpha, count);
-          }
-          fprintf(stdout, "done\n");
-        }
+//        {
+//          unordered_map<uint32_t, uint32_t> pixelToQuantCountTable;
+//          
+//          generatePixelHistogram(tmpResultImg, pixelToQuantCountTable);
+//          
+//          for ( uint32_t pixel : sortedColortable ) {
+//            uint32_t count = pixelToQuantCountTable[pixel];
+//            uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
+//            fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixelNoAlpha, pixelNoAlpha, count);
+//          }
+//          fprintf(stdout, "done\n");
+//        }
         
         if (debugDumpImages)
         {
@@ -1577,39 +1791,42 @@ captureRegionMask(SuperpixelImage &spImage,
         
         // Dump quant output, each pixel is replaced by color in colortable
         
-        tmpResultImg = Scalar(0,0,0xFF);
-        
-        for ( int i = 0; i < numPixels; i++ ) {
-          Coord c = regionCoords[i];
+        if (debugDumpImages) {
+          Mat tmpResultImg = inputImg.clone();
+          tmpResultImg = Scalar(0,0,0xFF);
           
-          // FIXME: need to identify the "inside" color and then deselect all others.
-          // The "inside" one is typically the largest cound inside the "in" region.
-          
-          uint32_t pixel = outPixels[i];
-          Vec3b vec;
-          // vec = PixelToVec3b(pixel);
-          if (pixel == 0x0) {
-            vec = PixelToVec3b(pixel);
-          } else {
-            vec = PixelToVec3b(0xFFFFFFFF);
+          for ( int i = 0; i < numPixels; i++ ) {
+            Coord c = regionCoords[i];
+            
+            // FIXME: need to identify the "inside" color and then deselect all others.
+            // The "inside" one is typically the largest cound inside the "in" region.
+            
+            uint32_t pixel = outPixels[i];
+            Vec3b vec;
+            // vec = PixelToVec3b(pixel);
+            if (pixel == 0x0) {
+              vec = PixelToVec3b(pixel);
+            } else {
+              vec = PixelToVec3b(0xFFFFFFFF);
+            }
+            tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+            
+            if (pixel == 0x0) {
+              // No-op when pixel is not on
+            } else {
+              outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
+            }
           }
-          tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
           
-          if (pixel == 0x0) {
-            // No-op when pixel is not on
-          } else {
-            outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
-          }
-        }
-        
-        if (debugDumpImages)
-        {
-          std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_quant_output2" << ".png";
-          string fname = fnameStream.str();
-          
-          imwrite(fname, tmpResultImg);
-          cout << "wrote " << fname << endl;
+          if (debugDumpImages)
+          {
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_quant_output2" << ".png";
+            string fname = fnameStream.str();
+            
+            imwrite(fname, tmpResultImg);
+            cout << "wrote " << fname << endl;
+          }          
         }
         
       }
