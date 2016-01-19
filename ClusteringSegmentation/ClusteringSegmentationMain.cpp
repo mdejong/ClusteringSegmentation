@@ -913,6 +913,10 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         cout << "wrote " << fname << endl;
         cout << "";
       }
+      
+      // FIXME: each masked region generated at this point is pixel exact as opposed
+      // to block oriented. Once a merge has been done to extract specific pixels
+      // out then the blocks are no longer valid.
 
     }
     

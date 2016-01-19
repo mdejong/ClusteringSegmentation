@@ -887,18 +887,10 @@ captureRegionMask(SuperpixelImage &spImage,
       }
     }
     
-//    Mat tmpResultImg = inputImg.clone();
-//    tmpResultImg = Scalar(0,0,0xFF);
-    
     int numPixels = (int) regionCoords.size();
     
     uint32_t *inPixels = new uint32_t[numPixels];
     uint32_t *outPixels = new uint32_t[numPixels];
-    
-    // This array of pixels correspond to inPixels/outPixels but
-    // it stores the srm tag that corresponds to a specific tag.
-    
-//    uint32_t *srmPixels = new uint32_t[numPixels];
     
     for ( int i = 0; i < numPixels; i++ ) {
       Coord c = regionCoords[i];
@@ -906,10 +898,6 @@ captureRegionMask(SuperpixelImage &spImage,
       Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
       uint32_t pixel = Vec3BToUID(vec);
       inPixels[i] = pixel;
-      
-//      Vec3b srmVec = srmTags.at<Vec3b>(c.y, c.x);
-//      uint32_t srmTag = Vec3BToUID(srmVec);
-//      srmPixels[i] = srmTag;
     }
     
     if (debugDumpImages) {
@@ -1034,18 +1022,6 @@ captureRegionMask(SuperpixelImage &spImage,
       
       unordered_map<uint32_t, uint32_t> mapSrcPixelToSRMTag;
       
-//      for ( int i = 0; i < numPixels; i++ ) {
-//        Coord c = regionCoords[i];
-//        Vec3b vec = srmTags.at<Vec3b>(c.y, c.x);
-//        uint32_t srmTag = Vec3BToUID(vec);
-//        //regionPixels.push_back();
-//        //regionPixels[srcTag] += 1;
-//        //map[srcTag] += 1;
-//        
-//        uint32_t inPixel = inPixels[i];
-//        mapSrcPixelToSRMTag[inPixel] = srmTag;
-//      }
-      
       // Iterate over the coords and gather up srmTags that correspond
       // to the area indicated by tags
       
@@ -1071,10 +1047,10 @@ captureRegionMask(SuperpixelImage &spImage,
         
         for ( Coord c : coords ) {
           Vec3b srmVec = srmTags.at<Vec3b>(c.y, c.x);
-          uint32_t srmTag = Vec3BToUID(srmVec);
+          //uint32_t srmTag = Vec3BToUID(srmVec);
           
-          Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
-          uint32_t pixel = Vec3BToUID(vec);
+          //Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+          //uint32_t pixel = Vec3BToUID(vec);
           
           tmpResultImg.at<Vec3b>(c.y, c.x) = srmVec;
         }
@@ -1090,8 +1066,27 @@ captureRegionMask(SuperpixelImage &spImage,
         }
       }
       
+      // Create region mask as byte mask
+      
+      Mat srmRegionMask(inputImg.rows, inputImg.cols, CV_8UC1);
+      srmRegionMask = Scalar(0);
+      
+      for ( Coord c : coords ) {
+        srmRegionMask.at<uint8_t>(c.y, c.x) = 0xFF;
+      }
+      
+      if (debugDumpImages) {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_srm_region_mask" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, srmRegionMask);
+        cout << "wrote " << fname << endl;
+        cout << "";
+      }
+      
       // Quant the region pixels to the provided cluster centers
-
+      
 //      for ( uint32_t pixel : estClusterCenters ) {}
       
       // Generate quant based on the input
@@ -1157,95 +1152,88 @@ captureRegionMask(SuperpixelImage &spImage,
           cout << "wrote " << fname << endl;
         }
         
-        // Find the indexes that are considered "inside" the shape
+        // Loop over each pixel passed through the quant logic and count up how
+        // often a pixel is "inside" the known region vs how often it is "outside".
         
         typedef struct {
           int inside;
           int outside;
         } InsideOutside;
         
-        // srmTags
-        
-        //quantOffsetsMat = Scalar(0x0, 0x0, 0xFF);
-        
-        // FIXME: for each pixel value, lookup the inside/outside value
-        
-        unordered_map<uint32_t, uint32_t> srmTagInsideCount;
+        unordered_map<uint32_t, InsideOutside> srmTagInsideCount;
         
         for ( int i = 0; i < numPixels; i++ ) {
           Coord c = regionCoords[i];
-          //uint32_t outPixel = outPixels[i];
-          
-          // Get UID from src tags
-          Vec3b vec = quantOffsetsMat.at<Vec3b>(c.y, c.x);
-          uint32_t offsetPixel = Vec3BToUID(vec);
-          offsetPixel = offsetPixel & 0xFF;
-          
-          //Vec3b vec = srmTags.at<Vec3b>(c.y, c.x);
-          //uint32_t srmPixel = Vec3BToUID(vec);
-          
-          //srmTagInsideCount[srmPixel] += 1;
-          srmTagInsideCount[offsetPixel] += 1;
-          
-          //map[srcTag] += 1;
-        }
-        
-        for ( auto &pair : srmTagInsideCount ) {
-          uint32_t pixel = pair.first;
-          uint32_t count = pair.second;
-          printf("count table[0x%08X] = %6d\n", pixel, count);
-        }
-        
-        for ( int i = 0; i < numPixels; i++ ) {
-          Coord c = regionCoords[i];
-          uint32_t outPixel = outPixels[i];
-          
-          if (srmTagInsideCount.count(outPixel) > 0) {
-            Vec3b vec(0xFF, 0xFF, 0xFF);
-            quantOffsetsMat.at<Vec3b>(c.y, c.x) = vec;
+          uint32_t quantPixel = outPixels[i];
+          InsideOutside &inOut = srmTagInsideCount[quantPixel];
+          uint8_t isInside = srmRegionMask.at<uint8_t>(c.y, c.x);
+          if (isInside) {
+            inOut.inside += 1;
+          } else {
+            inOut.outside += 1;
           }
         }
         
-        {
-          std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_quant_inside2_offsets" << ".png";
-          string fname = fnameStream.str();
+        // Vote for inside/outside status for each unique pixel based on a GT 50% chance
+        
+        unordered_map<uint32_t, bool> pixelToInside;
+        
+        for ( auto &pair : srmTagInsideCount ) {
+          uint32_t pixel = pair.first;
+          InsideOutside &inOut = pair.second;
           
-          imwrite(fname, quantOffsetsMat);
-          cout << "wrote " << fname << endl;
+          if (debug) {
+            printf("inout table[0x%08X] = (in out) (%5d %5d)\n", pixel, inOut.inside, inOut.outside);
+          }
+          
+          float percentOn = (float)inOut.inside / (inOut.inside + inOut.outside);
+          
+          if (debug) {
+            printf("percent on [0x%08X] = %0.3f\n", pixel, percentOn);
+          }
+          
+          if (percentOn > 0.5f) {
+            pixelToInside[pixel] = true;
+          } else {
+            pixelToInside[pixel] = false;
+          }
+          
+          if (debug) {
+            printf("pixelToInside[0x%08X] = %d\n", pixel, pixelToInside[pixel]);
+          }
+        }
+        
+        if (debug) {
+          printf("done\n");
+        }
+        
+        // Each pixel in the input is now mapped to a boolean condition that
+        // indicates if that pixel is inside or outside the shape.
+        
+        for ( int i = 0; i < numPixels; i++ ) {
+          Coord c = regionCoords[i];
+          uint32_t quantPixel = outPixels[i];
+          
+#if defined(DEBUG)
+          assert(pixelToInside.count(quantPixel));
+#endif // DEBUG
+          bool isInside = pixelToInside[quantPixel];
+          
+          if (isInside) {
+            outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
+            
+            if (debug) {
+              printf("pixel 0x%08X at (%5d,%5d) is marked on (inside)\n", quantPixel, c.x, c.y);
+            }
+          } else {
+            if (debug) {
+              printf("pixel 0x%08X at (%5d,%5d) is marked off (outside)\n", quantPixel, c.x, c.y);
+            }
+          }
         }
       }
       
       delete [] colortable;
-      
-      // Grab the output 
-      
-      // srmTags
-      
-      /*
-      for ( int i = 0; i < numPixels; i++ ) {
-        Coord c = regionCoords[i];
-        
-        // FIXME: need to identify the "inside" color and then deselect all others.
-        // The "inside" one is typically the largest cound inside the "in" region.
-        
-        uint32_t pixel = outPixels[i];
-        Vec3b vec;
-        // vec = PixelToVec3b(pixel);
-        if (pixel == 0x0) {
-          vec = PixelToVec3b(pixel);
-        } else {
-          vec = PixelToVec3b(0xFFFFFFFF);
-        }
-        tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
-        
-        if (pixel == 0x0) {
-          // No-op when pixel is not on
-        } else {
-          outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
-        }
-      }
-       */
     }
     
     // Estimate the number of clusters to use in a quant operation by
