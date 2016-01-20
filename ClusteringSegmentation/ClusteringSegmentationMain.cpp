@@ -898,6 +898,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     Mat maskMat(inputImg.rows, inputImg.cols, CV_8UC1);
     Mat mergeMat(inputImg.rows, inputImg.cols, CV_8UC3);
     
+    mergeMat = Scalar(0, 0, 0);
+    
     auto spVec = spImage.sortSuperpixelsBySize();
     
     for ( int32_t tag : spVec ) {
@@ -916,7 +918,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         cout << "";
       }
       
-      if (maskWritten) {        
+      if (maskWritten) {
         vector<Point> locations;
         findNonZero(maskMat, locations);
         
@@ -1034,13 +1036,20 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           printf("pixel->srmTag table[0x%08X] = num coords %d\n", renderedTag, (int)vec.size());
           
           {
-          int32_t tagToRender = tag; // dst tag
-          //int32_t tagToRender = renderedTag; // src tag
-          Vec3b renderedTagVec = Vec3BToUID(tagToRender);
-          
-          for ( Coord c : vec ) {
-            mergeMat.at<Vec3b>(c.y, c.x) = renderedTagVec;
-          }
+            int32_t tagToRender = tag; // dst tag
+            //int32_t tagToRender = renderedTag; // src tag
+            Vec3b renderedTagVec = Vec3BToUID(tagToRender);
+            
+            for ( Coord c : vec ) {
+              Vec3b vec = mergeMat.at<Vec3b>(c.y, c.x);
+              
+              if (vec[0] == 0x0 && vec[1] == 0x0 && vec[2] == 0x0) {
+                mergeMat.at<Vec3b>(c.y, c.x) = renderedTagVec;
+              } else {
+                // Attempting to merge already merged pixel
+                assert(0);
+              }
+            }
           }
         } // foreach vec of coords
         
