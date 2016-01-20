@@ -1086,25 +1086,6 @@ captureRegionMask(SuperpixelImage &spImage,
         }
       }
       
-      // Create region mask as byte mask
-      
-      Mat srmRegionMask(inputImg.rows, inputImg.cols, CV_8UC1);
-      srmRegionMask = Scalar(0);
-      
-      for ( Coord c : coords ) {
-        srmRegionMask.at<uint8_t>(c.y, c.x) = 0xFF;
-      }
-      
-      if (debugDumpImages) {
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_srm_region_mask" << ".png";
-        string fname = fnameStream.str();
-        
-        imwrite(fname, srmRegionMask);
-        cout << "wrote " << fname << endl;
-        cout << "";
-      }
-      
       // Quant the region pixels to the provided cluster centers
       
 //      for ( uint32_t pixel : estClusterCenters ) {}
@@ -1173,12 +1154,15 @@ captureRegionMask(SuperpixelImage &spImage,
           cout << "wrote " << fname << endl;
         }
       }
-        
+      
       unordered_map<uint32_t, bool> pixelToInside;
-      insideOutsideTest(srmRegionMask, regionCoords, outPixels, pixelToInside);
+      
+      insideOutsideTest(inputImg.rows, inputImg.cols, coords, tag, regionCoords, outPixels, pixelToInside);
       
       // Each pixel in the input is now mapped to a boolean condition that
       // indicates if that pixel is inside or outside the shape.
+      
+      const bool debugOnOff = true;
       
       for ( int i = 0; i < numPixels; i++ ) {
         Coord c = regionCoords[i];
@@ -1192,11 +1176,11 @@ captureRegionMask(SuperpixelImage &spImage,
         if (isInside) {
           outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
           
-          if (debug) {
+          if (debug && debugOnOff) {
             printf("pixel 0x%08X at (%5d,%5d) is marked on (inside)\n", quantPixel, c.x, c.y);
           }
         } else {
-          if (debug) {
+          if (debug && debugOnOff) {
             printf("pixel 0x%08X at (%5d,%5d) is marked off (outside)\n", quantPixel, c.x, c.y);
           }
         }
@@ -1746,49 +1730,37 @@ captureRegionMask(SuperpixelImage &spImage,
         
         map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
         
-        // FIXME: need to use "voting" util method here for pixels inside
-        // and outside the region to determine status.
+        // Vote
         
-        //MOMO
+        unordered_map<uint32_t, bool> pixelToInside;
         
-        // Dump quant output, each pixel is replaced by color in colortable
+        insideOutsideTest(inputImg.rows, inputImg.cols, coords, tag, regionCoords, outPixels, pixelToInside);
         
-        if (debugDumpImages) {
-          Mat tmpResultImg = inputImg.clone();
-          tmpResultImg = Scalar(0,0,0xFF);
+        // Each pixel in the input is now mapped to a boolean condition that
+        // indicates if that pixel is inside or outside the shape.
+        
+        const bool debugOnOff = true;
+        
+        for ( int i = 0; i < numPixels; i++ ) {
+          Coord c = regionCoords[i];
+          uint32_t quantPixel = outPixels[i];
           
-          for ( int i = 0; i < numPixels; i++ ) {
-            Coord c = regionCoords[i];
+#if defined(DEBUG)
+          assert(pixelToInside.count(quantPixel));
+#endif // DEBUG
+          bool isInside = pixelToInside[quantPixel];
+          
+          if (isInside) {
+            outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
             
-            // FIXME: need to identify the "inside" color and then deselect all others.
-            // The "inside" one is typically the largest cound inside the "in" region.
-            
-            uint32_t pixel = outPixels[i];
-            Vec3b vec;
-            // vec = PixelToVec3b(pixel);
-            if (pixel == 0x0) {
-              vec = PixelToVec3b(pixel);
-            } else {
-              vec = PixelToVec3b(0xFFFFFFFF);
+            if (debug && debugOnOff) {
+              printf("pixel 0x%08X at (%5d,%5d) is marked on (inside)\n", quantPixel, c.x, c.y);
             }
-            tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
-            
-            if (pixel == 0x0) {
-              // No-op when pixel is not on
-            } else {
-              outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
+          } else {
+            if (debug && debugOnOff) {
+              printf("pixel 0x%08X at (%5d,%5d) is marked off (outside)\n", quantPixel, c.x, c.y);
             }
           }
-          
-          if (debugDumpImages)
-          {
-            std::stringstream fnameStream;
-            fnameStream << "srm" << "_tag_" << tag << "_quant_output2" << ".png";
-            string fname = fnameStream.str();
-            
-            imwrite(fname, tmpResultImg);
-            cout << "wrote " << fname << endl;
-          }          
         }
         
       }
@@ -1823,12 +1795,35 @@ typedef struct {
 // Foreach pixel in a colortable determine the "inside/outside" status of that
 // pixel based on a stats test as compared to the current known region.
 
-void insideOutsideTest(const Mat &isInsideMask,
+void insideOutsideTest(int32_t width,
+                       int32_t height,
+                       const vector<Coord> &coords,
+                       int32_t tag,
                        const vector<Coord> &regionCoords,
                        const uint32_t *outPixels,
                        unordered_map<uint32_t, bool> &pixelToInsideMap)
 {
   const bool debug = true;
+  const bool debugDumpImages = true;
+  
+  // Create region mask as byte mask
+  
+  Mat isInsideMask(height, width, CV_8UC1);
+  isInsideMask = Scalar(0);
+  
+  for ( Coord c : coords ) {
+    isInsideMask.at<uint8_t>(c.y, c.x) = 0xFF;
+  }
+  
+  if (debugDumpImages) {
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_srm_region_mask" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, isInsideMask);
+    cout << "wrote " << fname << endl;
+    cout << "";
+  }
   
   unordered_map<uint32_t, InsideOutside> srmTagInsideCount;
   
