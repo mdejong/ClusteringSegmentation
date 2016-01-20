@@ -604,7 +604,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     }
     
     // Lambda
-    auto lambdaFunc = [](int32_t tag, const vector<int32_t> &children) {
+    auto lambdaFunc = [](int32_t tag, const vector<int32_t> &children)->void {
       fprintf(stdout, "tag %5d has %5d children\n", tag, (int)children.size());
     };
     

@@ -152,7 +152,7 @@ public:
   // The check method accepts a superpixel tag and returns false
   // if the specific superpixel has already been processed.
   
-  bool check(int32_t tag) {
+  bool checkProcessed(int32_t tag) {
     if (locked.count(tag) > 0) {
       return false;
     }

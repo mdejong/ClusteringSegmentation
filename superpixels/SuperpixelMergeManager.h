@@ -61,7 +61,7 @@ public:
   // The check method accepts a superpixel tag and returns false
   // if the specific superpixel has already been processed.
   
-  bool check(int32_t tag) {
+  bool checkProcessed(int32_t tag) {
     return true;
   }
   
@@ -113,7 +113,7 @@ int SuperpixelMergeManagerFunc(T & mergeManager) {
   for ( ; it != endIter; ) {
     int32_t tag = *it;
     
-    if (mergeManager.check(tag) == false) {
+    if (mergeManager.checkProcessed(tag) == false) {
       if (debug) {
         cout << "superpixel " << tag << " is already processed" << endl;
       }

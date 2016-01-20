@@ -2001,7 +2001,48 @@ recurseSuperpixelContainment(SuperpixelImage &spImage,
   }
 
   for ( int32_t tag : rootTags ) {
+    // While the root tags are being processed, insert entries into the map
+    // so that these root tags are not seen as children.
+    
+    auto it = begin(rootSet);
+    auto endIt = end(rootSet);
+
+    vector<int32_t> siblings;
+    
+    bool keep = false;
+    
+    for ( ; it != endIt; ++it ) {
+      int32_t otherRootTag = *it;
+      if (otherRootTag == tag) {
+        // Keep all entries after this one
+        keep = true;
+        continue;
+      } else if (keep) {
+        siblings.push_back(otherRootTag);
+      }
+    }
+    
+    for ( int32_t sibling : siblings ) {
+      if (debug) {
+        cout << "sibling " << sibling << endl;
+      }
+#if defined(DEBUG)
+      assert(map.count(sibling) == 0);
+#endif
+      map[sibling] = vector<int32_t>();
+    }
+    
     recurseSuperpixelContainmentImpl(spImage, map, tag);
+    
+    for ( int32_t sibling : siblings ) {
+#if defined(DEBUG)
+      assert(map.count(sibling) > 0);
+      assert(map[sibling].size() == 0);
+#endif
+
+      map.erase(sibling);
+    }
+
   }
   
   return rootTags;
