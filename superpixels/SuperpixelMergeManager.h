@@ -65,6 +65,11 @@ public:
     return true;
   }
   
+  // This merged into method is invoked when a merge operation is completed
+  // and the merge logic wishes to record the tag for the merge dst.
+  
+  void mergedInto(int32_t tag) {}
+  
   // The checkEdge method accepts two superpixel tags, the dst tag
   // indicates the region typically merged into while the src
   // represents a neighbor of dst that is being checked.
@@ -179,13 +184,15 @@ int SuperpixelMergeManagerFunc(T & mergeManager) {
           // the neighbors have changed and this iteration has to end.
           
           if (debug) {
-            cout << "ending neighbors iteration since " << tag << " was merged into identical neighbor" << endl;
+            cout << "ending neighbors iteration since " << tag << " was merged into larger neighbor " << neighborTag << endl;
           }
           
+          mergeManager.mergedInto(neighborTag);
           break;
         } else {
           // Successfully merged neighbor into this superpixel
           mergedNeighbor = true;
+          mergeManager.mergedInto(tag);
         }
       }
     } // end foreach neighbors loop

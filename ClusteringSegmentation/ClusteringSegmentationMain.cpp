@@ -36,6 +36,8 @@
 
 #include "Util.h"
 
+#include <stack>
+
 using namespace cv;
 using namespace std;
 
@@ -603,12 +605,28 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       }
     }
     
+    stack<int32_t> insideOutStack;
+    vector<int32_t> srmInsideOutOrder;
+    
     // Lambda
-    auto lambdaFunc = [](int32_t tag, const vector<int32_t> &children)->void {
+    auto lambdaFunc = [&](int32_t tag, const vector<int32_t> &children)->void {
       fprintf(stdout, "tag %5d has %5d children\n", tag, (int)children.size());
+      
+      insideOutStack.push(tag);
     };
     
     recurseSuperpixelIterate(rootTags, containsTreeMap, lambdaFunc);
+    
+    // Print in stack order
+    
+    while (!insideOutStack.empty())
+    {
+      int32_t tag = insideOutStack.top();
+      fprintf(stdout, "tag %5d has %5d children\n", tag, (int)containsTreeMap[tag].size());
+      insideOutStack.pop();
+      
+      srmInsideOutOrder.push_back(tag);
+    }
     
     // Scan the largest superpixel regions in largest to smallest order and find
     // overlap between the SRM generated superpixels.
@@ -918,7 +936,42 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       mergeManager.otherTagsSetPtr = &otherTagsSet;
       
       SuperpixelMergeManagerFunc<SRMMergeManager>(mergeManager);
+
+      // Store the tag that other regions were merged into
+
+      int32_t mergedIntoTag = mergeManager.mergedIntoTag;
+      assert(mergedIntoTag != 0);
+      otherTagsSet.clear();
+      otherTagsSet.insert(mergedIntoTag);
+      
+      if ((1)) {
+        cout << "best srm tag " << tag << " to merged mapping is " << mergedIntoTag << endl;
+      }
     }
+    
+    // Iterate over srmSuperpixles in an inside out order and
+    // find the best matching superpixel based on the region.
+    
+    vector<int32_t> spVec = spImage.sortSuperpixelsBySize();
+
+    vector<int32_t> toInsert;
+    
+    for ( int32_t tag : srmInsideOutOrder ) {
+      set<int32_t> &otherTagsSet = srmSuperpixelToExactMap[tag];
+      
+      if ((1)) {
+        cout << "srm superpixels " << tag << " corresponds to other tags : ";
+        for ( int32_t otherTag : otherTagsSet ) {
+          cout << otherTag << " ";
+        }
+        cout << endl;
+      }
+      
+      for ( int32_t tag : otherTagsSet ) {
+        toInsert.push_back(tag);
+      }
+    }
+    spVec.insert(begin(spVec), begin(toInsert), end(toInsert));
     
     // With the overall merge completed, generate a block Mat
     // for each large superpixel so that specific pixel values
@@ -929,9 +982,17 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     
     mergeMat = Scalar(0, 0, 0);
     
-    auto spVec = spImage.sortSuperpixelsBySize();
+    // Render tags after merges above could have changed the superpixel UIDs
+    
+    spImage.fillMatrixWithSuperpixelTags(renderedTagsMat);
+    
+    unordered_map<int32_t, int32_t> seen;
     
     for ( int32_t tag : spVec ) {
+      if (seen.count(tag) > 0) {
+        continue;
+      }
+      seen[tag] = 0;
       
       bool maskWritten =
       captureRegionMask(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, maskMat);
@@ -963,6 +1024,14 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           
           Vec3b vec = renderedTagsMat.at<Vec3b>(y, x);
           uint32_t renderedTag = Vec3BToUID(vec);
+          
+#if defined(DEBUG)
+          Superpixel *srcSpPtr = spImage.getSuperpixelPtr(renderedTag);
+          if (srcSpPtr == NULL) {
+            printf("coord (%5d, %5d) = 0x%08X aka %d\n", c.x, c.y, renderedTag, renderedTag);
+          }
+          assert(srcSpPtr);
+#endif // DEBUG
           
           if (renderedTag == tag) {
             // The region that pixels will be merged into

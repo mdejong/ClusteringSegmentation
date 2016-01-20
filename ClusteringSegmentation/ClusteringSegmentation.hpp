@@ -109,6 +109,8 @@ public:
   vector<int32_t> allSortedSuperpixels;
   
   int32_t mergeStepAtStart;
+
+  int32_t mergedIntoTag;
   
   // Set to true to enable debug global step dump
   const bool debugDumpImages = true;
@@ -117,7 +119,7 @@ public:
   const bool debugDumpEachStepImages = false;
   
   SRMMergeManager(SuperpixelImage & _spImage, Mat &_inputImg)
-  : SuperpixelMergeManager(_spImage, _inputImg), mergeStepAtStart(0)
+  : SuperpixelMergeManager(_spImage, _inputImg), mergeStepAtStart(0), mergedIntoTag(0)
   {}
   
   // Invoked before the merge operation starts, useful to setup initial
@@ -173,6 +175,7 @@ public:
     
     if (mergeStepAtStart == mergeStep) {
       // No merges done for this superpixel
+      mergedIntoTag = tag;
     } else {
       if (debugDumpImages) {
         // Determine if a merge was done on this iter
@@ -190,6 +193,13 @@ public:
         cout << "wrote " << fname << endl;
       }
     }
+  }
+  
+  // This merged into method is invoked when a merge operation is completed
+  // and the merge logic wishes to record the tag for the merge dst.
+  
+  void mergedInto(int32_t tag) {
+    mergedIntoTag = tag;
   }
   
   // The checkEdge method accepts two superpixel tags, the dst tag

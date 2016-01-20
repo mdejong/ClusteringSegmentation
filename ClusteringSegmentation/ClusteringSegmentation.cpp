@@ -1996,16 +1996,33 @@ recurseSuperpixelContainment(SuperpixelImage &spImage,
     }
   }
   
+  // Sort by superpixel size and then determine order by decreasing size
+  
+  vector<int32_t> sortedSuperpixelTags = spImage.sortSuperpixelsBySize();
+
+  unordered_map<int32_t,int32_t> rootTagToSize;
+  
   for ( int32_t tag : rootSet ) {
-    rootTags.push_back(tag);
+    rootTagToSize[tag] = 0;
   }
+  
+  for ( int32_t tag : sortedSuperpixelTags ) {
+    if (rootTagToSize.count(tag) > 0) {
+      // This superpixel is in rootSet
+      rootTags.push_back(tag);
+    }
+  }
+  
+  sortedSuperpixelTags = vector<int32_t>();
+  
+  assert(rootTags.size() == rootSet.size());
 
   for ( int32_t tag : rootTags ) {
     // While the root tags are being processed, insert entries into the map
     // so that these root tags are not seen as children.
     
-    auto it = begin(rootSet);
-    auto endIt = end(rootSet);
+    auto it = begin(rootTags);
+    auto endIt = end(rootTags);
 
     vector<int32_t> siblings;
     

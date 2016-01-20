@@ -224,4 +224,74 @@
   XCTAssert(containsTreeMap.size() == 2, @"map");
 }
 
+// In this case the (1+1) superpixel has more coords in the superpixel
+// so it should be processed first.
+
+- (void)testParse2x2CountContainment {
+  
+  NSArray *pixelsArr = @[
+                         @(0), @(1),
+                         @(1), @(1),
+                         ];
+  
+  Mat tagsImg(2, 2, CV_MAKETYPE(CV_8U, 3));
+  
+  [self.class fillImageWithPixels:pixelsArr img:tagsImg];
+  
+  SuperpixelImage spImage;
+  
+  bool worked = SuperpixelImage::parse(tagsImg, spImage);
+  XCTAssert(worked, @"SuperpixelImage parse");
+  
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
+  XCTAssert(superpixels.size() == 2, @"num sumperpixels");
+  
+  XCTAssert(superpixels[0] == 0+1, @"tag");
+  XCTAssert(superpixels[1] == 1+1, @"tag");
+  
+  {
+    NSArray *result = [self.class formatSuperpixelCoords:spImage.getSuperpixelPtr(superpixels[0])];
+    
+    NSArray *expected = @[
+                          @[@(0), @(0)]
+                          ];
+    
+    XCTAssert([result isEqualToArray:expected], @"coords");
+  }
+  
+  {
+    NSArray *result = [self.class formatSuperpixelCoords:spImage.getSuperpixelPtr(superpixels[1])];
+    
+    NSArray *expected = @[
+                          @[@(1), @(0)],
+                          @[@(0), @(1)],
+                          @[@(1), @(1)]
+                          ];
+    
+    XCTAssert([result isEqualToArray:expected], @"coords");
+  }
+  
+  // Scan for containment, note that the superpixle with 3 coords is processed first
+  
+  unordered_map<int32_t, vector<int32_t> > containsTreeMap;
+  
+  vector<int32_t> rootTags = recurseSuperpixelContainment(spImage, tagsImg, containsTreeMap);
+  
+  // Lambda w capture
+  auto lambdaFunc = [=](int32_t tag, const vector<int32_t> &children)->void {
+    fprintf(stdout, "tag %5d has %5d children\n", tag, (int)children.size());
+    
+    XCTAssert(tag == 1 || tag == 2, @"tag");
+    XCTAssert(children.size() == 0, @"children");
+  };
+  
+  recurseSuperpixelIterate(rootTags, containsTreeMap, lambdaFunc);
+  
+  XCTAssert(rootTags.size() == 2, @"tags");
+  XCTAssert(rootTags[0] == 2, @"tags");
+  XCTAssert(rootTags[1] == 1, @"tags");
+  
+  XCTAssert(containsTreeMap.size() == 2, @"map");
+}
+
 @end
