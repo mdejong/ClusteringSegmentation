@@ -706,6 +706,8 @@ estimateClusterCenters(const Mat & inputImg,
     // Process each unique pixel in outUniqueTable and lookup the difference
     // from the input pixel to the output pixel.
     
+    uint32_t totalAbsComponentDeltas = 0;
+    
     for ( auto &pair : inToOutTable ) {
       uint32_t inPixel = pair.first;
       uint32_t outPixel = pair.second;
@@ -717,10 +719,28 @@ estimateClusterCenters(const Mat & inputImg,
       if (debug) {
         printf("unique pixel delta 0x%08X -> 0x%08X = 0x%08X\n", inPixel, outPixel, deltaPixel);
       }
+      
+      uint32_t absDeltaPixel = absPixel(deltaPixel);
+      
+      if (debug) {
+        printf("abs    pixel delta 0x%08X\n", absDeltaPixel);
+      }
+      
+      totalAbsComponentDeltas += absDeltaPixel;
     }
     
-    
-    //  clusterCenters.push_back();
+    if (totalAbsComponentDeltas == 0) {
+      isVeryClose = true;
+      
+      // Gather cluster centers and return to caller
+      
+      for ( auto &pair : inToOutTable ) {
+        //uint32_t inPixel = pair.first;
+        uint32_t outPixel = pair.second;
+        
+        clusterCenters.push_back(outPixel);
+      }
+    }
     
   } // end doClustering if block
   
@@ -759,11 +779,11 @@ captureRegionMask(SuperpixelImage &spImage,
   
   auto &coords = spImage.getSuperpixelPtr(tag)->coords;
   
-  if (coords.size() <= (superpixelDim*superpixelDim)) {
+  if (coords.size() <= ((superpixelDim*superpixelDim) >> 1)) {
     // A region contained in only a single block, don't process by itself
     
     if (debug) {
-      cout << "captureRegionMask : region indicated by tag " << tag << " is too small to process" << endl;
+      cout << "captureRegionMask : region indicated by tag " << tag << " is too small to process with N coords " << coords.size() << endl;
     }
     
     return false;
@@ -1092,6 +1112,7 @@ captureRegionMask(SuperpixelImage &spImage,
       // Generate quant based on the input
       
       int numColors = (uint32_t) estClusterCenters.size();
+      assert(numColors > 0);
       uint32_t numActualClusters = numColors;
 
       uint32_t *colortable = new uint32_t[numActualClusters];
@@ -1634,7 +1655,7 @@ captureRegionMask(SuperpixelImage &spImage,
         
         vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(clusterCenterPixels);
         
-        // Once cluster centers have been sorted by 3D color cube distance, emit "centers.png"
+        // Once cluster centers have been sorted by 3D color cube distance, emit as PNG
         
         Mat sortedQtableOutputMat = Mat(numActualClusters, 1, CV_8UC3);
         sortedQtableOutputMat = (Scalar) 0;
@@ -1776,6 +1797,11 @@ captureRegionMask(SuperpixelImage &spImage,
         // as "inside" while the other range is "outside".
         
         map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
+        
+        // FIXME: need to use "voting" util method here for pixels inside
+        // and outside the region to determine status.
+        
+        MOMO
         
         // Dump quant output, each pixel is replaced by color in colortable
         

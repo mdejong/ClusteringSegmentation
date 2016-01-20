@@ -120,6 +120,15 @@ uint32_t squareAsSignedByte(uint8_t bval) {
   return (uint32_t) val;
 }
 
+// Treat unsigned byte as a signed byte and return the absolute value
+
+static inline
+uint32_t absSignedByte(uint8_t bval) {
+  int32_t val = (int8_t)bval;
+  val = abs(val);
+  return (uint32_t) val;
+}
+
 // Fast integer hypot() approx by Alan Paeth
 
 static inline
@@ -136,6 +145,73 @@ uint32_t intHypotApprox(int32_t x1, int32_t y1, int32_t x2, int32_t y2)
     y2 = -y2;
   }
   return (x2 + y2 - (((x2>y2) ? y2 : x2) >> 1) );
+}
+
+// Determine if the byte value stored as a signed delta can be represented
+// when stored into a field of size nbits.
+//
+// The smallest allowable nbits is 2 and this would make it possible
+// to store (-1,0,1,2) as values.
+
+static inline
+bool canSignedValueBeRepresented(uint8_t bval, const uint8_t nbits) {
+  int32_t val = (int8_t)bval;
+  
+  if (val < 0) {
+    // for 2 bits valid negative values (-1,0)
+    // for 3 bits valid negative values (-3,-2,-1)
+    if (nbits == 0) {
+      return false;
+    } else if (nbits == 1) {
+      return false;
+    } else if (nbits == 2) {
+      if (val < -1) {
+        return false;
+      }
+    } else if (nbits == 3) {
+      if (val < -3) {
+        return false;
+      }
+    } else if (nbits == 4) {
+      if (val < -7) {
+        return false;
+      }
+      return false;
+    } else {
+      assert(0);
+    }
+  } else {
+    // for 0 bits, only 0 is a valid value
+    // for 1 bits valid positive values (0,1)
+    // for 2 bits valid positive values (0,1,2)
+    // for 3 bits valid positive values (0,1,2,3,4)
+    if (nbits == 0) {
+      if (val != 0) {
+        return false;
+      }
+    } else if (nbits == 1) {
+      if (val > 1) {
+        return false;
+      }
+    } else if (nbits == 2) {
+      if (val > (1+1)) {
+        return false;
+      }
+    } else if (nbits == 3) {
+      if (val > (3+1)) {
+        return false;
+      }
+    } else if (nbits == 4) {
+      if (val > (7+1)) {
+        return false;
+      }
+      return false;
+    } else {
+      assert(0);
+    }
+  }
+  
+  return true;
 }
 
 // Given a vector of pixels and a pixel that may or may not be in the vector, return
@@ -162,5 +238,22 @@ uint32_t predict_trivial_component_sub(uint32_t pixel, uint32_t prevPixel);
 // Reverse a trivial prediction, returns the pixel.
 
 uint32_t predict_trivial_component_add(uint32_t prevPixel, uint32_t residual);
+
+// Return abs() for each component of delta pixel
+
+static inline
+uint32_t absPixel(uint32_t pixel) {
+  uint32_t B = pixel & 0xFF;
+  uint32_t G = (pixel >> 8) & 0xFF;
+  uint32_t R = (pixel >> 16) & 0xFF;
+  uint32_t A = (pixel >> 24) & 0xFF;
+  
+  B = absSignedByte(B);
+  G = absSignedByte(G);
+  R = absSignedByte(R);
+  A = absSignedByte(A);
+
+  return (A << 24) | (R << 16) | (G << 8) | B;
+}
 
 #endif // SUPERPIXEL_UTIL_H
