@@ -603,17 +603,9 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       }
     }
     
-//    for ( int32_t tag : rootTags ) {
-//      cout << "root tag " << tag << endl;
-//      
-//      for ( int32_t childTag : containsTreeMap[tag] ) {
-//        cout << "child tag " << childTag << endl;
-//      }
-//    }
-    
     // Lambda
-    auto lambdaFunc = [](int32_t tag) {
-      cout << "node tag (lambda) " << tag << endl;
+    auto lambdaFunc = [](int32_t tag, const vector<int32_t> &children) {
+      fprintf(stdout, "tag %5d has %5d children\n", tag, (int)children.size());
     };
     
     recurseSuperpixelIterate(rootTags, containsTreeMap, lambdaFunc);

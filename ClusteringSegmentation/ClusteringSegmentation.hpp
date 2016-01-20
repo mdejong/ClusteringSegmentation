@@ -77,12 +77,13 @@ recurseSuperpixelContainment(SuperpixelImage &spImage,
 static inline
 void recurseSuperpixelIterate(const vector<int32_t> &tags,
                               unordered_map<int32_t, vector<int32_t> > &map,
-                              std::function<void(int32_t)> f)
+                              std::function<void(int32_t, const vector<int32_t> &)> f)
 {
   for ( int32_t tag : tags ) {
-    f(tag);
-    
     vector<int32_t> &children = map[tag];
+    
+    f(tag, children);
+    
     recurseSuperpixelIterate(children, map, f);
   }
 }
