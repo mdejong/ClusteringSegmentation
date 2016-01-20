@@ -1063,10 +1063,44 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           cout << "" << endl;
         }
         
-      } // foreach tag in sorted superpixels
-
+      } // if maskWritten
+      
+    } // foreach tag in sorted superpixels
+    
+    // Copy any pixel from renderedTagsMat unless mergeMat is set
+    // to a non-zero value already.
+    
+    for ( int y = 0; y < renderedTagsMat.rows; y++ ) {
+      for ( int x = 0; x < renderedTagsMat.cols; x++ ) {
+        Vec3b vec = mergeMat.at<Vec3b>(y, x);
+        
+        if (vec[0] == 0x0 && vec[1] == 0x0 && vec[2] == 0x0) {
+          Vec3b renderedTagVec = renderedTagsMat.at<Vec3b>(y, x);
+          mergeMat.at<Vec3b>(y, x) = renderedTagVec;
+        }
+      }
     }
     
+    if (debugWriteIntermediateFiles) {
+      std::stringstream fnameStream;
+      fnameStream << "srm_merged_all_regions" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, mergeMat);
+      cout << "wrote " << fname << endl;
+      cout << "" << endl;
+    }
+    
+    // mergeMat now contains tags after a split and merge operation
+    
+    spImage = SuperpixelImage();
+    
+    worked = SuperpixelImage::parse(mergeMat, spImage);
+    
+    if (!worked) {
+      return false;
+    }
+
   }
   
   // Generate result image after region based merging
