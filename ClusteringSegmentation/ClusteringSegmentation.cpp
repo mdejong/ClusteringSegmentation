@@ -1853,6 +1853,14 @@ recurseSuperpixelContainmentImpl(SuperpixelImage &spImage,
     cout << "recurseSuperpixelContainmentImpl for tag " << tag << " with N = " << spPtr->coords.size() << endl;
   }
   
+  if (map.count(tag) > 0) {
+    if (debug) {
+      cout << " already processed tag " << tag << endl;
+    }
+    
+    return;
+  }
+  
   // Before processing neightbors, mark this superpixel as processed
   
   vector<int32_t> &children = map[tag];
@@ -1927,42 +1935,74 @@ recurseSuperpixelContainmentImpl(SuperpixelImage &spImage,
 
 std::vector<int32_t>
 recurseSuperpixelContainment(SuperpixelImage &spImage,
+                             const Mat &tagsImg,
                              unordered_map<int32_t, std::vector<int32_t> > &map)
 {
   const bool debug = true;
-  
+
+  set<int32_t> rootSet;
   vector<int32_t> rootTags;
   
-  // Sort the superpixel by size, if the background is the most common element then this is typically the largest
-  // element.
-
-  uint32_t firstTag = 1;
+  // Determine the outermost set of tags by gathering all the tags along the edges of the image. In the
+  // tricky case where more than 1 superpixel is a sibling at the toplevel this logic figures out where
+  // to being with the recursion.
   
-  Superpixel *spPtr = spImage.getSuperpixelPtr(firstTag);
+  int width = tagsImg.cols;
+  int height = tagsImg.rows;
   
-  Coord firstCoord = spPtr->coords[0];
+  int32_t lastTag = 0;
   
-  assert(firstCoord.x == 0 && firstCoord.y == 0);
-  
-  vector<int32_t> sortedSuperpixelTags = spImage.sortSuperpixelsBySize();
-  assert(sortedSuperpixelTags.size() > 0);
-
-  for ( int32_t tag : sortedSuperpixelTags ) {
-    // Recurse into children of tag
+  for ( int y = 0; y < height; y++ ) {
+    bool isFirstRow = (y == 0);
+    bool isLastRow = (y == (height-1));
     
-    if (map.count(tag) > 0) {
-      if (debug) {
-        cout << " already processed children for tag " << tag << endl;
+    for ( int x = 0; x < width; x++ ) {
+      bool isFirstCol = (x == 0);
+      bool isLastCol = (x == (width-1));
+      
+      if (isFirstRow || isLastRow) {
+        // All pixels in first and last row processed
+        
+        if (debug) {
+          cout << "check " << x << "," << y << endl;
+        }
+      } else if (isFirstCol || isLastCol) {
+        // All pixels in first and last col processed
+        
+        if (debug) {
+          cout << "check " << x << "," << y << endl;
+        }
+      } else {
+        // Not on the edges
+        
+        if (debug) {
+          cout << "skip " << x << "," << y << endl;
+        }
+        
+        continue;
       }
-      continue;
+      
+      Vec3b vec = tagsImg.at<Vec3b>(y, x);
+      int32_t tag = Vec3BToUID(vec);
+      
+      if (tag != lastTag) {
+        if (debug) {
+          cout << "check " << x << "," << y << " with tag " << tag << endl;
+        }
+        
+        rootSet.insert(tag);
+      }
+      lastTag = tag;
     }
-    
-    // Find all neighbors of tag
-    
-    recurseSuperpixelContainmentImpl(spImage, map, tag);
   }
   
-  rootTags.push_back(firstTag);
+  for ( int32_t tag : rootSet ) {
+    rootTags.push_back(tag);
+  }
+
+  for ( int32_t tag : rootTags ) {
+    recurseSuperpixelContainmentImpl(spImage, map, tag);
+  }
   
   return rootTags;
 }

@@ -591,7 +591,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     
     unordered_map<int32_t, vector<int32_t> > containsTreeMap;
     
-    vector<int32_t> rootTags = recurseSuperpixelContainment(srmSpImage, containsTreeMap);
+    vector<int32_t> rootTags = recurseSuperpixelContainment(srmSpImage, srmTags, containsTreeMap);
     
     for ( auto &pair : containsTreeMap ) {
       uint32_t tag = pair.first;
@@ -603,13 +603,20 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       }
     }
     
-    for ( int32_t tag : rootTags ) {
-      cout << "root tag " << tag << endl;
-      
-      for ( int32_t childTag : containsTreeMap[tag] ) {
-        cout << "child tag " << childTag << endl;
-      }
-    }
+//    for ( int32_t tag : rootTags ) {
+//      cout << "root tag " << tag << endl;
+//      
+//      for ( int32_t childTag : containsTreeMap[tag] ) {
+//        cout << "child tag " << childTag << endl;
+//      }
+//    }
+    
+    // Lambda
+    auto lambdaFunc = [](int32_t tag) {
+      cout << "node tag (lambda) " << tag << endl;
+    };
+    
+    recurseSuperpixelIterate(rootTags, containsTreeMap, lambdaFunc);
     
     // Scan the largest superpixel regions in largest to smallest order and find
     // overlap between the SRM generated superpixels.

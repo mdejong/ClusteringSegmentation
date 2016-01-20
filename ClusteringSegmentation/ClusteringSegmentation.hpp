@@ -20,6 +20,7 @@ class Coord;
 using cv::Mat;
 using std::string;
 using std::unordered_map;
+using std::vector;
 
 void generateStaticColortable(Mat &inputImg, SuperpixelImage &spImage);
 
@@ -67,7 +68,24 @@ captureRegionMask(SuperpixelImage &spImage,
 
 std::vector<int32_t>
 recurseSuperpixelContainment(SuperpixelImage &spImage,
+                             const Mat &tagsImg,
                              unordered_map<int32_t, std::vector<int32_t> > &map);
+
+// Inlined typed recursion method to iterate over tree structure contained
+// in root tags and a map that maps the tag to a vector of children.
+
+static inline
+void recurseSuperpixelIterate(const vector<int32_t> &tags,
+                              unordered_map<int32_t, vector<int32_t> > &map,
+                              std::function<void(int32_t)> f)
+{
+  for ( int32_t tag : tags ) {
+    f(tag);
+    
+    vector<int32_t> &children = map[tag];
+    recurseSuperpixelIterate(children, map, f);
+  }
+}
 
 // Implement merge of superpixels based on coordinates gather from SRM process
 
