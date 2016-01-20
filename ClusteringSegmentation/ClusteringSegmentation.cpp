@@ -1838,4 +1838,131 @@ captureRegionMask(SuperpixelImage &spImage,
   return true;
 }
 
+// Invoked for each child of a container, returns the tags that are direct children of tag
 
+void
+recurseSuperpixelContainmentImpl(SuperpixelImage &spImage,
+                                 unordered_map<int32_t, std::vector<int32_t> > &map,
+                                 int32_t tag)
+{
+  const bool debug = true;
+  
+  Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
+  
+  if (debug) {
+    cout << "recurseSuperpixelContainmentImpl for tag " << tag << " with N = " << spPtr->coords.size() << endl;
+  }
+  
+  // Before processing neightbors, mark this superpixel as processed
+  
+  vector<int32_t> &children = map[tag];
+  
+  auto &neighbors = spImage.edgeTable.getNeighborsSet(tag);
+
+  if (debug) {
+    cout << "neighbors: " << endl;
+    
+    for ( int32_t neighborTag : neighbors ) {
+      cout << neighborTag << endl;
+    }
+  }
+
+  // When all the neighbors are iterated over and only tag is found to
+  // be a common neighbor then we know that all the neighbors are
+  // contained inside tag.
+  
+  set<int32_t> neighborsOfNeighborsSet;
+  
+  for ( int32_t neighborTag : neighbors ) {
+    if (debug) {
+      cout << "process neighbor " << neighborTag << endl;
+    }
+    
+    if (map.count(neighborTag) > 0) {
+      if (debug) {
+        cout << "already processed neighbor tag " << neighborTag << endl;
+      }
+      continue;
+    }
+    
+    neighborsOfNeighborsSet.insert(neighborTag);
+    
+    // Recurse into neighbors of neighbor at this point
+    
+    recurseSuperpixelContainmentImpl(spImage, map, neighborTag);
+  }
+  
+  if (debug) {
+    cout << "neighborsOfNeighborsSet: " << endl;
+    
+    for ( int32_t neighborTag : neighborsOfNeighborsSet ) {
+      cout << neighborTag << endl;
+    }
+  }
+
+  if (neighborsOfNeighborsSet.size() == 0) {
+    // nop when no unprocecssed neighbors
+  } else if (neighborsOfNeighborsSet.size() == 1) {
+    // Special case of just 1 neighbor, neighbor must be inside tag
+    
+    for ( int32_t neighborTag : neighborsOfNeighborsSet ) {
+      children.push_back(neighborTag);
+    }
+  } else {
+    assert(0);
+  }
+
+  if (debug) {
+    cout << "recurseSuperpixelContainmentImpl for " << tag << " finished with children: " << endl;
+    
+    for ( int32_t childTag : children ) {
+      cout << childTag << endl;
+    }
+  }
+  
+  return;
+}
+
+// Recurse into each superpixel and determine the children of each superpixel.
+
+std::vector<int32_t>
+recurseSuperpixelContainment(SuperpixelImage &spImage,
+                             unordered_map<int32_t, std::vector<int32_t> > &map)
+{
+  const bool debug = true;
+  
+  vector<int32_t> rootTags;
+  
+  // Sort the superpixel by size, if the background is the most common element then this is typically the largest
+  // element.
+
+  uint32_t firstTag = 1;
+  
+  Superpixel *spPtr = spImage.getSuperpixelPtr(firstTag);
+  
+  Coord firstCoord = spPtr->coords[0];
+  
+  assert(firstCoord.x == 0 && firstCoord.y == 0);
+  
+  vector<int32_t> sortedSuperpixelTags = spImage.sortSuperpixelsBySize();
+  assert(sortedSuperpixelTags.size() > 0);
+
+  for ( int32_t tag : sortedSuperpixelTags ) {
+    // Recurse into children of tag
+    
+    if (map.count(tag) > 0) {
+      if (debug) {
+        cout << " already processed children for tag " << tag << endl;
+      }
+      continue;
+    }
+    
+    // Find all neighbors of tag
+    
+    recurseSuperpixelContainmentImpl(spImage, map, tag);
+  }
+  
+  rootTags.push_back(firstTag);
+  
+  return rootTags;
+}

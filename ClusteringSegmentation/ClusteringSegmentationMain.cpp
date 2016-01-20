@@ -95,6 +95,11 @@ int main(int argc, const char** argv) {
   
   assert(inputImg.channels() == 3);
   
+  if (inputImg.rows == 0 || inputImg.cols == 0) {
+    cerr << "invalid size " << inputImg.size() << " for image data" << endl;
+    exit(1);
+  }
+  
   Mat resultImg;
   
   bool worked = clusteringCombine(inputImg, resultImg);
@@ -580,6 +585,31 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     srmSpImage.fillMatrixWithSuperpixelTags(srmTags);
     
     cout << "srm generated superpixels N = " << srmSpImage.superpixels.size() << endl;
+    
+    // Scan SRM superpixel regions in terms of containment, this generates a tree
+    // where each UID can contain 1 to N children.
+    
+    unordered_map<int32_t, vector<int32_t> > containsTreeMap;
+    
+    vector<int32_t> rootTags = recurseSuperpixelContainment(srmSpImage, containsTreeMap);
+    
+    for ( auto &pair : containsTreeMap ) {
+      uint32_t tag = pair.first;
+      vector<int32_t> children = pair.second;
+      
+      cout << "for srm superpixels tag " << tag << " num children are " << children.size() << endl;
+      for ( int32_t childTag : children ) {
+        cout << childTag << endl;
+      }
+    }
+    
+    for ( int32_t tag : rootTags ) {
+      cout << "root tag " << tag << endl;
+      
+      for ( int32_t childTag : containsTreeMap[tag] ) {
+        cout << "child tag " << childTag << endl;
+      }
+    }
     
     // Scan the largest superpixel regions in largest to smallest order and find
     // overlap between the SRM generated superpixels.

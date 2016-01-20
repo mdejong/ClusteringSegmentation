@@ -63,6 +63,12 @@ captureRegionMask(SuperpixelImage &spImage,
                   int superpixelDim,
                   Mat &outBlockMask);
 
+// Recurse into each superpixel and determine the children of each superpixel.
+
+std::vector<int32_t>
+recurseSuperpixelContainment(SuperpixelImage &spImage,
+                             unordered_map<int32_t, std::vector<int32_t> > &map);
+
 // Implement merge of superpixels based on coordinates gather from SRM process
 
 #import "SuperpixelMergeManager.h"
