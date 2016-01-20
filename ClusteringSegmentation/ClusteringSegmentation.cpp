@@ -1172,32 +1172,32 @@ captureRegionMask(SuperpixelImage &spImage,
           imwrite(fname, quantOffsetsMat);
           cout << "wrote " << fname << endl;
         }
+      }
         
-        unordered_map<uint32_t, bool> pixelToInside;
-        insideOutsideTest(srmRegionMask, regionCoords, outPixels, pixelToInside);
+      unordered_map<uint32_t, bool> pixelToInside;
+      insideOutsideTest(srmRegionMask, regionCoords, outPixels, pixelToInside);
+      
+      // Each pixel in the input is now mapped to a boolean condition that
+      // indicates if that pixel is inside or outside the shape.
+      
+      for ( int i = 0; i < numPixels; i++ ) {
+        Coord c = regionCoords[i];
+        uint32_t quantPixel = outPixels[i];
         
-        // Each pixel in the input is now mapped to a boolean condition that
-        // indicates if that pixel is inside or outside the shape.
-        
-        for ( int i = 0; i < numPixels; i++ ) {
-          Coord c = regionCoords[i];
-          uint32_t quantPixel = outPixels[i];
-          
 #if defined(DEBUG)
-          assert(pixelToInside.count(quantPixel));
+        assert(pixelToInside.count(quantPixel));
 #endif // DEBUG
-          bool isInside = pixelToInside[quantPixel];
+        bool isInside = pixelToInside[quantPixel];
+        
+        if (isInside) {
+          outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
           
-          if (isInside) {
-            outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
-            
-            if (debug) {
-              printf("pixel 0x%08X at (%5d,%5d) is marked on (inside)\n", quantPixel, c.x, c.y);
-            }
-          } else {
-            if (debug) {
-              printf("pixel 0x%08X at (%5d,%5d) is marked off (outside)\n", quantPixel, c.x, c.y);
-            }
+          if (debug) {
+            printf("pixel 0x%08X at (%5d,%5d) is marked on (inside)\n", quantPixel, c.x, c.y);
+          }
+        } else {
+          if (debug) {
+            printf("pixel 0x%08X at (%5d,%5d) is marked off (outside)\n", quantPixel, c.x, c.y);
           }
         }
       }
