@@ -114,6 +114,7 @@ int main(int argc, const char** argv) {
 
 bool clusteringCombine(Mat &inputImg, Mat &resultImg)
 {
+  const bool debug = true;
   const bool debugWriteIntermediateFiles = true;
   
   // Alloc object on stack
@@ -895,6 +896,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     // for the area around the region can be queried.
     
     Mat maskMat(inputImg.rows, inputImg.cols, CV_8UC1);
+    Mat mergeMat(inputImg.rows, inputImg.cols, CV_8UC3);
     
     auto spVec = spImage.sortSuperpixelsBySize();
     
@@ -914,9 +916,145 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         cout << "";
       }
       
-      // FIXME: each masked region generated at this point is pixel exact as opposed
-      // to block oriented. Once a merge has been done to extract specific pixels
-      // out then the blocks are no longer valid.
+      if (maskWritten) {        
+        vector<Point> locations;
+        findNonZero(maskMat, locations);
+        
+        unordered_map<uint32_t,vector<Coord> > coordTable;
+        
+        for ( Point p : locations ) {
+          int x = p.x;
+          int y = p.y;
+          
+          Coord c(x, y);
+          
+          // Find spImage tag associated with this (x,y) coordinate
+          
+          Vec3b vec = renderedTagsMat.at<Vec3b>(y, x);
+          uint32_t renderedTag = Vec3BToUID(vec);
+          
+          if (renderedTag == tag) {
+            // The region that pixels will be merged into
+          } else {
+            vector<Coord> &mergeCoords = coordTable[renderedTag];
+            mergeCoords.push_back(c);
+          }
+          
+          //printf("coord (%5d, %5d) = 0x%08X\n", c.x, c.y, pixel);
+        }
+        
+        if (debug) {
+          for ( auto &pair : coordTable ) {
+            uint32_t pixel = pair.first;
+            vector<Coord> &vec = pair.second;
+            
+            printf("pixel->srmTag table[0x%08X] = num coords %d\n", pixel, (int)vec.size());
+          }
+          
+          printf("\n");
+        }
+        
+        // Merge by pulling the indicated coordinates out of the associated superpixels
+        
+        Superpixel *dstSpPtr = spImage.getSuperpixelPtr(tag);
+        assert(dstSpPtr);
+        
+        for ( auto &pair : coordTable ) {
+          uint32_t renderedTag = pair.first;
+          vector<Coord> &vec = pair.second;
+          
+          Superpixel *srcSpPtr = spImage.getSuperpixelPtr(renderedTag);
+          assert(srcSpPtr);
+          
+          const vector<Coord> &srcCoords = srcSpPtr->coords;
+          
+          vector<Coord> filteredVec;
+          filteredVec.reserve(srcSpPtr->coords.size());
+          
+          unordered_map<Coord, uint32_t> toRemoveMap;
+          
+          //append_to_vector(dstSpPtr->coords, vec);
+          
+          for ( Coord c : vec ) {
+            toRemoveMap[c] = 0;
+          }
+          
+          if (debug) {
+            int i = 0;
+            for ( Coord c : vec ) {
+              printf("vec[%5d] = (%5d,%5d)\n", i, c.x, c.y);
+              i++;
+            }
+            
+            printf("\n");
+          }
+          
+          if (debug) {
+            int i = 0;
+            for ( auto &pair : toRemoveMap ) {
+              Coord c = pair.first;
+              printf("toRemoveMap[%5d] = (%5d,%5d)\n", i, c.x, c.y);
+              i++;
+            }
+            
+            printf("\n");
+          }
+          
+          if (debug) {
+            int i = 0;
+            for ( Coord c : srcCoords ) {
+              printf("pre filtered[%5d] = (%5d,%5d)\n", i, c.x, c.y);
+              i++;
+            }
+            
+            printf("\n");
+          }
+          
+          for ( Coord c : srcCoords ) {
+            if (toRemoveMap.count(c) > 0) {
+              // Skip to remove
+            } else {
+              filteredVec.push_back(c);
+            }
+          }
+          
+          if (debug) {
+            int i = 0;
+            for ( Coord c : filteredVec ) {
+              printf("filtered[%5d] = (%5d,%5d)\n", i, c.x, c.y);
+              i++;
+            }
+            
+            printf("\n");
+          }
+          
+          assert(srcCoords.size() == (filteredVec.size() + toRemoveMap.size()));
+          //dstSpPtr->coords = filteredVec;
+          
+          printf("pixel->srmTag table[0x%08X] = num coords %d\n", renderedTag, (int)vec.size());
+          
+          {
+          int32_t tagToRender = tag; // dst tag
+          //int32_t tagToRender = renderedTag; // src tag
+          Vec3b renderedTagVec = Vec3BToUID(tagToRender);
+          
+          for ( Coord c : vec ) {
+            mergeMat.at<Vec3b>(c.y, c.x) = renderedTagVec;
+          }
+          }
+        } // foreach vec of coords
+        
+        if (debugWriteIntermediateFiles) {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_merge_region" << ".png";
+          string fname = fnameStream.str();
+          
+          imwrite(fname, mergeMat);
+          cout << "wrote " << fname << endl;
+          cout << "" << endl;
+        }
+        
+      } // foreach tag in sorted superpixels
 
     }
     
