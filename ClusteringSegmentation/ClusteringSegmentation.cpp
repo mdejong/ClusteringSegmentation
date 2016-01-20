@@ -1173,60 +1173,8 @@ captureRegionMask(SuperpixelImage &spImage,
           cout << "wrote " << fname << endl;
         }
         
-        // Loop over each pixel passed through the quant logic and count up how
-        // often a pixel is "inside" the known region vs how often it is "outside".
-        
-        typedef struct {
-          int inside;
-          int outside;
-        } InsideOutside;
-        
-        unordered_map<uint32_t, InsideOutside> srmTagInsideCount;
-        
-        for ( int i = 0; i < numPixels; i++ ) {
-          Coord c = regionCoords[i];
-          uint32_t quantPixel = outPixels[i];
-          InsideOutside &inOut = srmTagInsideCount[quantPixel];
-          uint8_t isInside = srmRegionMask.at<uint8_t>(c.y, c.x);
-          if (isInside) {
-            inOut.inside += 1;
-          } else {
-            inOut.outside += 1;
-          }
-        }
-        
-        // Vote for inside/outside status for each unique pixel based on a GT 50% chance
-        
         unordered_map<uint32_t, bool> pixelToInside;
-        
-        for ( auto &pair : srmTagInsideCount ) {
-          uint32_t pixel = pair.first;
-          InsideOutside &inOut = pair.second;
-          
-          if (debug) {
-            printf("inout table[0x%08X] = (in out) (%5d %5d)\n", pixel, inOut.inside, inOut.outside);
-          }
-          
-          float percentOn = (float)inOut.inside / (inOut.inside + inOut.outside);
-          
-          if (debug) {
-            printf("percent on [0x%08X] = %0.3f\n", pixel, percentOn);
-          }
-          
-          if (percentOn > 0.5f) {
-            pixelToInside[pixel] = true;
-          } else {
-            pixelToInside[pixel] = false;
-          }
-          
-          if (debug) {
-            printf("pixelToInside[0x%08X] = %d\n", pixel, pixelToInside[pixel]);
-          }
-        }
-        
-        if (debug) {
-          printf("done\n");
-        }
+        insideOutsideTest(srmRegionMask, regionCoords, outPixels, pixelToInside);
         
         // Each pixel in the input is now mapped to a boolean condition that
         // indicates if that pixel is inside or outside the shape.
@@ -1801,7 +1749,7 @@ captureRegionMask(SuperpixelImage &spImage,
         // FIXME: need to use "voting" util method here for pixels inside
         // and outside the region to determine status.
         
-        MOMO
+        //MOMO
         
         // Dump quant output, each pixel is replaced by color in colortable
         
@@ -1862,6 +1810,76 @@ captureRegionMask(SuperpixelImage &spImage,
   }
   
   return true;
+}
+
+// Loop over each pixel passed through the quant logic and count up how
+// often a pixel is "inside" the known region vs how often it is "outside".
+
+typedef struct {
+  int inside;
+  int outside;
+} InsideOutside;
+
+// Foreach pixel in a colortable determine the "inside/outside" status of that
+// pixel based on a stats test as compared to the current known region.
+
+void insideOutsideTest(const Mat &isInsideMask,
+                       const vector<Coord> &regionCoords,
+                       const uint32_t *outPixels,
+                       unordered_map<uint32_t, bool> &pixelToInsideMap)
+{
+  const bool debug = true;
+  
+  unordered_map<uint32_t, InsideOutside> srmTagInsideCount;
+  
+  int numPixels = (int) regionCoords.size();
+  
+  for ( int i = 0; i < numPixels; i++ ) {
+    Coord c = regionCoords[i];
+    uint32_t quantPixel = outPixels[i];
+    InsideOutside &inOut = srmTagInsideCount[quantPixel];
+    uint8_t isInside = isInsideMask.at<uint8_t>(c.y, c.x);
+    if (isInside) {
+      inOut.inside += 1;
+    } else {
+      inOut.outside += 1;
+    }
+  }
+  
+  // Vote for inside/outside status for each unique pixel based on a GT 50% chance
+  
+//  unordered_map<uint32_t, bool> pixelToInside;
+  
+  for ( auto &pair : srmTagInsideCount ) {
+    uint32_t pixel = pair.first;
+    InsideOutside &inOut = pair.second;
+    
+    if (debug) {
+      printf("inout table[0x%08X] = (in out) (%5d %5d)\n", pixel, inOut.inside, inOut.outside);
+    }
+    
+    float percentOn = (float)inOut.inside / (inOut.inside + inOut.outside);
+    
+    if (debug) {
+      printf("percent on [0x%08X] = %0.3f\n", pixel, percentOn);
+    }
+    
+    if (percentOn > 0.5f) {
+      pixelToInsideMap[pixel] = true;
+    } else {
+      pixelToInsideMap[pixel] = false;
+    }
+    
+    if (debug) {
+      printf("pixelToInsideMap[0x%08X] = %d\n", pixel, pixelToInsideMap[pixel]);
+    }
+  }
+  
+  if (debug) {
+    printf("done\n");
+  }
+
+  return;
 }
 
 // Invoked for each child of a container, returns the tags that are direct children of tag

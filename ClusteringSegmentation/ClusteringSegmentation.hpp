@@ -64,6 +64,14 @@ captureRegionMask(SuperpixelImage &spImage,
                   int superpixelDim,
                   Mat &outBlockMask);
 
+// Foreach pixel in a colortable determine the "inside/outside" status of that
+// pixel based on a stats test as compared to the current known region.
+
+void insideOutsideTest(const Mat &isInsideMask,
+                       const vector<Coord> &regionCoords,
+                       const uint32_t *outPixels,
+                       unordered_map<uint32_t, bool> &pixelToInsideMap);
+
 // Recurse into each superpixel and determine the children of each superpixel.
 
 std::vector<int32_t>
