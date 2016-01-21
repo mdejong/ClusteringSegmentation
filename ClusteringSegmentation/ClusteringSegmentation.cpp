@@ -1086,11 +1086,7 @@ captureRegionMask(SuperpixelImage &spImage,
         }
       }
       
-      // Quant the region pixels to the provided cluster centers
-      
-//      for ( uint32_t pixel : estClusterCenters ) {}
-      
-      // Generate quant based on the input
+      // Generate cluster centers based on the indicated number of clusters N
       
       int numColors = (uint32_t) estClusterCenters.size();
       assert(numColors > 0);
@@ -1155,9 +1151,31 @@ captureRegionMask(SuperpixelImage &spImage,
         }
       }
       
+      // FIXME: make sure that colortableVec passed to insideOutsideTest() is actually sorted
+      
+      vector<uint32_t> sortedColortable;
+      
+      // Copy cluster colors into colortable after resorting
+      {
+        for (int i = 0; i < numColors; i++) {
+          uint32_t pixel = colortable[i];
+          sortedColortable.push_back(pixel);
+        }
+        
+        vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(sortedColortable);
+        
+        sortedColortable.clear();
+        
+        for (int i = 0; i < numColors; i++) {
+          int si = (int) sortedOffsets[i];
+          uint32_t pixel = colortable[si];
+          sortedColortable.push_back(pixel);
+        }
+      }
+      
       unordered_map<uint32_t, bool> pixelToInside;
       
-      insideOutsideTest(inputImg.rows, inputImg.cols, coords, tag, regionCoords, outPixels, pixelToInside);
+      insideOutsideTest(inputImg.rows, inputImg.cols, coords, tag, regionCoords, outPixels, sortedColortable, pixelToInside);
       
       // Each pixel in the input is now mapped to a boolean condition that
       // indicates if that pixel is inside or outside the shape.
@@ -1603,21 +1621,6 @@ captureRegionMask(SuperpixelImage &spImage,
           sortedColortable.push_back(pixel);
         }
         
-        // Generate histogram based on the sorted quant pixels
-        
-//        {
-//          unordered_map<uint32_t, uint32_t> pixelToQuantCountTable;
-//          
-//          generatePixelHistogram(tmpResultImg, pixelToQuantCountTable);
-//          
-//          for ( uint32_t pixel : sortedColortable ) {
-//            uint32_t count = pixelToQuantCountTable[pixel];
-//            uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
-//            fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixelNoAlpha, pixelNoAlpha, count);
-//          }
-//          fprintf(stdout, "done\n");
-//        }
-        
         if (debugDumpImages)
         {
           std::stringstream fnameStream;
@@ -1678,7 +1681,7 @@ captureRegionMask(SuperpixelImage &spImage,
       
       // Determine which cluster center is nearest to the peak pixels and use
       // that info to generate new cluster centers that are exactly at the
-      // peak value. This means that the peak pixels will quant exactly and the
+      // peak values. This means that the peak pixels will quant exactly and the
       // nearby cluster value will get the nearby but not exactly on pixels.
       // This should clearly separate the flat pixels from the gradient pixels.
       
@@ -1709,6 +1712,39 @@ captureRegionMask(SuperpixelImage &spImage,
           }
         }
         
+        if (debug) {
+          cout << "numActualClusters was " << numActualClusters << " while output numColors is " << numColors << endl;
+        }
+        
+        // Resort cluster centers
+        
+        vector<uint32_t> resortedColortable;
+        
+        {
+          for (int i = 0; i < numColors; i++) {
+            resortedColortable.push_back(colortable[i]);
+          }
+          
+          vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(resortedColortable);
+          
+          // Once cluster centers have been sorted by 3D color cube distance, emit as PNG
+          
+          resortedColortable.clear();
+          
+          for (int i = 0; i < numColors; i++) {
+            int si = (int) sortedOffsets[i];
+            uint32_t pixel = colortable[si];            
+            resortedColortable.push_back(pixel);
+          }
+          
+          // Copy pixel values in sorted order back into colortable
+          
+          for (int i = 0; i < numColors; i++) {
+            uint32_t pixel = resortedColortable[i];
+            colortable[i] = pixel;
+          }
+        }
+        
         if (debugDumpImages)
         {
           std::stringstream fnameStream;
@@ -1730,11 +1766,46 @@ captureRegionMask(SuperpixelImage &spImage,
         
         map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
         
-        // Vote
+        // Vote inside/outside
         
         unordered_map<uint32_t, bool> pixelToInside;
         
-        insideOutsideTest(inputImg.rows, inputImg.cols, coords, tag, regionCoords, outPixels, pixelToInside);
+        insideOutsideTest(inputImg.rows, inputImg.cols, coords, tag, regionCoords, outPixels, resortedColortable, pixelToInside);
+        
+        // Emit vote result table which basically shows the sorted pixel and the vote boolean as black or white
+        
+        if (debugDumpImages)
+        {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_quant_table3_votes" << ".png";
+          string fname = fnameStream.str();
+          
+          // Write image that contains one color in each row in a N x 2 image
+          
+          int numColortableEntries = (int) resortedColortable.size();
+          
+          Mat qtableOutputMat = Mat(numColortableEntries, 2, CV_8UC3);
+          qtableOutputMat = (Scalar) 0;
+          
+          for (int i = 0; i < numColortableEntries; i++) {
+            uint32_t pixel = resortedColortable[i];
+            Vec3b vec = PixelToVec3b(pixel);
+            qtableOutputMat.at<Vec3b>(i, 0) = vec;
+            
+            bool isInside = pixelToInside[pixel];
+            
+            if (isInside) {
+              vec = Vec3b(0xFF, 0xFF, 0xFF);
+            } else {
+              vec = Vec3b(0, 0, 0);
+            }
+            
+            qtableOutputMat.at<Vec3b>(i, 1) = vec;
+          }
+          
+          imwrite(fname, qtableOutputMat);
+          cout << "wrote " << fname << endl;
+        }
         
         // Each pixel in the input is now mapped to a boolean condition that
         // indicates if that pixel is inside or outside the shape.
@@ -1801,6 +1872,7 @@ void insideOutsideTest(int32_t width,
                        int32_t tag,
                        const vector<Coord> &regionCoords,
                        const uint32_t *outPixels,
+                       const vector<uint32_t> &sortedColortable,
                        unordered_map<uint32_t, bool> &pixelToInsideMap)
 {
   const bool debug = true;
@@ -1832,6 +1904,11 @@ void insideOutsideTest(int32_t width,
   for ( int i = 0; i < numPixels; i++ ) {
     Coord c = regionCoords[i];
     uint32_t quantPixel = outPixels[i];
+    
+    if (debug) {
+      printf("quantPixel 0x%08X\n", quantPixel);
+    }
+    
     InsideOutside &inOut = srmTagInsideCount[quantPixel];
     uint8_t isInside = isInsideMask.at<uint8_t>(c.y, c.x);
     if (isInside) {
@@ -1841,9 +1918,22 @@ void insideOutsideTest(int32_t width,
     }
   }
   
-  // Vote for inside/outside status for each unique pixel based on a GT 50% chance
+  for ( int i = 0; i < sortedColortable.size(); i++ ) {
+    uint32_t pixel = sortedColortable[i];
+    
+    if (srmTagInsideCount.count(pixel) == 0) {
+      InsideOutside &inOut = srmTagInsideCount[pixel];
+      // FIXME: assume it is inside somewhere in a gradient ?
+      // May not be important since no output pixels match it.
+      inOut.inside += 1;
+      inOut.outside += 0;
+    }
+  }
   
-//  unordered_map<uint32_t, bool> pixelToInside;
+  // If any colortable pixels did not appear in outPixels then add inside = 0
+  // votes for that pixel ?
+  
+  // Vote for inside/outside status for each unique pixel based on a GT 50% chance
   
   for ( auto &pair : srmTagInsideCount ) {
     uint32_t pixel = pair.first;
@@ -1871,9 +1961,76 @@ void insideOutsideTest(int32_t width,
   }
   
   if (debug) {
-    printf("done\n");
+    printf("done voting\n");
   }
+  
+  // Dump the colortable in sorted order
 
+  uint32_t prevPixel = sortedColortable[0];
+  
+  for ( int i = 0; i < sortedColortable.size(); i++ ) {
+    uint32_t pixel = sortedColortable[i];
+    
+    if (debug) {
+      printf("colortable[%5d] = 0x%08X\n", i, pixel);
+    }
+    
+    uint32_t deltaPixel = predict_trivial_component_sub(prevPixel, pixel);
+    
+    if (debug) {
+      printf("pixel delta 0x%08X -> 0x%08X = 0x%08X\n", prevPixel, pixel, deltaPixel);
+    }
+    
+    uint32_t absDeltaPixel = absPixel(deltaPixel);
+    
+    if (debug) {
+      printf("abs    pixel delta 0x%08X : %d %d %d\n", absDeltaPixel, (int)((absDeltaPixel >> 16)&0xFF), (int)((absDeltaPixel >> 8)&0xFF), (int)((absDeltaPixel >> 0)&0xFF));
+    }
+    
+    prevPixel = pixel;
+  }
+  
+  if (debug) {
+    printf("done measure table diff\n");
+  }
+  
+  // Print in/out state for each ordered table pixel
+  
+  for ( int i = 0; i < sortedColortable.size(); i++ ) {
+    uint32_t pixel = sortedColortable[i];
+    
+#if defined(DEBUG)
+    assert(pixelToInsideMap.count(pixel) > 0);
+#endif // DEBUG
+    
+    bool isInside = pixelToInsideMap[pixel];
+    
+    if (debug) {
+      printf("colortable[%5d] = 0x%08X : isInside %d\n", i, pixel, isInside);
+    }
+  }
+  
+  // FIXME: issue with in/out is that the src region does not expand all the way
+  // out and as a result the nearest quant table value does not have many in
+  // votes even though it is far from the black pixel. The better approach here
+  // would be to place a pixel very near black so that even though it is black
+  // with just a little green that pixel is seen as "inside". This kind of psudo
+  // pixel that is known to not be outside as compared to a black background
+  // (since it is a little bit green) should then be seen by this method as
+  // inside. Basically need to have a way to indicate that a specific colortable
+  // entry is "known to be inside" when it is automatically placed near the
+  // background color cluster center.
+  
+//  inout table[0x00000000] = (in out) (    0  1267)
+//  percent on [0x00000000] = 0.000
+  
+//  inout table[0x000C4400] = (in out) (    7    21)
+//  percent on [0x000C4400] = 0.250
+  
+  if (debug) {
+    printf("done in out boolean\n");
+  }
+  
   return;
 }
 

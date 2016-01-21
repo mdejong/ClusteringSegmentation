@@ -73,6 +73,7 @@ void insideOutsideTest(int32_t width,
                        int32_t tag,
                        const vector<Coord> &regionCoords,
                        const uint32_t *outPixels,
+                       const vector<uint32_t> &sortedColortable,
                        unordered_map<uint32_t, bool> &pixelToInsideMap);
 
 // Recurse into each superpixel and determine the children of each superpixel.
