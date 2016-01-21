@@ -240,6 +240,20 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     
     mergeMat = Scalar(0, 0, 0);
     
+    // Calculate adler before rescanning and attempting region merges
+    // in case the identical regions get regenerated and there is no
+    // reason to reparse.
+    
+    uint32_t tagsAdlerBeforeMerge = 0;
+    
+    for ( int y = 0; y < srmTags.rows; y++ ) {
+      for ( int x = 0; x < srmTags.cols; x++ ) {
+        Vec3b vec = srmTags.at<Vec3b>(y, x);
+        uint32_t pixel = Vec3BToUID(vec);
+        tagsAdlerBeforeMerge = my_adler32(tagsAdlerBeforeMerge, (unsigned char const *)&pixel, sizeof(uint32_t), 0);
+      }
+    }
+    
 //    unordered_map<int32_t, int32_t> seen;
     
     for ( int32_t tag : srmInsideOutOrder ) {
@@ -346,17 +360,36 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       cout << "" << endl;
     }
     
+    uint32_t tagsAdlerAfterMerge = 0;
+    
+    for ( int y = 0; y < srmTags.rows; y++ ) {
+      for ( int x = 0; x < srmTags.cols; x++ ) {
+        Vec3b vec = srmTags.at<Vec3b>(y, x);
+        uint32_t pixel = Vec3BToUID(vec);
+        tagsAdlerAfterMerge = my_adler32(tagsAdlerAfterMerge, (unsigned char const *)&pixel, sizeof(uint32_t), 0);
+      }
+    }
+    
+    // Don't do expensive reparsing if merge resulted in the exact same thing
+
+    if (tagsAdlerBeforeMerge == tagsAdlerAfterMerge) {
+      if (debug) {
+        cout << "merge operation did not change any tags" << endl;
+      }
+    } else {
+      spImage = SuperpixelImage();
+      
+      worked = SuperpixelImage::parse(mergeMat, spImage);
+      
+      if (!worked) {
+        return false;
+      }
+    }
+    
     // FIXME: If there have been no changes, no reason to reparse ? (check an adler32)
     
     // mergeMat now contains tags after a split and merge operation
     
-    spImage = SuperpixelImage();
-    
-    worked = SuperpixelImage::parse(mergeMat, spImage);
-    
-    if (!worked) {
-      return false;
-    }
   }
   
   // Generate result image after region based merging
