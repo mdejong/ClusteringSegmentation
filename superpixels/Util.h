@@ -256,4 +256,31 @@ uint32_t absPixel(uint32_t pixel) {
   return (A << 24) | (R << 16) | (G << 8) | B;
 }
 
+// Return delta from one point in a color cube to
+// another point. For example, if (0, 0, 0) to
+// (255, 255, 255) is computed then the returned
+// value is
+
+static inline
+void xyzDelta(uint32_t fromPixel, uint32_t toPixel, int32_t &dR, int32_t &dG, int32_t &dB) {
+  uint32_t B1 = fromPixel & 0xFF;
+  uint32_t G1 = (fromPixel >> 8) & 0xFF;
+  uint32_t R1 = (fromPixel >> 16) & 0xFF;
+  
+  uint32_t B2 = toPixel & 0xFF;
+  uint32_t G2 = (toPixel >> 8) & 0xFF;
+  uint32_t R2 = (toPixel >> 16) & 0xFF;
+  
+  dB = (int32_t)B2 - (int32_t)B1;
+  dG = (int32_t)G2 - (int32_t)G1;
+  dR = (int32_t)R2 - (int32_t)R1;
+  
+  return;
+}
+
+// Scale a delta vector to a close non-zero approximation for each component.
+// For example, (128, 255, 1) would be scaled to (1, 2, 0).
+
+void xyzDeltaToUnitVector(int32_t &dR, int32_t &dG, int32_t &dB);
+
 #endif // SUPERPIXEL_UTIL_H

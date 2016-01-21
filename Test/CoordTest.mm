@@ -2249,4 +2249,89 @@
   return;
 }
 
+- (void)testCubeDeltas
+{
+  uint32_t B, G, R;
+  uint32_t fromPixel, toPixel;
+
+  B = 0;
+  G = 0;
+  R = 0;
+  fromPixel = (R << 16) | (G << 8) | (B);
+
+  B = 255;
+  G = 254;
+  R = 255;
+  toPixel = (R << 16) | (G << 8) | (B);
+  
+  int32_t sR, sG, sB;
+  xyzDelta(fromPixel, toPixel, sR, sG, sB);
+  
+  XCTAssert(sR == 255, @"votes");
+  XCTAssert(sG == 254, @"votes");
+  XCTAssert(sB == 255, @"votes");
+
+  xyzDelta(toPixel, fromPixel, sR, sG, sB);
+  
+  XCTAssert(sR == -255, @"votes");
+  XCTAssert(sG == -254, @"votes");
+  XCTAssert(sB == -255, @"votes");
+}
+
+- (void)testCubeDeltaRatios
+{
+  uint32_t B, G, R;
+  uint32_t fromPixel, toPixel;
+  
+  B = 0;
+  G = 0;
+  R = 1;
+  fromPixel = (R << 16) | (G << 8) | (B);
+  
+  B = 255;
+  G = 128;
+  R = 0;
+  toPixel = (R << 16) | (G << 8) | (B);
+
+  int32_t sR, sG, sB;
+  xyzDelta(fromPixel, toPixel, sR, sG, sB);
+  
+  XCTAssert(sB == 255, @"votes");
+  XCTAssert(sG == 128, @"votes");
+  XCTAssert(sR == -1, @"votes");
+  
+  xyzDeltaToUnitVector(sR, sG, sB);
+
+  XCTAssert(sB == 2.0f, @"votes");
+  XCTAssert(sG == 1.0f, @"votes");
+  XCTAssert(sR == 0.0f, @"votes");
+
+  sB = 0;
+  sG = 0;
+  sR = 0;
+  xyzDeltaToUnitVector(sR, sG, sB);
+  
+  XCTAssert(sB == 0.0f, @"votes");
+  XCTAssert(sG == 0.0f, @"votes");
+  XCTAssert(sR == 0.0f, @"votes");
+
+  sB = 0;
+  sG = 1;
+  sR = 0;
+  xyzDeltaToUnitVector(sR, sG, sB);
+  
+  XCTAssert(sB == 0.0f, @"votes");
+  XCTAssert(sG == 1.0f, @"votes");
+  XCTAssert(sR == 0.0f, @"votes");
+  
+  sB = 8;
+  sG = 30;
+  sR = 4;
+  xyzDeltaToUnitVector(sR, sG, sB);
+  
+  XCTAssert(sB == 1.0f, @"votes");
+  XCTAssert(sG == 4.0f, @"votes");
+  XCTAssert(sR == 1.0f, @"votes");
+}
+
 @end

@@ -1654,7 +1654,7 @@ captureRegionMask(SuperpixelImage &spImage,
           assert(pixel_to_sorted_offset.count(pixel) > 0);
           uint32_t offset = pixel_to_sorted_offset[pixel];
           
-          if ((debug)) {
+          if ((debug) && false) {
             char buffer[1024];
             snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is %d -> offset %d\n", c.x, c.y, pixel, offset);
             cout << buffer;
@@ -1693,10 +1693,116 @@ captureRegionMask(SuperpixelImage &spImage,
           pixel = pixel & 0x00FFFFFF;
           pixelToQuantCountTable[pixel] = i;
         }
+
+        {
+          int i = 0;
+          
+          for ( uint32_t pixel : peakPixels ) {
+            pixel = pixel & 0x00FFFFFF;
+            if (debug) {
+              printf("peak[%5d] = 0x%08X\n", i, pixel);
+            }
+            i += 1;
+          }
+        }
         
-        for ( uint32_t pixel : peakPixels ) {
-          pixel = pixel & 0x00FFFFFF;
-          pixelToQuantCountTable[pixel] = 0;
+        {
+          uint32_t prevPeak = 0x0;
+          
+          for ( int i = 0; i < peakPixels.size(); i++ ) {
+            uint32_t pixel = peakPixels[i];
+            pixel = pixel & 0x00FFFFFF;
+            
+            if (pixelToQuantCountTable.count(pixel) == 0) {
+              pixelToQuantCountTable[pixel] = 0;
+              
+              if (debug) {
+                printf("added peak pixel 0x%08X\n", pixel);
+              }
+            } else {
+              if (debug) {
+                printf("colortable already contains peak pixel 0x%08X\n", pixel);
+              }
+            }
+            
+            int32_t sR, sG, sB;
+            
+            xyzDelta(prevPeak, pixel, sR, sG, sB);
+            
+            if (debug) {
+              printf("peakToPeakDelta 0x%08X -> 0x%08X = (%d %d %d)\n", prevPeak, pixel, sR, sG, sB);
+            }
+            
+            xyzDeltaToUnitVector(sR, sG, sB);
+            
+            if (debug) {
+              printf("unit vector (%5d %5d %5d)\n", sR, sG, sB);
+            }
+            
+            if (1) {
+              // Add book end in direction of next peak, but very close
+              
+              // FIXME: in additon to adding the peak, make sure that
+              // another value is very near the peak to act as a book
+              // end in the direction of the other peak(s). Might need
+              // one bookend for each other major peak.
+              
+              if ((i == 0) && (peakPixels.size() > 1)) {
+                // Add bookend by finding the delta to the next peak, since
+                // this is the first element and it is likely to be 0x0.
+                
+                uint32_t nextPeak = peakPixels[1];
+                
+                // Note that this delta is not quite correct since the value
+                // 0xFF must be treated as the maximum delta, not -1 to flip
+                // from 0 to 255.
+                
+                xyzDelta(pixel, nextPeak, sR, sG, sB);
+                
+                if (debug) {
+                  printf("peakToPeakDelta 0x%08X -> 0x%08X = (%d %d %d)\n", pixel, nextPeak, sR, sG, sB);
+                }
+                
+                xyzDeltaToUnitVector(sR, sG, sB);
+                
+                if (debug) {
+                  printf("unit vector (%5d %5d %5d)\n", sR, sG, sB);
+                }
+                
+                // Add vector to current pixel
+
+                Vec3f curVec(pixel & 0xFF, (pixel >> 8) & 0xFF, (pixel >> 16) & 0xFF);
+                Vec3f deltaVec(sB, sG, sR);
+                Vec3f sumVec = curVec + deltaVec;
+
+                if (debug) {
+                  cout << "cur + delta = booekend : " << curVec << " + " << deltaVec << " = " << sumVec << endl;
+                }
+                
+                uint32_t B = round(sumVec[0]);
+                uint32_t G = round(sumVec[1]);
+                uint32_t R = round(sumVec[2]);
+                
+                uint32_t bePixel = (R << 16) | (G << 8) | B;
+                
+                if (pixelToQuantCountTable.count(bePixel) == 0) {
+                  pixelToQuantCountTable[bePixel] = 0;
+                  
+                  if (debug) {
+                    printf("added bookend pixel 0x%08X\n", bePixel);
+                  }
+                } else {
+                  if (debug) {
+                    printf("colortable already contains bookend pixel 0x%08X\n", bePixel);
+                  }
+                }
+
+              }
+
+            }
+            
+            prevPeak = pixel;
+          }
         }
         
         int numColors = (int)pixelToQuantCountTable.size();
@@ -1765,6 +1871,29 @@ captureRegionMask(SuperpixelImage &spImage,
         // as "inside" while the other range is "outside".
         
         map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
+        
+        // Dump output, which is the input colors run through the color table
+        
+        if (debugDumpImages) {
+          Mat tmpResultImg = inputImg.clone();
+          tmpResultImg = Scalar(0,0,0xFF);
+          
+          for ( int i = 0; i < numPixels; i++ ) {
+            Coord c = regionCoords[i];
+            uint32_t pixel = outPixels[i];
+            Vec3b vec = PixelToVec3b(pixel);
+            tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+          }
+          
+          {
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_quant_output2" << ".png";
+            string fname = fnameStream.str();
+            
+            imwrite(fname, tmpResultImg);
+            cout << "wrote " << fname << endl;
+          }
+        }
         
         // Vote inside/outside
         
@@ -1905,7 +2034,7 @@ void insideOutsideTest(int32_t width,
     Coord c = regionCoords[i];
     uint32_t quantPixel = outPixels[i];
     
-    if (debug) {
+    if (debug && 0) {
       printf("quantPixel 0x%08X\n", quantPixel);
     }
     
@@ -1935,9 +2064,9 @@ void insideOutsideTest(int32_t width,
   
   // Vote for inside/outside status for each unique pixel based on a GT 50% chance
   
-  for ( auto &pair : srmTagInsideCount ) {
-    uint32_t pixel = pair.first;
-    InsideOutside &inOut = pair.second;
+  for ( int i = 0; i < sortedColortable.size(); i++ ) {
+    uint32_t pixel = sortedColortable[i];
+    InsideOutside &inOut = srmTagInsideCount[pixel];
     
     if (debug) {
       printf("inout table[0x%08X] = (in out) (%5d %5d)\n", pixel, inOut.inside, inOut.outside);
@@ -2026,6 +2155,20 @@ void insideOutsideTest(int32_t width,
   
 //  inout table[0x000C4400] = (in out) (    7    21)
 //  percent on [0x000C4400] = 0.250
+
+// w bookend (known to be inside, leading right up to known solid color)
+  
+//  inout table[0x00000000] = (in out) (    0  1215)
+//  percent on [0x00000000] = 0.000
+//  pixelToInsideMap[0x00000000] = 0
+//  inout table[0x00010300] = (in out) (    0    52)
+//  percent on [0x00010300] = 0.000
+//  pixelToInsideMap[0x00010300] = 0
+//  inout table[0x000C4400] = (in out) (    7    21)
+//  percent on [0x000C4400] = 0.250
+//  pixelToInsideMap[0x000C4400] = 0
+//  inout table[0x00178000] = (in out) (  174     0)
+//  percent on [0x00178000] = 1.000
   
   if (debug) {
     printf("done in out boolean\n");

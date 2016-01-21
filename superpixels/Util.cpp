@@ -634,3 +634,106 @@ uint32_t predict_trivial_component_add(uint32_t prevPixel, uint32_t residual)
   uint32_t pixel = component_sub_8by4(mat, mat, 2, 1, 0);
   return pixel;
 }
+
+// Scale a delta vector to a close non-zero approximation for each component.
+// For example, (128, 255, 1) would be scaled to (1, 2, 0).
+
+void xyzDeltaToUnitVector(int32_t &dR, int32_t &dG, int32_t &dB) {
+  const bool debug = true;
+  
+  float scale = sqrt(float(dR*dR + dG*dG + dB*dB));
+  
+  if (scale == 0.0f) {
+    dR = 0;
+    dG = 0;
+    dB = 0;
+    return;
+  }
+  
+  assert(scale > 0.0f);
+  
+  float ratioR = dR / scale;
+  float ratioG = dG / scale;
+  float ratioB = dB / scale;
+  
+  if (debug) {
+  printf("ratioR %0.2f\n", ratioR);
+  printf("ratioG %0.2f\n", ratioG);
+  printf("ratioB %0.2f\n", ratioB);
+  }
+  
+  // Choose from 5,4,3,2,1 as the scale.
+  
+  int first3 = 0;
+  int first2 = 0;
+  int first1 = 0;
+  
+  int scaledR = 0;
+  int scaledG = 0;
+  int scaledB = 0;
+  
+  const int max = 10;
+  
+  for ( int i = 1; i < max; i++ ) {
+    scaledR = round(ratioR * i);
+    scaledG = round(ratioG * i);
+    scaledB = round(ratioB * i);
+    
+    uint32_t numNonZero = 0;
+    if (scaledR > 0) {
+      numNonZero++;
+    }
+    if (scaledG > 0) {
+      numNonZero++;
+    }
+    if (scaledB > 0) {
+      numNonZero++;
+    }
+    
+    if (debug) {
+      printf("(dR dG dB) for %d = (%3d %3d %3d) num-num-zero %d\n", i, scaledR, scaledG, scaledB, numNonZero);
+    }
+    
+    if (numNonZero == 3 && first3 == 0) {
+      first3 = i;
+    }
+    
+    if (numNonZero == 2 && first2 == 0) {
+      first2 = i;
+    }
+    
+    if (numNonZero == 1 && first1 == 0) {
+      first1 = i;
+    }
+  }
+  
+  if (first1 == 0) {
+    // Multiply by scale so that at least 1 unit is non-zero
+    scaledR = round(ratioR * scale);
+    scaledG = round(ratioG * scale);
+    scaledB = round(ratioB * scale);
+  } else if (first2 == 0) {
+    scaledR = round(ratioR * first1);
+    scaledG = round(ratioG * first1);
+    scaledB = round(ratioB * first1);
+  } else if (first3 == 0) {
+    scaledR = round(ratioR * first2);
+    scaledG = round(ratioG * first2);
+    scaledB = round(ratioB * first2);
+  } else if (first3 != 0) {
+    scaledR = round(ratioR * first3);
+    scaledG = round(ratioG * first3);
+    scaledB = round(ratioB * first3);
+  }
+  
+  dR = scaledR;
+  dG = scaledG;
+  dB = scaledB;
+  
+  if (debug) {
+    printf("(dR dG dB) = (%3d %3d %3d)\n", scaledR, scaledG, scaledB);
+  }
+  
+  return;
+}
+
