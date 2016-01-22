@@ -940,6 +940,15 @@ captureRegionMask(SuperpixelImage &spImage,
       }
     }
     
+    // FIXME: before running the color logic, it is important to also mask out
+    // any colors inside the morph region that have already been claimed by
+    // regions farther "inside". For example, a circle in a circle can be
+    // made more effective by not considering the pixels that have been
+    // claimed for the interior colors. There are fewer points to process
+    // and fewer vectors to consider as possible matches. The morph mask
+    // above does the job of masking around, but masking the interior
+    // regions that are already fully processed should be done also.
+    
     // Quant to evenly spaced grid to get estimate for number of clusters N
     
     vector<uint32_t> colors = getSubdividedColors();
@@ -1173,14 +1182,14 @@ captureRegionMask(SuperpixelImage &spImage,
         }
       }
       
-      unordered_map<uint32_t, bool> pixelToInside;
+      unordered_map<uint32_t, InsideOutsideRecord> pixelToInside;
       
       insideOutsideTest(inputImg.rows, inputImg.cols, coords, tag, regionCoords, outPixels, sortedColortable, pixelToInside);
       
       // Each pixel in the input is now mapped to a boolean condition that
       // indicates if that pixel is inside or outside the shape.
       
-      const bool debugOnOff = true;
+      const bool debugOnOff = false;
       
       for ( int i = 0; i < numPixels; i++ ) {
         Coord c = regionCoords[i];
@@ -1189,7 +1198,7 @@ captureRegionMask(SuperpixelImage &spImage,
 #if defined(DEBUG)
         assert(pixelToInside.count(quantPixel));
 #endif // DEBUG
-        bool isInside = pixelToInside[quantPixel];
+        bool isInside = pixelToInside[quantPixel].isInside;
         
         if (isInside) {
           outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
@@ -1350,6 +1359,8 @@ captureRegionMask(SuperpixelImage &spImage,
         
         int i = 0;
         
+        // Insert zero slow with zero count so that a peak can
+        // be detected in the first position.
         i += 1;
         
         for ( uint32_t pixel : sortedColortable ) {
@@ -1361,7 +1372,7 @@ captureRegionMask(SuperpixelImage &spImage,
           data[1][i] = count;
           
           if ((0)) {
-            fprintf(stderr, "pixel %05d : 0x%08X = %d\n", i, pixelNoAlpha, count);
+            fprintf(stderr, "data[%05d] = 0x%08X -> count %d\n", i, pixelNoAlpha, count);
           }
           
           i += 1;
@@ -1391,7 +1402,6 @@ captureRegionMask(SuperpixelImage &spImage,
         }
         
         fprintf(stdout, "num emi_peaks %d\n", emi_count);
-        fprintf(stdout, "num absorp_peaks %d\n", absorp_count);
         
         for(i = 0; i < emi_count; ++i) {
           int offset = emi_peaks[i];
@@ -1401,7 +1411,7 @@ captureRegionMask(SuperpixelImage &spImage,
           peakPixels.push_back(pixel);
         }
         
-        puts("");
+        fprintf(stdout, "num absorp_peaks %d\n", absorp_count);
         
         for(i = 0; i < absorp_count; ++i) {
           int offset = absorp_peaks[i];
@@ -1683,7 +1693,7 @@ captureRegionMask(SuperpixelImage &spImage,
       // for (B,G,R) values and emit as an image that contains the peak
       // points and the center of mass point.
       
-      if ((0)) {
+      if ((1)) {
         vector<Vec3b> clusterCenterPoints;
         
         for (int i = 0; i < numActualClusters; i++) {
@@ -1735,7 +1745,7 @@ captureRegionMask(SuperpixelImage &spImage,
       // Pass all input points to the fitLine() method in attempt to get a best
       // fit line.
       
-      if ((0)) {
+      if ((1)) {
         vector<Vec3b> allRegionPoints;
         
         for (int i = 0; i < numPixels; i++) {
@@ -2198,7 +2208,7 @@ captureRegionMask(SuperpixelImage &spImage,
         
         // Vote inside/outside
         
-        unordered_map<uint32_t, bool> pixelToInside;
+        unordered_map<uint32_t, InsideOutsideRecord> pixelToInside;
         
         insideOutsideTest(inputImg.rows, inputImg.cols, coords, tag, regionCoords, outPixels, resortedColortable, pixelToInside);
         
@@ -2222,7 +2232,7 @@ captureRegionMask(SuperpixelImage &spImage,
             Vec3b vec = PixelToVec3b(pixel);
             qtableOutputMat.at<Vec3b>(i, 0) = vec;
             
-            bool isInside = pixelToInside[pixel];
+            bool isInside = pixelToInside[pixel].isInside;
             
             if (isInside) {
               vec = Vec3b(0xFF, 0xFF, 0xFF);
@@ -2237,10 +2247,25 @@ captureRegionMask(SuperpixelImage &spImage,
           cout << "wrote " << fname << endl;
         }
         
+        // If after the voting, it becomes clear that one of the regions
+        // is always outside the in/out region defined by the tags, then
+        // pixels in that range can be left out of the vector calculation.
+        // For example, the black outside the red in OneCircleInsideAnother.png.
+        // In this case, the pixels that quant to the black to red vector
+        // can all be ignored and the blue to red vector can be extracted
+        // cleanly. This is useful to turn off the in/out vote of certain
+        // pixels if on with zero votes and to "capture" all the possible
+        // pixels along the vector line up to the bookend and identify those
+        // as in/out. The extends of the inner region should fully capture
+        // gradient pixels at the bound, so that if the outer region is
+        // otherwise uniform then it will not need to know about the inner
+        // region color use at all and can be free to predict as if the
+        // inner region shift does not happen.
+        
         // Each pixel in the input is now mapped to a boolean condition that
         // indicates if that pixel is inside or outside the shape.
         
-        const bool debugOnOff = true;
+        const bool debugOnOff = false;
         
         for ( int i = 0; i < numPixels; i++ ) {
           Coord c = regionCoords[i];
@@ -2249,7 +2274,7 @@ captureRegionMask(SuperpixelImage &spImage,
 #if defined(DEBUG)
           assert(pixelToInside.count(quantPixel));
 #endif // DEBUG
-          bool isInside = pixelToInside[quantPixel];
+          bool isInside = pixelToInside[quantPixel].isInside;
           
           if (isInside) {
             outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
@@ -2288,11 +2313,6 @@ captureRegionMask(SuperpixelImage &spImage,
 // Loop over each pixel passed through the quant logic and count up how
 // often a pixel is "inside" the known region vs how often it is "outside".
 
-typedef struct {
-  int inside;
-  int outside;
-} InsideOutside;
-
 // Foreach pixel in a colortable determine the "inside/outside" status of that
 // pixel based on a stats test as compared to the current known region.
 
@@ -2303,7 +2323,7 @@ void insideOutsideTest(int32_t width,
                        const vector<Coord> &regionCoords,
                        const uint32_t *outPixels,
                        const vector<uint32_t> &sortedColortable,
-                       unordered_map<uint32_t, bool> &pixelToInsideMap)
+                       unordered_map<uint32_t, InsideOutsideRecord> &pixelToInsideMap)
 {
   const bool debug = true;
   const bool debugDumpImages = true;
@@ -2327,7 +2347,7 @@ void insideOutsideTest(int32_t width,
     cout << "";
   }
   
-  unordered_map<uint32_t, InsideOutside> srmTagInsideCount;
+  //unordered_map<uint32_t, InsideOutside> srmTagInsideCount;
   
   int numPixels = (int) regionCoords.size();
   
@@ -2339,7 +2359,7 @@ void insideOutsideTest(int32_t width,
       printf("quantPixel 0x%08X\n", quantPixel);
     }
     
-    InsideOutside &inOut = srmTagInsideCount[quantPixel];
+    InsideOutsideRecord &inOut = pixelToInsideMap[quantPixel];
     uint8_t isInside = isInsideMask.at<uint8_t>(c.y, c.x);
     if (isInside) {
       inOut.inside += 1;
@@ -2351,12 +2371,13 @@ void insideOutsideTest(int32_t width,
   for ( int i = 0; i < sortedColortable.size(); i++ ) {
     uint32_t pixel = sortedColortable[i];
     
-    if (srmTagInsideCount.count(pixel) == 0) {
-      InsideOutside &inOut = srmTagInsideCount[pixel];
+    if (pixelToInsideMap.count(pixel) == 0) {
+      InsideOutsideRecord &inOut = pixelToInsideMap[pixel];
       // FIXME: assume it is inside somewhere in a gradient ?
       // May not be important since no output pixels match it.
       inOut.inside += 1;
       inOut.outside += 0;
+      inOut.confidence = 0.0f;
     }
   }
   
@@ -2367,7 +2388,7 @@ void insideOutsideTest(int32_t width,
   
   for ( int i = 0; i < sortedColortable.size(); i++ ) {
     uint32_t pixel = sortedColortable[i];
-    InsideOutside &inOut = srmTagInsideCount[pixel];
+    InsideOutsideRecord &inOut = pixelToInsideMap[pixel];
     
     if (debug) {
       printf("inout table[0x%08X] = (in out) (%5d %5d)\n", pixel, inOut.inside, inOut.outside);
@@ -2375,18 +2396,20 @@ void insideOutsideTest(int32_t width,
     
     float percentOn = (float)inOut.inside / (inOut.inside + inOut.outside);
     
+    inOut.confidence = percentOn;
+    
     if (debug) {
       printf("percent on [0x%08X] = %0.3f\n", pixel, percentOn);
     }
     
     if (percentOn > 0.5f) {
-      pixelToInsideMap[pixel] = true;
+      inOut.isInside = true;
     } else {
-      pixelToInsideMap[pixel] = false;
+      inOut.isInside = false;
     }
     
     if (debug) {
-      printf("pixelToInsideMap[0x%08X] = %d\n", pixel, pixelToInsideMap[pixel]);
+      printf("pixelToInsideMap[0x%08X].isInside = %d\n", pixel, inOut.isInside);
     }
   }
   
@@ -2433,7 +2456,7 @@ void insideOutsideTest(int32_t width,
     assert(pixelToInsideMap.count(pixel) > 0);
 #endif // DEBUG
     
-    bool isInside = pixelToInsideMap[pixel];
+    bool isInside = pixelToInsideMap[pixel].isInside;
     
     if (debug) {
       printf("colortable[%5d] = 0x%08X : isInside %d\n", i, pixel, isInside);

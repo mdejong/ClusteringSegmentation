@@ -67,6 +67,13 @@ captureRegionMask(SuperpixelImage &spImage,
 // Foreach pixel in a colortable determine the "inside/outside" status of that
 // pixel based on a stats test as compared to the current known region.
 
+typedef struct {
+  int inside;
+  int outside;
+  float confidence;
+  bool isInside;
+} InsideOutsideRecord;
+
 void insideOutsideTest(int32_t width,
                        int32_t height,
                        const vector<Coord> &coords,
@@ -74,7 +81,7 @@ void insideOutsideTest(int32_t width,
                        const vector<Coord> &regionCoords,
                        const uint32_t *outPixels,
                        const vector<uint32_t> &sortedColortable,
-                       unordered_map<uint32_t, bool> &pixelToInsideMap);
+                       unordered_map<uint32_t, InsideOutsideRecord> &pixelToInsideMap);
 
 // Recurse into each superpixel and determine the children of each superpixel.
 
