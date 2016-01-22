@@ -950,3 +950,36 @@ void vote_for_identical_neighbors(unordered_map<uint32_t, uint32_t> &pixelToNumV
   
   return;
 }
+
+// Given a series of 3D points, generate a center of mass in (x,y,z) for the points.
+
+Vec3b centerOfMass3d(const vector<Vec3b> &points)
+{
+  uint32_t sumX = 0;
+  uint32_t sumY = 0;
+  uint32_t sumZ = 0;
+  uint32_t N = 0;
+  
+  for ( Vec3b vec : points ) {
+    uint32_t x = vec[0];
+    uint32_t y = vec[1];
+    uint32_t z = vec[2];
+    
+    sumX += x;
+    sumY += y;
+    sumZ += z;
+    N += 1;
+  }
+  
+  uint32_t cX = sumX / N;
+  uint32_t cY = sumY / N;
+  uint32_t cZ = sumZ / N;
+  
+  assert(cX < 256);
+  assert(cY < 256);
+  assert(cZ < 256);
+  
+  return Vec3b(cX,cY,cZ);
+}
+
+

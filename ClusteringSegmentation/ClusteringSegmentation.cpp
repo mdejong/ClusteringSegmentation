@@ -1679,6 +1679,158 @@ captureRegionMask(SuperpixelImage &spImage,
         }
       }
       
+      // Examine points in 3D space by gathering center of mass coordinates
+      // for (B,G,R) values and emit as an image that contains the peak
+      // points and the center of mass point.
+      
+      if ((0)) {
+        vector<Vec3b> clusterCenterPoints;
+        
+        for (int i = 0; i < numActualClusters; i++) {
+          uint32_t pixel = colortable[i];
+          Vec3b vec = PixelToVec3b(pixel);
+          clusterCenterPoints.push_back(vec);
+        }
+        
+        Vec3b centerOfMass = centerOfMass3d(clusterCenterPoints);
+        
+        if (debugDumpImages) {
+          
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_peak_center_of_mass" << ".png";
+          string fname = fnameStream.str();
+          
+          // Write image that contains one color in each row in a N x 2 image
+          
+          int numPoints = (int) peakPixels.size() + 1;
+          
+          Mat outputMat = Mat(numPoints, 1, CV_8UC3);
+          outputMat = (Scalar) 0;
+          
+          int i = 0;
+          
+          for ( uint32_t pixel : peakPixels ) {
+            pixel = pixel & 0x00FFFFFF;
+            if (debug) {
+              printf("peak[%5d] = 0x%08X\n", i, pixel);
+            }
+            Vec3b vec = PixelToVec3b(pixel);
+            outputMat.at<Vec3b>(i, 0) = vec;
+            i += 1;
+          }
+          
+          // Add center of mass pixel
+          
+          outputMat.at<Vec3b>(i, 0) = centerOfMass;
+          
+          if (debug) {
+            printf("peak com = 0x%02X%02X%02X\n", centerOfMass[0], centerOfMass[1], centerOfMass[2]);
+          }
+          
+          imwrite(fname, outputMat);
+          cout << "wrote " << fname << endl;
+        }
+      }
+      
+      // Make use of OpenCV fitLine() in attempt to determine a vector through the
+      // 3D space that best fits the points identified in the peaks.
+      
+      if ((1)) {
+        vector<Vec3b> clusterCenterPoints;
+        
+        for (int i = 0; i < numActualClusters; i++) {
+          uint32_t pixel = colortable[i];
+          Vec3b vec = PixelToVec3b(pixel);
+          clusterCenterPoints.push_back(vec);
+        }
+        
+//        Mat linePointsMat;
+//        vector<Vec3b> linePoints;
+        
+        vector<float> lineVec;
+        vector<Vec3b> linePoints;
+        
+        int distType = CV_DIST_L12;
+        //int distType = CV_DIST_FAIR;
+        
+        fitLine(clusterCenterPoints, lineVec, distType, 0, 0.1, 0.1);
+        
+        // In case of 3D fitting (vx, vy, vz, x0, y0, z0)
+        // where (vx, vy, vz) is a normalized vector collinear to the line
+        // and (x0, y0, z0) is a point on the line.
+        
+        Vec3b centerOfMass(round(lineVec[3]), round(lineVec[4]), round(lineVec[5]));
+        
+        linePoints.push_back(centerOfMass);
+        linePoints.push_back(centerOfMass); // Dup COM
+
+        Vec3f colinearF(lineVec[0], lineVec[1], lineVec[2]);
+        Vec3f centerOfMassF(centerOfMass[0], centerOfMass[1], centerOfMass[2]);
+        
+        // Add another point away from the com
+        
+        int scalar = 30; // num points in (x,y,z) space
+        
+        Vec3f comPlusUnitF = centerOfMassF + (colinearF * scalar);
+        Vec3b comPlusUnit(round(comPlusUnitF[0]), round(comPlusUnitF[1]), round(comPlusUnitF[2]));
+        
+        Vec3f comMinusUnitF = centerOfMassF - (colinearF * scalar);
+        Vec3b comMinusUnit(round(comMinusUnitF[0]), round(comMinusUnitF[1]), round(comMinusUnitF[2]));
+        
+        if (debug) {
+          cout << "centerOfMassF " << centerOfMassF << endl;
+          cout << "colinearF " << colinearF << endl;
+          cout << "comPlusUnitF " << comPlusUnitF << endl;
+          cout << "comMinusUnitF " << comMinusUnitF << endl;
+          cout << "comPlusUnit " << comPlusUnit << endl;
+          cout << "comMinusUnit " << comMinusUnit << endl;
+        }
+        
+        linePoints.push_back(comPlusUnit);
+        linePoints.push_back(comMinusUnit);
+        
+        if (debugDumpImages) {
+          
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_peak_center_of_mass" << ".png";
+          string fname = fnameStream.str();
+          
+          // Write image that contains one color in each row in a N x 2 image
+          
+          int numPoints = (int) peakPixels.size() + (int) linePoints.size();
+          
+          Mat outputMat = Mat(numPoints, 1, CV_8UC3);
+          outputMat = (Scalar) 0;
+          
+          int i = 0;
+          
+          for ( uint32_t pixel : peakPixels ) {
+            pixel = pixel & 0x00FFFFFF;
+            if (debug) {
+              printf("peak[%5d] = 0x%08X\n", i, pixel);
+            }
+            Vec3b vec = PixelToVec3b(pixel);
+            outputMat.at<Vec3b>(i, 0) = vec;
+            i += 1;
+          }
+          
+          // Add each line point
+          
+          for ( Vec3b vec : linePoints ) {
+            outputMat.at<Vec3b>(i, 0) = vec;
+            
+            if (debug) {
+              printf("line point %5d = 0x%02X%02X%02X\n", i, vec[0], vec[1], vec[2]);
+            }
+            
+            i += 1;
+          }
+          
+          imwrite(fname, outputMat);
+          cout << "wrote " << fname << endl;
+        }
+      }
+      
       // Determine which cluster center is nearest to the peak pixels and use
       // that info to generate new cluster centers that are exactly at the
       // peak values. This means that the peak pixels will quant exactly and the

@@ -112,4 +112,8 @@ void vote_for_identical_neighbors(unordered_map<uint32_t, uint32_t> &pixelToNumV
                                   const Mat &inImage,
                                   const Mat &inMaskImage);
 
+// Given a series of 3D points, generate a center of mass in (x,y,z) for the points.
+
+Vec3b centerOfMass3d(const vector<Vec3b> &points);
+
 #endif // OPENCV_UTIL_H
