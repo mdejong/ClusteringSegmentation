@@ -2516,72 +2516,98 @@ recurseSuperpixelContainmentImpl(SuperpixelImage &spImage,
     cout << "recurseSuperpixelContainmentImpl for tag " << tag << " with N = " << spPtr->coords.size() << endl;
   }
   
+#if defined(DEBUG)
   if (map.count(tag) > 0) {
-    if (debug) {
-      cout << " already processed tag " << tag << endl;
-    }
-    
-    return;
+    cout << " already processed tag " << tag << endl;
+    assert(0);
   }
+#endif // DEBUG
   
   // Before processing neightbors, mark this superpixel as processed
   
   vector<int32_t> &children = map[tag];
   
-  auto &neighbors = spImage.edgeTable.getNeighborsSet(tag);
+  auto &neighborsSet = spImage.edgeTable.getNeighborsSet(tag);
 
   if (debug) {
     cout << "neighbors: " << endl;
     
-    for ( int32_t neighborTag : neighbors ) {
+    for ( int32_t neighborTag : neighborsSet ) {
       cout << neighborTag << endl;
     }
   }
-
-  // When all the neighbors are iterated over and only tag is found to
-  // be a common neighbor then we know that all the neighbors are
-  // contained inside tag.
   
-  set<int32_t> neighborsOfNeighborsSet;
+  // Filter neighborsSet into a set of siblings by removing
+  // the neighbors that are known to already be processed.
   
-  for ( int32_t neighborTag : neighbors ) {
+  set<int32_t> siblings;
+  
+  for ( int32_t neighborTag : neighborsSet ) {
     if (debug) {
-      cout << "process neighbor " << neighborTag << endl;
+      cout << "check for unprocessed neighbor " << neighborTag << endl;
     }
     
     if (map.count(neighborTag) > 0) {
       if (debug) {
         cout << "already processed neighbor tag " << neighborTag << endl;
       }
-      continue;
+    } else {
+      siblings.insert(neighborTag);
+    }
+  }
+  
+  // Iterate over neighbors and recursively process, note that any
+  // other siblings are inserted into the processed map in order
+  // to properly handle recursion WRT siblings.
+
+  while ( 1 ) {
+    int32_t neighborTag;
+    
+    {
+      // Scope ensures that iterators are released before loop body
+      auto it = begin(siblings);
+      auto itEnd = end(siblings);
+      
+      if (it == itEnd) {
+        break;
+      }
+      
+      neighborTag = *it;
+      
+      siblings.erase(it);
     }
     
-    neighborsOfNeighborsSet.insert(neighborTag);
+    if (debug) {
+      cout << "process neighbor " << neighborTag << endl;
+    }
+    
+    children.push_back(neighborTag);
+    
+    for ( int32_t sibling : siblings ) {
+#if defined(DEBUG)
+      assert(sibling != neighborTag);
+      assert(map.count(sibling) == 0);
+#endif // DEBUG
+      map[sibling] = vector<int32_t>();
+    }
     
     // Recurse into neighbors of neighbor at this point
     
     recurseSuperpixelContainmentImpl(spImage, map, neighborTag);
-  }
-  
-  if (debug) {
-    cout << "neighborsOfNeighborsSet: " << endl;
     
-    for ( int32_t neighborTag : neighborsOfNeighborsSet ) {
-      cout << neighborTag << endl;
+    for ( int32_t sibling : siblings ) {
+#if defined(DEBUG)
+      assert(sibling != neighborTag);
+      assert(map.count(sibling) > 0);
+      assert(map[sibling].size() == 0);
+#endif // DEBUG
+      map.erase(sibling);
     }
   }
 
-  if (neighborsOfNeighborsSet.size() == 0) {
-    // nop when no unprocecssed neighbors
-  } else if (neighborsOfNeighborsSet.size() == 1) {
-    // Special case of just 1 neighbor, neighbor must be inside tag
-    
-    for ( int32_t neighborTag : neighborsOfNeighborsSet ) {
-      children.push_back(neighborTag);
-    }
-  } else {
-    assert(0);
-  }
+#if defined(DEBUG)
+  assert(siblings.size() == 0);
+#endif // DEBUG
 
   if (debug) {
     cout << "recurseSuperpixelContainmentImpl for " << tag << " finished with children: " << endl;
@@ -2676,31 +2702,17 @@ recurseSuperpixelContainment(SuperpixelImage &spImage,
     }
   }
   
-  sortedSuperpixelTags = vector<int32_t>();
+  sortedSuperpixelTags = vector<int32_t>(); // Dealloc possibly large list
   
   assert(rootTags.size() == rootSet.size());
 
+  set<int32_t> siblings;
   for ( int32_t tag : rootTags ) {
-    // While the root tags are being processed, insert entries into the map
-    // so that these root tags are not seen as children.
-    
-    auto it = begin(rootTags);
-    auto endIt = end(rootTags);
-
-    vector<int32_t> siblings;
-    
-    bool keep = false;
-    
-    for ( ; it != endIt; ++it ) {
-      int32_t otherRootTag = *it;
-      if (otherRootTag == tag) {
-        // Keep all entries after this one
-        keep = true;
-        continue;
-      } else if (keep) {
-        siblings.push_back(otherRootTag);
-      }
-    }
+    siblings.insert(tag);
+  }
+  
+  for ( int32_t tag : rootTags ) {
+    siblings.erase(tag);
     
     for ( int32_t sibling : siblings ) {
       if (debug) {

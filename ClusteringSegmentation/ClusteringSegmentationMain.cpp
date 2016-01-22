@@ -317,8 +317,18 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
             printf("coord (%5d, %5d) = 0x%08X aka %d\n", x, y, mergedTag, mergedTag);
             vec = srmTags.at<Vec3b>(y, x);
             uint32_t toBeMergedTag = Vec3BToUID(vec);
-            printf("coord (%5d, %5d) = attempted merge 0x%08X aka %d\n", x, y, toBeMergedTag, toBeMergedTag);
-            assert(0);
+            
+            const bool allowReplaceWithSameTag = false;
+            
+            if (allowReplaceWithSameTag) {
+              if (mergedTag != toBeMergedTag) {
+                printf("coord (%5d, %5d) = attempted merge 0x%08X aka %d\n", x, y, toBeMergedTag, toBeMergedTag);
+                assert(0);
+              }
+            } else {
+              printf("coord (%5d, %5d) = attempted merge 0x%08X aka %d\n", x, y, toBeMergedTag, toBeMergedTag);
+              assert(0);
+            }
           }
         } // foreach locations
         

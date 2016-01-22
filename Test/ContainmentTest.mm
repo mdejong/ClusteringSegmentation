@@ -294,4 +294,97 @@
   XCTAssert(containsTreeMap.size() == 2, @"map");
 }
 
+// In this case the (1+1) and (2+1) superpixels
+// are siblings inside (0+1)
+
+- (void)testParse4x4Siblings {
+  
+  NSArray *pixelsArr = @[
+                         @(0), @(0), @(0), @(0),
+                         @(0), @(1), @(2), @(0),
+                         @(0), @(1), @(2), @(0),
+                         @(0), @(0), @(0), @(0),
+                         ];
+  
+  Mat tagsImg(4, 4, CV_MAKETYPE(CV_8U, 3));
+  
+  [self.class fillImageWithPixels:pixelsArr img:tagsImg];
+  
+  SuperpixelImage spImage;
+  
+  bool worked = SuperpixelImage::parse(tagsImg, spImage);
+  XCTAssert(worked, @"SuperpixelImage parse");
+  
+  vector<int32_t> superpixels = spImage.getSuperpixelsVec();
+  XCTAssert(superpixels.size() == 3, @"num sumperpixels");
+  
+  XCTAssert(superpixels[0] == 0+1, @"tag");
+  XCTAssert(superpixels[1] == 1+1, @"tag");
+  XCTAssert(superpixels[2] == 2+1, @"tag");
+  
+  {
+    Superpixel *spPtr = spImage.getSuperpixelPtr(superpixels[0]);
+    
+    XCTAssert(spPtr->coords.size() == 12, @"coords");
+  }
+  
+  {
+    Superpixel *spPtr = spImage.getSuperpixelPtr(superpixels[1]);
+    
+    XCTAssert(spPtr->coords.size() == 2, @"coords");
+  }
+
+  {
+    Superpixel *spPtr = spImage.getSuperpixelPtr(superpixels[2]);
+    
+    XCTAssert(spPtr->coords.size() == 2, @"coords");
+  }
+  
+  // Scan for containment, note that the superpixle with 3 coords is processed first
+  
+  unordered_map<int32_t, vector<int32_t> > containsTreeMap;
+  
+  vector<int32_t> rootTags = recurseSuperpixelContainment(spImage, tagsImg, containsTreeMap);
+  
+  // Lambda w capture
+  auto lambdaFunc = [=](int32_t tag, const vector<int32_t> &children)->void {
+    fprintf(stdout, "tag %5d has %5d children\n", tag, (int)children.size());
+    
+    if (tag == 1) {
+      XCTAssert(children.size() == 2, @"children");
+    } else if (tag == 2 || tag == 3) {
+      XCTAssert(children.size() == 0, @"children");
+    } else {
+      XCTAssert(0, @"tag");
+    }
+  };
+  
+  recurseSuperpixelIterate(rootTags, containsTreeMap, lambdaFunc);
+  
+  XCTAssert(rootTags.size() == 1, @"tags");
+  XCTAssert(rootTags[0] == 1, @"tags");
+  
+  // Children of 1 should include 2 and 3 as siblings
+  
+  XCTAssert(containsTreeMap.size() == 3, @"map");
+  
+  {
+    vector<int32_t> children = containsTreeMap[rootTags[0]];
+    XCTAssert(children.size() == 2, @"children");
+    // siblings
+    XCTAssert(children[0] == 2, @"children");
+    XCTAssert(children[1] == 3, @"children");
+  }
+  
+  {
+    vector<int32_t> children = containsTreeMap[2];
+    XCTAssert(children.size() == 0, @"children");
+  }
+  
+  {
+    vector<int32_t> children = containsTreeMap[3];
+    XCTAssert(children.size() == 0, @"children");
+  }
+}
+
 @end
