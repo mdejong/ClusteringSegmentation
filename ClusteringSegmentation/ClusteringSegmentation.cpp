@@ -877,7 +877,7 @@ captureRegionMask(SuperpixelImage &spImage,
   // Generate a collection of pixels from the blocks included in the
   // expanded mask.
   
-  if ((1)) {
+  if (debugDumpImages) {
     int width = inputImg.cols;
     int height = inputImg.rows;
     
@@ -1732,20 +1732,17 @@ captureRegionMask(SuperpixelImage &spImage,
         }
       }
       
-      // Make use of OpenCV fitLine() in attempt to determine a vector through the
-      // 3D space that best fits the points identified in the peaks.
+      // Pass all input points to the fitLine() method in attempt to get a best
+      // fit line.
       
-      if ((1)) {
-        vector<Vec3b> clusterCenterPoints;
+      if ((0)) {
+        vector<Vec3b> allRegionPoints;
         
-        for (int i = 0; i < numActualClusters; i++) {
-          uint32_t pixel = colortable[i];
+        for (int i = 0; i < numPixels; i++) {
+          uint32_t pixel = inPixels[i];
           Vec3b vec = PixelToVec3b(pixel);
-          clusterCenterPoints.push_back(vec);
+          allRegionPoints.push_back(vec);
         }
-        
-//        Mat linePointsMat;
-//        vector<Vec3b> linePoints;
         
         vector<float> lineVec;
         vector<Vec3b> linePoints;
@@ -1753,7 +1750,7 @@ captureRegionMask(SuperpixelImage &spImage,
         int distType = CV_DIST_L12;
         //int distType = CV_DIST_FAIR;
         
-        fitLine(clusterCenterPoints, lineVec, distType, 0, 0.1, 0.1);
+        fitLine(allRegionPoints, lineVec, distType, 0, 0.1, 0.1);
         
         // In case of 3D fitting (vx, vy, vz, x0, y0, z0)
         // where (vx, vy, vz) is a normalized vector collinear to the line
@@ -1761,8 +1758,10 @@ captureRegionMask(SuperpixelImage &spImage,
         
         Vec3b centerOfMass(round(lineVec[3]), round(lineVec[4]), round(lineVec[5]));
         
+        for (int i = 0; i < 300; i++) {
         linePoints.push_back(centerOfMass);
         linePoints.push_back(centerOfMass); // Dup COM
+        }
 
         Vec3f colinearF(lineVec[0], lineVec[1], lineVec[2]);
         Vec3f centerOfMassF(centerOfMass[0], centerOfMass[1], centerOfMass[2]);
@@ -1786,32 +1785,182 @@ captureRegionMask(SuperpixelImage &spImage,
           cout << "comMinusUnit " << comMinusUnit << endl;
         }
         
+        for (int i = 0; i < 300; i++) {
         linePoints.push_back(comPlusUnit);
         linePoints.push_back(comMinusUnit);
+        }
         
         if (debugDumpImages) {
           
           std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_peak_center_of_mass" << ".png";
+          fnameStream << "srm" << "_tag_" << tag << "_all_center_of_mass" << ".png";
           string fname = fnameStream.str();
           
           // Write image that contains one color in each row in a N x 2 image
           
-          int numPoints = (int) peakPixels.size() + (int) linePoints.size();
+          int numPoints = (int) allRegionPoints.size() + (int) linePoints.size();
           
           Mat outputMat = Mat(numPoints, 1, CV_8UC3);
           outputMat = (Scalar) 0;
           
           int i = 0;
           
-          for ( uint32_t pixel : peakPixels ) {
+          for ( Vec3b vec : allRegionPoints ) {
+            uint32_t pixel = Vec3BToUID(vec);
             pixel = pixel & 0x00FFFFFF;
             if (debug) {
               printf("peak[%5d] = 0x%08X\n", i, pixel);
             }
-            Vec3b vec = PixelToVec3b(pixel);
+            //Vec3b vec = PixelToVec3b(pixel);
             outputMat.at<Vec3b>(i, 0) = vec;
             i += 1;
+          }
+          
+          // Add each line point
+          
+          for ( Vec3b vec : linePoints ) {
+            outputMat.at<Vec3b>(i, 0) = vec;
+            
+            if (debug) {
+              printf("line point %5d = 0x%02X%02X%02X\n", i, vec[0], vec[1], vec[2]);
+            }
+            
+            i += 1;
+          }
+          
+          imwrite(fname, outputMat);
+          cout << "wrote " << fname << endl;
+        }
+      }
+      
+      // Generate a best fit vector from the region colors that have been passed
+      // through and initial even region quant. This should get rid of outliers
+      // and generate a clean best fit line.
+
+      if ((1)) {
+        vector<Vec3b> quantPoints;
+        
+        const bool onlyLineOutput = true;
+        
+        for (int i = 0; i < numPixels; i++) {
+          uint32_t pixel = outPixels[i];
+          Vec3b vec = PixelToVec3b(pixel);
+          quantPoints.push_back(vec);
+        }
+        
+        vector<float> lineVec;
+        vector<Vec3b> linePoints;
+        
+        int distType = CV_DIST_L12;
+        //int distType = CV_DIST_FAIR;
+        
+        fitLine(quantPoints, lineVec, distType, 0, 0.1, 0.1);
+        
+        // In case of 3D fitting (vx, vy, vz, x0, y0, z0)
+        // where (vx, vy, vz) is a normalized vector collinear to the line
+        // and (x0, y0, z0) is a point on the line.
+        
+        Vec3b centerOfMass(round(lineVec[3]), round(lineVec[4]), round(lineVec[5]));
+        
+        if (onlyLineOutput == false) {
+          for (int i = 0; i < 300; i++) {
+            linePoints.push_back(centerOfMass);
+            linePoints.push_back(centerOfMass); // Dup COM
+          }
+        } else {
+          linePoints.push_back(centerOfMass);          
+        }
+        
+        Vec3f colinearF(lineVec[0], lineVec[1], lineVec[2]);
+        Vec3f centerOfMassF(centerOfMass[0], centerOfMass[1], centerOfMass[2]);
+        
+        // Add another point away from the com
+        
+        int scalar = 30; // num points in (x,y,z) space
+        
+        Vec3f comPlusUnitF = centerOfMassF + (colinearF * scalar);
+        Vec3b comPlusUnit(round(comPlusUnitF[0]), round(comPlusUnitF[1]), round(comPlusUnitF[2]));
+        
+        Vec3f comMinusUnitF = centerOfMassF - (colinearF * scalar);
+        Vec3b comMinusUnit(round(comMinusUnitF[0]), round(comMinusUnitF[1]), round(comMinusUnitF[2]));
+        
+        if (debug) {
+          cout << "centerOfMassF " << centerOfMassF << endl;
+          cout << "colinearF " << colinearF << endl;
+          cout << "comPlusUnitF " << comPlusUnitF << endl;
+          cout << "comMinusUnitF " << comMinusUnitF << endl;
+          cout << "comPlusUnit " << comPlusUnit << endl;
+          cout << "comMinusUnit " << comMinusUnit << endl;
+        }
+        
+        if (onlyLineOutput == false) {
+          for (int i = 0; i < 300; i++) {
+            linePoints.push_back(comPlusUnit);
+            linePoints.push_back(comMinusUnit);
+          }
+        } else {
+          // Generate line points from -1 -> 0 -> +1 assuming that the
+          // scale is the total colorspace size.
+          
+          for (int scalar = 1; scalar < 255; scalar++ ) {
+            Vec3f comPlusUnitF = centerOfMassF + (colinearF * scalar);
+            Vec3b comPlusUnit(round(comPlusUnitF[0]), round(comPlusUnitF[1]), round(comPlusUnitF[2]));
+            
+            Vec3f comMinusUnitF = centerOfMassF - (colinearF * scalar);
+            Vec3b comMinusUnit(round(comMinusUnitF[0]), round(comMinusUnitF[1]), round(comMinusUnitF[2]));
+            
+            if (comPlusUnitF[0] <= 255 && comPlusUnitF[1] <= 255 && comPlusUnitF[0] <= 255) {
+              linePoints.push_back(comPlusUnit);
+              
+              if (debug) {
+                cout << "comPlusUnit " << comPlusUnit << endl;
+              }
+            }
+
+            if (comMinusUnitF[0] >= 0 && comMinusUnitF[1] >= 0 && comMinusUnitF[0] >= 0) {
+              linePoints.push_back(comMinusUnit);
+              
+              if (debug) {
+                cout << "comMinusUnit " << comMinusUnit << endl;
+              }
+            }
+          }
+          
+        }
+        
+        if (debugDumpImages) {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_quant_center_of_mass" << ".png";
+          string fname = fnameStream.str();
+          
+          // Write image that contains one color in each row in a N x 2 image
+          
+          int numPoints;
+          
+          if (onlyLineOutput == false) {
+            numPoints = (int) quantPoints.size() + (int) linePoints.size();
+          } else {
+            numPoints = (int) linePoints.size();
+          }
+          
+          Mat outputMat = Mat(numPoints, 1, CV_8UC3);
+          outputMat = (Scalar) 0;
+          
+          int i = 0;
+          
+          if (onlyLineOutput == false) {
+            
+            for ( Vec3b vec : quantPoints ) {
+              uint32_t pixel = Vec3BToUID(vec);
+              pixel = pixel & 0x00FFFFFF;
+              if (debug) {
+                printf("quant[%5d] = 0x%08X\n", i, pixel);
+              }
+              //Vec3b vec = PixelToVec3b(pixel);
+              outputMat.at<Vec3b>(i, 0) = vec;
+              i += 1;
+            }
+            
           }
           
           // Add each line point
