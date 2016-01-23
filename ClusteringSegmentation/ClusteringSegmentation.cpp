@@ -2431,9 +2431,13 @@ captureNotCloseRegion(SuperpixelImage &spImage,
       cout << "";
     }
     
+    Mat savedTmpResultImg = tmpResultImg;
+    
     // Call decrease white logic over and over until no more white area is left.
     
-    vector<vector<Coord> > coordVecStack;
+    vector<vector<Coord> > decreasingCoordVecStack;
+    
+    // Define max iter num in terms of sqrt(width^2, height^2)
     
     for ( int i = 2; i < 100; i++ ) {
       tmpResultImg = decreaseWhiteInRegion(tmpResultImg, 1, tag);
@@ -2454,7 +2458,7 @@ captureNotCloseRegion(SuperpixelImage &spImage,
         break;
       }
       
-      coordVecStack.push_back(coords);
+      decreasingCoordVecStack.insert(begin(decreasingCoordVecStack), coords);
       
       {
         std::stringstream fnameStream;
@@ -2496,6 +2500,78 @@ captureNotCloseRegion(SuperpixelImage &spImage,
     }
     
     cout << "done" << endl;
+    
+    
+    // Call decrease white logic over and over until no more white area is left.
+    
+    vector<vector<Coord> > expandingCoordVecStack;
+    
+    // Define max iter num in terms of sqrt(width^2, height^2)
+    
+    tmpResultImg = savedTmpResultImg;
+    
+    for ( int i = 2; i < 15; i++ ) {
+      tmpResultImg = expandWhiteInRegion(tmpResultImg, 1, tag);
+      
+      vector<Point> locations;
+      findNonZero(tmpResultImg, locations);
+      
+      vector<Coord> coords;
+      
+      for ( Point p : locations ) {
+        Coord c(p.x, p.y);
+        coords.push_back(c);
+      }
+      
+      int numNonZero = (int) coords.size();
+      
+      if (numNonZero == 0) {
+        break;
+      }
+      
+      expandingCoordVecStack.insert(begin(expandingCoordVecStack), coords);
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_srm_region_increase_mask" << i << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, tmpResultImg);
+        cout << "wrote " << fname << endl;
+        cout << "";
+      }
+      
+      // Dump alpha masked version of the original input.
+      
+      {
+        Mat alphaMaskResultImg(inputImg.rows, inputImg.cols, CV_8UC4);
+        alphaMaskResultImg = Scalar(0, 0, 0, 0);
+        
+        for ( Coord c : coords ) {
+          Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+          Vec4b vec4;
+          vec4[0] = vec[0];
+          vec4[1] = vec[1];
+          vec4[2] = vec[2];
+          vec4[3] = 0xFF;
+          alphaMaskResultImg.at<Vec4b>(c.y, c.x) = vec4;
+        }
+        
+        {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_srm_region_increase_alpha_mask" << i << ".png";
+          string fname = fnameStream.str();
+          
+          imwrite(fname, alphaMaskResultImg);
+          cout << "wrote " << fname << endl;
+          cout << "";
+        }
+      }
+      
+    }
+    
+    cout << "done" << endl;
+
   }
   
     // If after the voting, it becomes clear that one of the regions
