@@ -1327,12 +1327,10 @@ captureNotCloseRegion(SuperpixelImage &spImage,
     fprintf(stdout, "done\n");
   }
   
-  // Instead of a stddev type of approach, use grap peak logic to examine the counts
+  // Instead of a stddev type of approach, use peak logic to examine the counts
   // and select the peaks in the distrobution.
   
   vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(sortedPixelKeys);
-  
-  // Once cluster centers have been sorted by 3D color cube distance, emit "centers.png"
   
   int numPoints = (int) sortedOffsets.size();
   
@@ -2393,8 +2391,113 @@ captureNotCloseRegion(SuperpixelImage &spImage,
 //  vec [0.732098, 0.413795, -0.541116]
 //  vec [0.732728, 0.429867, -0.527564]
 //  vec [0.733142, 0.4339, -0.523673]
+
   
+  // Determine the color inside the region, this could be rooted on a flat region
+  // of all the same pixel value or it could be a region of alike colors that
+  // define a cluster center point. The clustering logic above is useful in
+  // that it identifies a best clustering, but that clustering needs to be
+  // iterated such that a set of N vectors from one core color to the next is
+  // defined.
+  
+  if (debugDumpImages) {
+    Mat tmpResultImg(inputImg.rows, inputImg.cols, CV_8UC1);
+    tmpResultImg = Scalar(0);
+
+    Vec3b prevSrmVec;
+    int i = 0;
     
+    for ( Coord c : srmRegionCoords ) {
+      Vec3b srmVec = srmTags.at<Vec3b>(c.y, c.x);
+
+      if (i == 0) {
+      } else {
+        assert(srmVec == prevSrmVec);
+      }
+      prevSrmVec = srmVec;
+      
+      tmpResultImg.at<uint8_t>(c.y, c.x) = 0xFF;
+      
+      i += 1;
+    }
+    
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_srm_region_decrease_mask" << "1" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, tmpResultImg);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    // Call decrease white logic over and over until no more white area is left.
+    
+    vector<vector<Coord> > coordVecStack;
+    
+    for ( int i = 2; i < 100; i++ ) {
+      tmpResultImg = decreaseWhiteInRegion(tmpResultImg, 1, tag);
+      
+      vector<Point> locations;
+      findNonZero(tmpResultImg, locations);
+      
+      vector<Coord> coords;
+      
+      for ( Point p : locations ) {
+        Coord c(p.x, p.y);
+        coords.push_back(c);
+      }
+      
+      int numNonZero = (int) coords.size();
+      
+      if (numNonZero == 0) {
+        break;
+      }
+      
+      coordVecStack.push_back(coords);
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_srm_region_decrease_mask" << i << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, tmpResultImg);
+        cout << "wrote " << fname << endl;
+        cout << "";
+      }
+      
+      // Dump alpha masked version of the original input.
+      
+      {
+        Mat alphaMaskResultImg(inputImg.rows, inputImg.cols, CV_8UC4);
+        alphaMaskResultImg = Scalar(0, 0, 0, 0);
+        
+        for ( Coord c : coords ) {
+          Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+          Vec4b vec4;
+          vec4[0] = vec[0];
+          vec4[1] = vec[1];
+          vec4[2] = vec[2];
+          vec4[3] = 0xFF;
+          alphaMaskResultImg.at<Vec4b>(c.y, c.x) = vec4;
+        }
+        
+        {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_srm_region_decrease_alpha_mask" << i << ".png";
+          string fname = fnameStream.str();
+          
+          imwrite(fname, alphaMaskResultImg);
+          cout << "wrote " << fname << endl;
+          cout << "";
+        }
+      }
+
+    }
+    
+    cout << "done" << endl;
+  }
+  
     // If after the voting, it becomes clear that one of the regions
     // is always outside the in/out region defined by the tags, then
     // pixels in that range can be left out of the vector calculation.
