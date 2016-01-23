@@ -650,7 +650,7 @@ Mat expandBlockRegion(int32_t tag,
   const bool debug = false;
   const bool debugDumpImages = true;
   
-  Mat morphBlockMat = Mat(blockHeight, blockWidth, CV_8U);
+  Mat morphBlockMat = Mat(blockHeight, blockWidth, CV_8UC1);
   morphBlockMat = (Scalar) 0;
   
   // Iterate over input coords and calcualte block coord to activate

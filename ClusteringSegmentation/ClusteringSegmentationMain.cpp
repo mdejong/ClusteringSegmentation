@@ -318,7 +318,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
             vec = srmTags.at<Vec3b>(y, x);
             uint32_t toBeMergedTag = Vec3BToUID(vec);
             
-            const bool allowReplaceWithSameTag = true;
+            const bool allowReplaceWithSameTag = false;
             
             if (allowReplaceWithSameTag) {
               if (mergedTag != toBeMergedTag) {

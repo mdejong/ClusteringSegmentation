@@ -778,9 +778,9 @@ estimateClusterCenters(const Mat & inputImg,
 }
 
 // Morph the "region mask", this is basically a way to expand the 2D region around the shape
-// in a way that should capture pixels around the outlines of the
+// in a way that should capture pixels around the superpixel.
 
-Mat
+void
 morphRegionMask(const Mat & inputImg,
                 int32_t tag,
                 const vector<Coord> &coords,
@@ -843,7 +843,7 @@ morphRegionMask(const Mat & inputImg,
     int width = inputImg.cols;
     int height = inputImg.rows;
     
-    Mat tmpExpandedBlockMat(height, width, CV_8U);
+    Mat tmpExpandedBlockMat(height, width, CV_8UC1);
     
     tmpExpandedBlockMat = (Scalar) 0;
     
@@ -960,7 +960,7 @@ morphRegionMask(const Mat & inputImg,
     cout << "return morphRegionMask" << endl;
   }
   
-  return expandedBlockMat;
+  return;
 }
 
 // Given a tag indicating a superpixel generate a mask that captures the region in terms of
@@ -1006,9 +1006,7 @@ captureRegionMask(SuperpixelImage &spImage,
   
   vector<Coord> regionCoords;
   
-  Mat expandedBlockMat = morphRegionMask(inputImg, tag, coords, blockWidth, blockHeight, superpixelDim, regionCoords);
-  
-  // Invoke util method
+  morphRegionMask(inputImg, tag, coords, blockWidth, blockHeight, superpixelDim, regionCoords);
   
   vector<uint32_t> estClusterCenters;
   
@@ -1292,7 +1290,7 @@ captureNotCloseRegion(SuperpixelImage &spImage,
   // byte for each pixel and acts as a mask. The white pixels indicate the blocks
   // that are included in the mask.
   
-  Mat blockMaskMat(blockMat.rows, blockMat.cols, CV_8U);
+  Mat blockMaskMat(blockMat.rows, blockMat.cols, CV_8UC1);
   blockMaskMat = (Scalar) 0;
   
   for ( Coord c : regionCoords ) {
@@ -1321,12 +1319,13 @@ captureNotCloseRegion(SuperpixelImage &spImage,
   
   vector<uint32_t> sortedPixelKeys = sort_keys_by_count(pixelToNumVotesMap, true);
   
-  for ( uint32_t pixel : sortedPixelKeys ) {
-    uint32_t count = pixelToNumVotesMap[pixel];
-    fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixel, pixel, count);
+  if (debug) {
+    for ( uint32_t pixel : sortedPixelKeys ) {
+      uint32_t count = pixelToNumVotesMap[pixel];
+      fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixel, pixel, count);
+    }
+    fprintf(stdout, "done\n");
   }
-  
-  fprintf(stdout, "done\n");
   
   // Instead of a stddev type of approach, use grap peak logic to examine the counts
   // and select the peaks in the distrobution.
@@ -1351,31 +1350,34 @@ captureNotCloseRegion(SuperpixelImage &spImage,
     sortedColortable.push_back(pixel);
   }
   
-  for ( uint32_t pixel : sortedColortable ) {
-    uint32_t count = pixelToNumVotesMap[pixel];
-    fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixel, pixel, count);
+  if (debug) {
+    for ( uint32_t pixel : sortedColortable ) {
+      uint32_t count = pixelToNumVotesMap[pixel];
+      fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixel, pixel, count);
+    }
+    fprintf(stdout, "done\n");
   }
-  
-  fprintf(stdout, "done\n");
   
   // Dump sorted pixel data as a CSV file, with int value and hex rep of int value for readability
   
-  std::stringstream fnameStream;
-  fnameStream << "srm" << "_tag_" << tag << "_quant_table_sorted" << ".csv";
-  string fname = fnameStream.str();
-  
-  FILE *fout = fopen(fname.c_str(), "w+");
-  
-  for ( uint32_t pixel : sortedColortable ) {
-    uint32_t count = pixelToNumVotesMap[pixel];
-    uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
-    fprintf(fout, "%d,0x%08X,%d\n", pixelNoAlpha, pixelNoAlpha, count);
+  if (debugDumpImages) {
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_quant_table_sorted" << ".csv";
+    string fname = fnameStream.str();
+    
+    FILE *fout = fopen(fname.c_str(), "w+");
+    
+    for ( uint32_t pixel : sortedColortable ) {
+      uint32_t count = pixelToNumVotesMap[pixel];
+      uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
+      fprintf(fout, "%d,0x%08X,%d\n", pixelNoAlpha, pixelNoAlpha, count);
+    }
+    
+    fclose(fout);
+    cout << "wrote " << fname << endl;
   }
   
-  fclose(fout);
-  cout << "wrote " << fname << endl;
-  
-  {
+  if (debugDumpImages) {
     std::stringstream fnameStream;
     fnameStream << "srm" << "_tag_" << tag << "_block_mask_sorted" << ".png";
     string filename = fnameStream.str();
@@ -1448,7 +1450,7 @@ captureNotCloseRegion(SuperpixelImage &spImage,
       uint32_t pixelNoAlpha = data[0][j];
       uint32_t count = data[1][j];
       
-      if ((1)) {
+      if (debug) {
         fprintf(stderr, "pixel %05d : 0x%08X = %d\n", j, pixelNoAlpha, count);
       }
     }
@@ -1462,21 +1464,29 @@ captureNotCloseRegion(SuperpixelImage &spImage,
       exit(1);
     }
     
+    if (debug) {
     fprintf(stdout, "num emi_peaks %d\n", emi_count);
+    }
     
     for(i = 0; i < emi_count; ++i) {
       int offset = emi_peaks[i];
-      fprintf(stdout, "%5d : %5d,%5d\n", offset, (int)data[0][offset], (int)data[1][offset]);
+      if (debug) {
+        fprintf(stdout, "%5d : %5d,%5d\n", offset, (int)data[0][offset], (int)data[1][offset]);
+      }
       
       uint32_t pixel = (uint32_t) round(data[0][offset]);
       peakPixels.push_back(pixel);
     }
     
+    if (debug) {
     fprintf(stdout, "num absorp_peaks %d\n", absorp_count);
+    }
     
     for(i = 0; i < absorp_count; ++i) {
       int offset = absorp_peaks[i];
-      fprintf(stdout, "%5d : %5d,%5d\n", offset, (int)data[0][offset],(int)data[1][offset]);
+      if (debug) {
+        fprintf(stdout, "%5d : %5d,%5d\n", offset, (int)data[0][offset],(int)data[1][offset]);
+      }
     }
     
     free(data[0]);
@@ -1570,7 +1580,9 @@ captureNotCloseRegion(SuperpixelImage &spImage,
   
   const int numClusters = N;
   
-  cout << "numClusters detected as " << numClusters << endl;
+  if (debug) {
+    cout << "numClusters detected as " << numClusters << endl;
+  }
   
   uint32_t *colortable = new uint32_t[numClusters];
   
@@ -1646,7 +1658,7 @@ captureNotCloseRegion(SuperpixelImage &spImage,
     }
 #endif // DEBUG
     
-    if ((1)) {
+    if (debug) {
       fprintf(stdout, "numClusters %5d : numActualClusters %5d \n", numClusters, numActualClusters);
       
       unordered_map<uint32_t, uint32_t> seen;
@@ -2231,11 +2243,13 @@ captureNotCloseRegion(SuperpixelImage &spImage,
       
       dumpQuantTableImage(fname, inputImg, colortable, numColors);
     }
-    
+  
+  if (debug) {
     for ( int i = 0; i < numColors; i++) {
       uint32_t pixel = colortable[i];
       fprintf(stdout, "colortable[%5d] = 0x%08X\n", i, pixel);
     }
+  }
     
     // Run input pixels through closest color quant logic using the
     // generated colortable. Note that the colortable should be
@@ -2307,6 +2321,79 @@ captureNotCloseRegion(SuperpixelImage &spImage,
       imwrite(fname, qtableOutputMat);
       cout << "wrote " << fname << endl;
     }
+  
+  // Determine the dominate vector(s) as we iterate through the colortable
+  // so that vectors add as long as they are actually in the same vector
+  // line.
+
+  vector<vector<uint32_t> > vecOfPixels;
+  vector<vector<Vec3f> > vecOfVectors;
+  
+  vecOfPixels.push_back(vector<uint32_t>());
+  vector<uint32_t> *currentVecPtr = &vecOfPixels[0];
+  
+  vecOfVectors.push_back(vector<Vec3f>());
+  vector<Vec3f> *currentVecOfVec3bPtr = &vecOfVectors[0];
+
+  uint32_t prevPixel = 0x0;
+  
+  for ( int i = 0; i < numColors; i++) {
+    uint32_t pixel = resortedColortable[i];
+    fprintf(stdout, "resorted colortable[%5d] = 0x%08X\n", i, pixel);
+    
+    int prevSize = (int) currentVecPtr->size();
+    currentVecPtr->push_back(pixel);
+    
+    if (prevSize == 0) {
+      // currentVecPtr is currently empty, so append the first pixel
+      // and continue on with the next pixel.
+    } else {
+      // At least 2 pixels, initial vector between pixels can now
+      // be determined for the first time.
+      
+      int32_t sR, sG, sB;
+      
+      xyzDelta(prevPixel, pixel, sR, sG, sB);
+      
+      if (debug) {
+        printf("peakToPeakDelta 0x%08X -> 0x%08X = (%d %d %d)\n", prevPixel, pixel, sR, sG, sB);
+      }
+      
+      Vec3f unitVec = xyzDeltaToUnitVec3f(sR, sG, sB);
+      
+      if (debug) {
+        cout << "unit vector " << unitVec << endl;
+      }
+
+      currentVecOfVec3bPtr->push_back(unitVec);
+    }
+    
+    prevPixel = pixel;
+  }
+
+  for ( uint32_t pixel : *currentVecPtr ) {
+    printf("0x%08X\n", pixel);
+  }
+  
+  for ( Vec3f vec : *currentVecOfVec3bPtr ) {
+    cout << "vec " << vec << endl;
+  }
+  
+//  Should see this set of vectors as shifting from one
+//  general slope to a new slope at offset 5
+//  the fact that earlier slopes are not exactly
+//  the same is not critical. Last 5 are basically
+//  the same
+  
+//  vec [0.0794929, 0.0794929, 0.993661]
+//  vec [0.111784, 0.111784, 0.987425]
+//  vec [-0.131796, -0.131796, 0.982476]
+//  vec [0.535899, 0.535899, 0.652399]
+//  vec [0.730889, 0.426352, -0.53294]
+//  vec [0.732098, 0.413795, -0.541116]
+//  vec [0.732728, 0.429867, -0.527564]
+//  vec [0.733142, 0.4339, -0.523673]
+  
     
     // If after the voting, it becomes clear that one of the regions
     // is always outside the in/out region defined by the tags, then

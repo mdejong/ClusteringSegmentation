@@ -58,6 +58,22 @@ Vec3b PixelToVec3b(uint32_t pixel) {
   return Vec3b(B, G, R);
 }
 
+static inline
+Vec3f xyzDeltaToUnitVec3f(int32_t &dR, int32_t &dG, int32_t &dB) {
+  float scale = sqrt(float(dR*dR + dG*dG + dB*dB));
+  
+  if (scale == 0.0f) {
+    dR = 0;
+    dG = 0;
+    dB = 0;
+    return Vec3f(dB, dG, dR);
+  } else {
+    Vec3f vec(dB, dG, dR);
+    vec = vec / scale;
+    return vec;
+  }
+}
+
 // Print SSIM for two images to cout
 
 int printSSIM(Mat inImage1, Mat inImage2);
