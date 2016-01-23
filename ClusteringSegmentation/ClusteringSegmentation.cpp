@@ -2431,6 +2431,31 @@ captureNotCloseRegion(SuperpixelImage &spImage,
       cout << "";
     }
     
+    {
+      Mat alphaMaskResultImg(inputImg.rows, inputImg.cols, CV_8UC4);
+      alphaMaskResultImg = Scalar(0, 0, 0, 0);
+      
+      for ( Coord c : srmRegionCoords ) {
+        Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+        Vec4b vec4;
+        vec4[0] = vec[0];
+        vec4[1] = vec[1];
+        vec4[2] = vec[2];
+        vec4[3] = 0xFF;
+        alphaMaskResultImg.at<Vec4b>(c.y, c.x) = vec4;
+      }
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_srm_region_decrease_alpha_mask" << "1" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, alphaMaskResultImg);
+        cout << "wrote " << fname << endl;
+        cout << "";
+      }
+    }
+    
     Mat savedTmpResultImg = tmpResultImg;
     
     // Call decrease white logic over and over until no more white area is left.
@@ -2573,6 +2598,14 @@ captureNotCloseRegion(SuperpixelImage &spImage,
     cout << "done" << endl;
 
   }
+  
+  // FIXME: the better approach would be to decrease until the region seems to stabilize around
+  // on single color or one quant color and then expand until there is a jump up in the number
+  // of colors or quant num. This has the effect of trimming off any "splay" pixels that are
+  // improperly identified in the region and then expanding the region to account for any "under".
+  // Expanding only according to the original SRM shape is not going to be correct in the case
+  // of splay pixels.
+  
   
     // If after the voting, it becomes clear that one of the regions
     // is always outside the in/out region defined by the tags, then
