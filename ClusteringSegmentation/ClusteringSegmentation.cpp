@@ -857,7 +857,7 @@ morphRegionMask(const Mat & inputImg,
   int inputWidthMinus1 = inputImg.cols - 1;
   int inputHeightMinus1 = inputImg.rows - 1;
   
-  //vector<Coord> regionCoords;
+  regionCoords.clear();
   regionCoords.reserve(locations.size() * (superpixelDim * superpixelDim));
   
   for ( Point p : locations ) {
@@ -881,38 +881,27 @@ morphRegionMask(const Mat & inputImg,
         regionCoords.push_back(c);
       }
     }
+  }
     
-    int numPixels = (int) regionCoords.size();
+  int numPixels = (int) regionCoords.size();
+  
+  if (debugDumpImages) {
+    Mat tmpResultImg = inputImg.clone();
+    tmpResultImg = Scalar(0,0,0xFF);
     
-//    uint32_t *inPixels = new uint32_t[numPixels];
-//    uint32_t *outPixels = new uint32_t[numPixels];
-//    
-//    for ( int i = 0; i < numPixels; i++ ) {
-//      Coord c = regionCoords[i];
-//      
-//      Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
-//      uint32_t pixel = Vec3BToUID(vec);
-//      inPixels[i] = pixel;
-//    }
+    for ( int i = 0; i < numPixels; i++ ) {
+      Coord c = regionCoords[i];
+      Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+      tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+    }
     
-    if (debugDumpImages) {
-      Mat tmpResultImg = inputImg.clone();
-      tmpResultImg = Scalar(0,0,0xFF);
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_morph_masked_input" << ".png";
+      string fname = fnameStream.str();
       
-      for ( int i = 0; i < numPixels; i++ ) {
-        Coord c = regionCoords[i];
-        Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
-        tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
-      }
-      
-      {
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_morph_masked_input" << ".png";
-        string fname = fnameStream.str();
-        
-        imwrite(fname, tmpResultImg);
-        cout << "wrote " << fname << endl;
-      }
+      imwrite(fname, tmpResultImg);
+      cout << "wrote " << fname << endl;
     }
   }
   
@@ -976,7 +965,7 @@ captureRegionMask(SuperpixelImage &spImage,
   // and fewer vectors to consider as possible matches. The morph mask
   // above does the job of masking around, but masking the interior
   // regions that are already fully processed should be done also.
-  
+
   int numPixels = (int) regionCoords.size();
   
   uint32_t *inPixels = new uint32_t[numPixels];
@@ -990,92 +979,6 @@ captureRegionMask(SuperpixelImage &spImage,
     inPixels[i] = pixel;
   }
   
-    // Quant to evenly spaced grid to get estimate for number of clusters N
-    
-    vector<uint32_t> colors = getSubdividedColors();
-    
-    uint32_t numColors = (uint32_t) colors.size();
-    uint32_t *colortable = new uint32_t[numColors];
-    
-    {
-      int i = 0;
-      for ( uint32_t color : colors ) {
-        colortable[i++] = color;
-      }
-    }
-    
-    map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
-    
-    // Count each quant pixel in outPixels
-    
-    Mat countMat(1, numPixels, CV_8UC3);
-    
-    for (int i = 0; i < numPixels; i++) {
-      uint32_t pixel = outPixels[i];
-      Vec3b vec = PixelToVec3b(pixel);
-      countMat.at<Vec3b>(0, i) = vec;
-    }
-    
-    unordered_map<uint32_t, uint32_t> outPixelToCountTable;
-    
-    generatePixelHistogram(countMat, outPixelToCountTable);
-    
-    for ( auto it = begin(outPixelToCountTable); it != end(outPixelToCountTable); ++it) {
-      uint32_t pixel = it->first;
-      uint32_t count = it->second;
-      
-      printf("count table[0x%08X] = %6d\n", pixel, count);
-    }
-    
-    // Dump quant output, each pixel is replaced by color in colortable
-    
-    if (debugDumpImages) {
-      Mat tmpResultImg = inputImg.clone();
-      tmpResultImg = Scalar(0,0,0xFF);
-      
-      for ( int i = 0; i < numPixels; i++ ) {
-        Coord c = regionCoords[i];
-        uint32_t pixel = outPixels[i];
-        Vec3b vec = PixelToVec3b(pixel);
-        tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
-      }
-      
-      {
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_quant_output" << ".png";
-        string fname = fnameStream.str();
-        
-        imwrite(fname, tmpResultImg);
-        cout << "wrote " << fname << endl;
-      }
-    
-      // Map quant pixels to colortable offsets
-    
-      vector<uint32_t> colortableVec;
-      
-      for (int i = 0; i < numColors; i++) {
-        uint32_t pixel = colortable[i];
-        colortableVec.push_back(pixel);
-      }
-      
-      // Add phony entry for Red (the mask color)
-      colortableVec.push_back(0x00FF0000);
-      
-      Mat quantOffsetsMat = mapQuantPixelsToColortableIndexes(tmpResultImg, colortableVec, true);
-      
-      {
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_quant_offsets" << ".png";
-        string fname = fnameStream.str();
-        
-        imwrite(fname, quantOffsetsMat);
-        cout << "wrote " << fname << endl;
-      }
-    }
-    
-    delete [] colortable;
-    
-    
     // Invoke util method
     
     vector<uint32_t> estClusterCenters;
