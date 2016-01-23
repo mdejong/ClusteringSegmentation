@@ -886,13 +886,18 @@ morphRegionMask(const Mat & inputImg,
   int numPixels = (int) regionCoords.size();
   
   if (debugDumpImages) {
-    Mat tmpResultImg = inputImg.clone();
-    tmpResultImg = Scalar(0,0,0xFF);
+    Mat tmpResultImg(inputImg.rows, inputImg.cols, CV_8UC4);
+    tmpResultImg = Scalar(0,0,0,0);
     
     for ( int i = 0; i < numPixels; i++ ) {
       Coord c = regionCoords[i];
       Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
-      tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+      Vec4b vec4;
+      vec4[0] = vec[0];
+      vec4[1] = vec[1];
+      vec4[2] = vec[2];
+      vec4[3] = 0xFF;
+      tmpResultImg.at<Vec4b>(c.y, c.x) = vec4;
     }
     
     {
