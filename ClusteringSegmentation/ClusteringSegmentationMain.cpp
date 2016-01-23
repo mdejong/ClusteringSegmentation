@@ -215,7 +215,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     
     // Lambda
     auto lambdaFunc = [&](int32_t tag, const vector<int32_t> &children)->void {
-      fprintf(stdout, "tag %5d has %5d children\n", tag, (int)children.size());
+      fprintf(stdout, "tag %9d has %5d children\n", tag, (int)children.size());
       
       insideOutStack.push(tag);
     };
@@ -318,7 +318,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
             vec = srmTags.at<Vec3b>(y, x);
             uint32_t toBeMergedTag = Vec3BToUID(vec);
             
-            const bool allowReplaceWithSameTag = false;
+            const bool allowReplaceWithSameTag = true;
             
             if (allowReplaceWithSameTag) {
               if (mergedTag != toBeMergedTag) {
@@ -356,6 +356,11 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         if (vec[0] == 0x0 && vec[1] == 0x0 && vec[2] == 0x0) {
           vec = srmTags.at<Vec3b>(y, x);
           mergeMat.at<Vec3b>(y, x) = vec;
+          
+          if ((debug) && true) {
+            uint32_t pixel = Vec3BToUID(vec);
+            fprintf(stdout, "copy existing tag at (%5d, %5d) = 0X%08X\n", x, y, pixel);
+          }
         }
       }
     }

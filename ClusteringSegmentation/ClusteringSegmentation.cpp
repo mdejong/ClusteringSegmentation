@@ -751,47 +751,24 @@ estimateClusterCenters(const Mat & inputImg,
   return isVeryClose;
 }
 
+// Morph the "region mask", this is basically a way to expand the 2D region around the shape
+// in a way that should capture pixels around the outlines of the
 
-// Given a tag indicating a superpixel generate a mask that captures the region in terms of
-// exact pixels. This method returns a Mat that indicate a boolean region mask where 0xFF
-// means that the pixel is inside the indicated region.
-
-bool
-captureRegionMask(SuperpixelImage &spImage,
-                  const Mat & inputImg,
-                  const Mat & srmTags,
-                  int32_t tag,
-                  int blockWidth,
-                  int blockHeight,
-                  int superpixelDim,
-                  Mat &outBlockMask)
+Mat
+morphRegionMask(const Mat & inputImg,
+                int32_t tag,
+                const vector<Coord> &coords,
+                int blockWidth,
+                int blockHeight,
+                int superpixelDim,
+                vector<Coord> &regionCoords)
 {
   const bool debug = true;
   const bool debugDumpImages = true;
   
   if (debug) {
-    cout << "captureRegionMask" << endl;
+    cout << "morphRegionMask" << endl;
   }
-  
-  assert(outBlockMask.rows == inputImg.rows);
-  assert(outBlockMask.cols == inputImg.cols);
-  assert(outBlockMask.channels() == 1);
-  
-  auto &coords = spImage.getSuperpixelPtr(tag)->coords;
-  
-  if (coords.size() <= ((superpixelDim*superpixelDim) >> 1)) {
-    // A region contained in only a single block, don't process by itself
-    
-    if (debug) {
-      cout << "captureRegionMask : region indicated by tag " << tag << " is too small to process with N coords " << coords.size() << endl;
-    }
-    
-    return false;
-  }
-
-  // Init mask after possible early return
-  
-  outBlockMask = (Scalar) 0;
   
   Mat expandedBlockMat = expandBlockRegion(tag, coords, 2, blockWidth, blockHeight, superpixelDim);
   
@@ -877,48 +854,46 @@ captureRegionMask(SuperpixelImage &spImage,
   // Generate a collection of pixels from the blocks included in the
   // expanded mask.
   
-  if (debugDumpImages) {
-    int width = inputImg.cols;
-    int height = inputImg.rows;
+  int inputWidthMinus1 = inputImg.cols - 1;
+  int inputHeightMinus1 = inputImg.rows - 1;
+  
+  //vector<Coord> regionCoords;
+  regionCoords.reserve(locations.size() * (superpixelDim * superpixelDim));
+  
+  for ( Point p : locations ) {
+    int actualX = p.x * superpixelDim;
+    int actualY = p.y * superpixelDim;
     
-    vector<Coord> regionCoords;
-    regionCoords.reserve(locations.size() * (superpixelDim * superpixelDim));
+    Coord min(actualX, actualY);
+    Coord max(actualX+superpixelDim-1, actualY+superpixelDim-1);
     
-    for ( Point p : locations ) {
-      int actualX = p.x * superpixelDim;
-      int actualY = p.y * superpixelDim;
-      
-      Coord min(actualX, actualY);
-      Coord max(actualX+superpixelDim-1, actualY+superpixelDim-1);
-      
-      for ( int y = min.y; y <= max.y; y++ ) {
-        for ( int x = min.x; x <= max.x; x++ ) {
-          Coord c(x, y);
-          
-          if (x > width-1) {
-            continue;
-          }
-          if (y > height-1) {
-            continue;
-          }
-          
-          regionCoords.push_back(c);
+    for ( int y = min.y; y <= max.y; y++ ) {
+      for ( int x = min.x; x <= max.x; x++ ) {
+        Coord c(x, y);
+        
+        if (x > inputWidthMinus1) {
+          continue;
         }
+        if (y > inputHeightMinus1) {
+          continue;
+        }
+        
+        regionCoords.push_back(c);
       }
     }
     
     int numPixels = (int) regionCoords.size();
     
-    uint32_t *inPixels = new uint32_t[numPixels];
-    uint32_t *outPixels = new uint32_t[numPixels];
-    
-    for ( int i = 0; i < numPixels; i++ ) {
-      Coord c = regionCoords[i];
-      
-      Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
-      uint32_t pixel = Vec3BToUID(vec);
-      inPixels[i] = pixel;
-    }
+//    uint32_t *inPixels = new uint32_t[numPixels];
+//    uint32_t *outPixels = new uint32_t[numPixels];
+//    
+//    for ( int i = 0; i < numPixels; i++ ) {
+//      Coord c = regionCoords[i];
+//      
+//      Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+//      uint32_t pixel = Vec3BToUID(vec);
+//      inPixels[i] = pixel;
+//    }
     
     if (debugDumpImages) {
       Mat tmpResultImg = inputImg.clone();
@@ -939,16 +914,82 @@ captureRegionMask(SuperpixelImage &spImage,
         cout << "wrote " << fname << endl;
       }
     }
+  }
+  
+  if (debug) {
+    cout << "return morphRegionMask" << endl;
+  }
+  
+  return expandedBlockMat;
+}
+
+// Given a tag indicating a superpixel generate a mask that captures the region in terms of
+// exact pixels. This method returns a Mat that indicate a boolean region mask where 0xFF
+// means that the pixel is inside the indicated region.
+
+bool
+captureRegionMask(SuperpixelImage &spImage,
+                  const Mat & inputImg,
+                  const Mat & srmTags,
+                  int32_t tag,
+                  int blockWidth,
+                  int blockHeight,
+                  int superpixelDim,
+                  Mat &outBlockMask)
+{
+  const bool debug = true;
+  const bool debugDumpImages = true;
+  
+  if (debug) {
+    cout << "captureRegionMask" << endl;
+  }
+  
+  assert(outBlockMask.rows == inputImg.rows);
+  assert(outBlockMask.cols == inputImg.cols);
+  assert(outBlockMask.channels() == 1);
+  
+  auto &coords = spImage.getSuperpixelPtr(tag)->coords;
+  
+  if (coords.size() <= ((superpixelDim*superpixelDim) >> 1)) {
+    // A region contained in only a single block, don't process by itself
     
-    // FIXME: before running the color logic, it is important to also mask out
-    // any colors inside the morph region that have already been claimed by
-    // regions farther "inside". For example, a circle in a circle can be
-    // made more effective by not considering the pixels that have been
-    // claimed for the interior colors. There are fewer points to process
-    // and fewer vectors to consider as possible matches. The morph mask
-    // above does the job of masking around, but masking the interior
-    // regions that are already fully processed should be done also.
+    if (debug) {
+      cout << "captureRegionMask : region indicated by tag " << tag << " is too small to process with N coords " << coords.size() << endl;
+    }
     
+    return false;
+  }
+
+  // Init mask after possible early return
+  
+  outBlockMask = (Scalar) 0;
+  
+  vector<Coord> regionCoords;
+  
+  Mat expandedBlockMat = morphRegionMask(inputImg, tag, coords, blockWidth, blockHeight, superpixelDim, regionCoords);
+  
+  // FIXME: before running the color logic, it is important to also mask out
+  // any colors inside the morph region that have already been claimed by
+  // regions farther "inside". For example, a circle in a circle can be
+  // made more effective by not considering the pixels that have been
+  // claimed for the interior colors. There are fewer points to process
+  // and fewer vectors to consider as possible matches. The morph mask
+  // above does the job of masking around, but masking the interior
+  // regions that are already fully processed should be done also.
+  
+  int numPixels = (int) regionCoords.size();
+  
+  uint32_t *inPixels = new uint32_t[numPixels];
+  uint32_t *outPixels = new uint32_t[numPixels];
+  
+  for ( int i = 0; i < numPixels; i++ ) {
+    Coord c = regionCoords[i];
+    
+    Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+    uint32_t pixel = Vec3BToUID(vec);
+    inPixels[i] = pixel;
+  }
+  
     // Quant to evenly spaced grid to get estimate for number of clusters N
     
     vector<uint32_t> colors = getSubdividedColors();
@@ -1235,11 +1276,14 @@ captureRegionMask(SuperpixelImage &spImage,
       // that are included in the mask.
       
       Mat blockMaskMat(blockMat.rows, blockMat.cols, CV_8U);
-      blockMaskMat= (Scalar) 0;
+      blockMaskMat = (Scalar) 0;
       
-      for ( Point p : locations ) {
-        int blockX = p.x;
-        int blockY = p.y;
+      for ( Coord c : regionCoords ) {
+        // Convert (X,Y) to block (X,Y)
+        
+        int blockX = c.x / superpixelDim;
+        int blockY = c.y / superpixelDim;
+        
         blockMaskMat.at<uint8_t>(blockY, blockX) = 0xFF;
       }
       
@@ -2300,8 +2344,6 @@ captureRegionMask(SuperpixelImage &spImage,
       delete [] colortable;
       
     }
-    
-  }
   
   if (debug) {
     cout << "return captureRegionMask" << endl;
