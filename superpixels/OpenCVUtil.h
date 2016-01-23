@@ -92,13 +92,13 @@ Coord findRegionCenter(Mat &binMat, cv::Rect roi, Mat &outDistMat, int tag);
 // the white region inside a black region. This makes use of a circular operator and
 // an expansion size indicated by the caller.
 
-Mat expandWhiteInRegion(Mat &binMat, int expandNumPixelsSize, int tag);
+Mat expandWhiteInRegion(const Mat &binMat, int expandNumPixelsSize, int tag);
 
 // Given an input binary Mat (0x0 or 0xFF) perform a erode() operation that will decrease
 // the white region inside a black region. This makes use of a circular operator and
 // an expansion size indicated by the caller.
 
-Mat decreaseWhiteInRegion(Mat &binMat, int expandNumPixelsSize, int tag);
+Mat decreaseWhiteInRegion(const Mat &binMat, int decreaseNumPixelsSize, int tag);
 
 // Given a superpixel tag that indicates a region segmented into 4x4 squares
 // map (X,Y) coordinates to a minimized Mat representation that can be

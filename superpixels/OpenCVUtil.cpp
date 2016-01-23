@@ -619,7 +619,7 @@ Coord findRegionCenter(Mat &binMat, cv::Rect roi, Mat &outDistMat, int tag)
 // the white region inside a black region. This makes use of a circular operator and
 // an expansion size indicated by the caller.
 
-Mat expandWhiteInRegion(Mat &binMat, int expandNumPixelsSize, int tag)
+Mat expandWhiteInRegion(const Mat &binMat, int expandNumPixelsSize, int tag)
 {
   assert(binMat.channels() == 1);
   
@@ -641,14 +641,14 @@ Mat expandWhiteInRegion(Mat &binMat, int expandNumPixelsSize, int tag)
 // the white region inside a black region. This makes use of a circular operator and
 // an expansion size indicated by the caller.
 
-Mat decreaseWhiteInRegion(Mat &binMat, int expandNumPixelsSize, int tag)
+Mat decreaseWhiteInRegion(const Mat &binMat, int decreaseNumPixelsSize, int tag)
 {
   assert(binMat.channels() == 1);
   
   Mat outBinMat = binMat.clone();
   
   int dilation_type = MORPH_ELLIPSE;
-  int dilation_size = expandNumPixelsSize;
+  int dilation_size = decreaseNumPixelsSize;
   
   Mat element = getStructuringElement( dilation_type,
                                       Size( 2*dilation_size + 1, 2*dilation_size+1 ),

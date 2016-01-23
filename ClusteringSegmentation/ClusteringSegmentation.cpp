@@ -1311,6 +1311,10 @@ captureNotCloseRegion(SuperpixelImage &spImage,
     cout << "wrote " << fname << endl;
   }
   
+  // Examine the region mask and check for the case of splay pixels
+  // that extend away from known solid color regions but are actually
+  // gradients.
+  
   // Count neighbors that share a quant pixel value after conversion to blocks
   
   unordered_map<uint32_t, uint32_t> pixelToNumVotesMap;
@@ -2215,8 +2219,6 @@ captureNotCloseRegion(SuperpixelImage &spImage,
       
       vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(resortedColortable);
       
-      // Once cluster centers have been sorted by 3D color cube distance, emit as PNG
-      
       resortedColortable.clear();
       
       for (int i = 0; i < numColors; i++) {
@@ -2605,6 +2607,8 @@ captureNotCloseRegion(SuperpixelImage &spImage,
   // improperly identified in the region and then expanding the region to account for any "under".
   // Expanding only according to the original SRM shape is not going to be correct in the case
   // of splay pixels.
+  
+  // An upper bound on the region bounds could be the containing region bounds.
   
   
     // If after the voting, it becomes clear that one of the regions
