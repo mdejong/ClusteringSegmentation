@@ -31,6 +31,19 @@
 using namespace cv;
 using namespace std;
 
+void
+captureVeryCloseRegion(SuperpixelImage &spImage,
+                       const Mat & inputImg,
+                       const Mat & srmTags,
+                       int32_t tag,
+                       int blockWidth,
+                       int blockHeight,
+                       int superpixelDim,
+                       Mat &outBlockMask,
+                       const vector<Coord> &regionCoords,
+                       const vector<Coord> &srmRegionCoords,
+                       int estNumColors);
+
 // Given an input image and a pixel buffer that is of the same dimensions
 // write the buffer of pixels out as an image in a file.
 
@@ -1011,180 +1024,9 @@ captureRegionMask(SuperpixelImage &spImage,
     bool isVeryClose = estimateClusterCenters(inputImg, tag, regionCoords, estClusterCenters);
     
     if (isVeryClose) {
-      // In this case the pixels are from a very small colortable or all the entries
-      // are so close together that one can assume that the colors are very simple
-      // and can be represented by quant that uses the original colors as a colortable.
-      
-      // Vote inside/outside for each pixel after we know what colortable entry a specific
-      // pixel is associated with.
-      
-      unordered_map<uint32_t, uint32_t> mapSrcPixelToSRMTag;
-      
-      // Iterate over the coords and gather up srmTags that correspond
-      // to the area indicated by tags
-      
-      for ( Coord c : coords ) {
-        Vec3b srmVec = srmTags.at<Vec3b>(c.y, c.x);
-        uint32_t srmTag = Vec3BToUID(srmVec);
-        
-        Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
-        uint32_t pixel = Vec3BToUID(vec);
-        
-        mapSrcPixelToSRMTag[pixel] = srmTag;
-      }
-
-      for ( auto &pair : mapSrcPixelToSRMTag ) {
-        uint32_t pixel = pair.first;
-        uint32_t srmTag = pair.second;
-        printf("pixel->srmTag table[0x%08X] = 0x%08X\n", pixel, srmTag);
-      }
-      
-      if (debugDumpImages) {
-        Mat tmpResultImg = inputImg.clone();
-        tmpResultImg = Scalar(0,0,0);
-        
-        for ( Coord c : coords ) {
-          Vec3b srmVec = srmTags.at<Vec3b>(c.y, c.x);
-          //uint32_t srmTag = Vec3BToUID(srmVec);
-          
-          //Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
-          //uint32_t pixel = Vec3BToUID(vec);
-          
-          tmpResultImg.at<Vec3b>(c.y, c.x) = srmVec;
-        }
-        
-        {
-          std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_srm_region_tags" << ".png";
-          string fname = fnameStream.str();
-          
-          imwrite(fname, tmpResultImg);
-          cout << "wrote " << fname << endl;
-          cout << "";
-        }
-      }
-      
-      // Generate cluster centers based on the indicated number of clusters N
-      
-      int numColors = (uint32_t) estClusterCenters.size();
-      assert(numColors > 0);
-      uint32_t numActualClusters = numColors;
-
-      uint32_t *colortable = new uint32_t[numActualClusters];
-      
-      int allPixelsUnique = 0;
-      
-      quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
-      
-      // Write quant output where each original pixel is replaced with the closest
-      // colortable entry.
-      
-      if (debugDumpImages) {
-        Mat tmpResultImg = inputImg.clone();
-        tmpResultImg = Scalar(0,0,0xFF);
-        
-        for ( int i = 0; i < numPixels; i++ ) {
-          Coord c = regionCoords[i];
-          uint32_t pixel = outPixels[i];
-          Vec3b vec = PixelToVec3b(pixel);
-          tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
-        }
-        
-        {
-          std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_quant_inside_output" << ".png";
-          string fname = fnameStream.str();
-          
-          imwrite(fname, tmpResultImg);
-          cout << "wrote " << fname << endl;
-        }
-        
-        {
-          std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_quant_inside_table" << ".png";
-          string fname = fnameStream.str();
-          
-          dumpQuantTableImage(fname, inputImg, colortable, numColors);
-        }
-        
-        vector<uint32_t> colortableVec;
-        
-        for (int i = 0; i < numColors; i++) {
-          uint32_t pixel = colortable[i];
-          colortableVec.push_back(pixel);
-        }
-        
-        // Add phony entry for Red (the mask color)
-        colortableVec.push_back(0x00FF0000);
-        
-        Mat quantOffsetsMat = mapQuantPixelsToColortableIndexes(tmpResultImg, colortableVec, true);
-        
-        {
-          std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_quant_inside_offsets" << ".png";
-          string fname = fnameStream.str();
-          
-          imwrite(fname, quantOffsetsMat);
-          cout << "wrote " << fname << endl;
-        }
-      }
-      
-      // FIXME: make sure that colortableVec passed to insideOutsideTest() is actually sorted
-      
-      vector<uint32_t> sortedColortable;
-      
-      // Copy cluster colors into colortable after resorting
-      {
-        for (int i = 0; i < numColors; i++) {
-          uint32_t pixel = colortable[i];
-          sortedColortable.push_back(pixel);
-        }
-        
-        vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(sortedColortable);
-        
-        sortedColortable.clear();
-        
-        for (int i = 0; i < numColors; i++) {
-          int si = (int) sortedOffsets[i];
-          uint32_t pixel = colortable[si];
-          sortedColortable.push_back(pixel);
-        }
-      }
-      
-      unordered_map<uint32_t, InsideOutsideRecord> pixelToInside;
-      
-      insideOutsideTest(inputImg.rows, inputImg.cols, coords, tag, regionCoords, outPixels, sortedColortable, pixelToInside);
-      
-      // Each pixel in the input is now mapped to a boolean condition that
-      // indicates if that pixel is inside or outside the shape.
-      
-      const bool debugOnOff = false;
-      
-      for ( int i = 0; i < numPixels; i++ ) {
-        Coord c = regionCoords[i];
-        uint32_t quantPixel = outPixels[i];
-        
-#if defined(DEBUG)
-        assert(pixelToInside.count(quantPixel));
-#endif // DEBUG
-        bool isInside = pixelToInside[quantPixel].isInside;
-        
-        if (isInside) {
-          outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
-          
-          if (debug && debugOnOff) {
-            printf("pixel 0x%08X at (%5d,%5d) is marked on (inside)\n", quantPixel, c.x, c.y);
-          }
-        } else {
-          if (debug && debugOnOff) {
-            printf("pixel 0x%08X at (%5d,%5d) is marked off (outside)\n", quantPixel, c.x, c.y);
-          }
-        }
-      }
-      
-      delete [] colortable;
+      captureVeryCloseRegion(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, outBlockMask, regionCoords, coords, (int)estClusterCenters.size());
     }
-    
+  
     // Estimate the number of clusters to use in a quant operation by
     // mapping the input pixels through an even quant table and then
     // convert to blocks that represent the quant regions. This logic
@@ -2278,6 +2120,224 @@ captureRegionMask(SuperpixelImage &spImage,
   }
   
   return true;
+}
+
+// In this case the pixels are from a very small colortable or all the entries
+// are so close together that one can assume that the colors are very simple
+// and can be represented by quant that uses the original colors as a colortable.
+
+// FIXME: why both regionCoords (region including expand around) and the
+// srm region as coords ?
+
+void
+captureVeryCloseRegion(SuperpixelImage &spImage,
+                  const Mat & inputImg,
+                  const Mat & srmTags,
+                  int32_t tag,
+                  int blockWidth,
+                  int blockHeight,
+                  int superpixelDim,
+                  Mat &outBlockMask,
+                  const vector<Coord> &regionCoords,
+                  const vector<Coord> &srmRegionCoords,
+                  int estNumColors)
+{
+  const bool debug = true;
+  const bool debugDumpImages = true;
+  
+  if (debug) {
+    cout << "captureVeryCloseRegion" << endl;
+  }
+  
+  int numPixels = (int)regionCoords.size();
+  
+  assert(estNumColors > 0);
+  uint32_t numActualClusters = estNumColors;
+  
+  uint32_t *colortable = new uint32_t[numActualClusters];
+  uint32_t *inPixels = new uint32_t[numPixels];
+  uint32_t *outPixels = new uint32_t[numPixels];
+  
+  for ( int i = 0; i < numPixels; i++ ) {
+    Coord c = regionCoords[i];
+    
+    Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+    uint32_t pixel = Vec3BToUID(vec);
+    inPixels[i] = pixel;
+  }
+  
+  // In this case the pixels are from a very small colortable or all the entries
+  // are so close together that one can assume that the colors are very simple
+  // and can be represented by quant that uses the original colors as a colortable.
+  
+  // Vote inside/outside for each pixel after we know what colortable entry a specific
+  // pixel is associated with.
+  
+  unordered_map<uint32_t, uint32_t> mapSrcPixelToSRMTag;
+  
+  // Iterate over the coords and gather up srmTags that correspond
+  // to the area indicated by tag
+  
+  for ( Coord c : srmRegionCoords ) {
+    Vec3b srmVec = srmTags.at<Vec3b>(c.y, c.x);
+    uint32_t srmTag = Vec3BToUID(srmVec);
+    
+    Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+    uint32_t pixel = Vec3BToUID(vec);
+    
+    mapSrcPixelToSRMTag[pixel] = srmTag;
+  }
+  
+  for ( auto &pair : mapSrcPixelToSRMTag ) {
+    uint32_t pixel = pair.first;
+    uint32_t srmTag = pair.second;
+    printf("pixel->srmTag table[0x%08X] = 0x%08X\n", pixel, srmTag);
+  }
+  
+  if (debugDumpImages) {
+    Mat tmpResultImg = inputImg.clone();
+    tmpResultImg = Scalar(0,0,0);
+    
+    for ( Coord c : srmRegionCoords ) {
+      Vec3b srmVec = srmTags.at<Vec3b>(c.y, c.x);
+      //uint32_t srmTag = Vec3BToUID(srmVec);
+      
+      //Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+      //uint32_t pixel = Vec3BToUID(vec);
+      
+      tmpResultImg.at<Vec3b>(c.y, c.x) = srmVec;
+    }
+    
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_srm_region_tags" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, tmpResultImg);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+  }
+  
+  // Generate cluster centers based on the indicated number of clusters N
+  
+  int allPixelsUnique = 0;
+  
+  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
+  
+  // Write quant output where each original pixel is replaced with the closest
+  // colortable entry.
+  
+  if (debugDumpImages) {
+    Mat tmpResultImg = inputImg.clone();
+    tmpResultImg = Scalar(0,0,0xFF);
+    
+    for ( int i = 0; i < numPixels; i++ ) {
+      Coord c = regionCoords[i];
+      uint32_t pixel = outPixels[i];
+      Vec3b vec = PixelToVec3b(pixel);
+      tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+    }
+    
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_quant_inside_output" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, tmpResultImg);
+      cout << "wrote " << fname << endl;
+    }
+    
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_quant_inside_table" << ".png";
+      string fname = fnameStream.str();
+      
+      dumpQuantTableImage(fname, inputImg, colortable, numActualClusters);
+    }
+    
+    vector<uint32_t> colortableVec;
+    
+    for (int i = 0; i < numActualClusters; i++) {
+      uint32_t pixel = colortable[i];
+      colortableVec.push_back(pixel);
+    }
+    
+    // Add phony entry for Red (the mask color)
+    colortableVec.push_back(0x00FF0000);
+    
+    Mat quantOffsetsMat = mapQuantPixelsToColortableIndexes(tmpResultImg, colortableVec, true);
+    
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_quant_inside_offsets" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, quantOffsetsMat);
+      cout << "wrote " << fname << endl;
+    }
+  }
+  
+  // FIXME: make sure that colortableVec passed to insideOutsideTest() is actually sorted
+  
+  vector<uint32_t> sortedColortable;
+  
+  // Copy cluster colors into colortable after resorting
+  {
+    for (int i = 0; i < numActualClusters; i++) {
+      uint32_t pixel = colortable[i];
+      sortedColortable.push_back(pixel);
+    }
+    
+    vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(sortedColortable);
+    
+    sortedColortable.clear();
+    
+    for (int i = 0; i < numActualClusters; i++) {
+      int si = (int) sortedOffsets[i];
+      uint32_t pixel = colortable[si];
+      sortedColortable.push_back(pixel);
+    }
+  }
+  
+  unordered_map<uint32_t, InsideOutsideRecord> pixelToInside;
+  
+  insideOutsideTest(inputImg.rows, inputImg.cols, srmRegionCoords, tag, regionCoords, outPixels, sortedColortable, pixelToInside);
+  
+  // Each pixel in the input is now mapped to a boolean condition that
+  // indicates if that pixel is inside or outside the shape.
+  
+  const bool debugOnOff = false;
+  
+  for ( int i = 0; i < numPixels; i++ ) {
+    Coord c = regionCoords[i];
+    uint32_t quantPixel = outPixels[i];
+    
+#if defined(DEBUG)
+    assert(pixelToInside.count(quantPixel));
+#endif // DEBUG
+    bool isInside = pixelToInside[quantPixel].isInside;
+    
+    if (isInside) {
+      outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
+      
+      if (debug && debugOnOff) {
+        printf("pixel 0x%08X at (%5d,%5d) is marked on (inside)\n", quantPixel, c.x, c.y);
+      }
+    } else {
+      if (debug && debugOnOff) {
+        printf("pixel 0x%08X at (%5d,%5d) is marked off (outside)\n", quantPixel, c.x, c.y);
+      }
+    }
+  }
+  
+  delete [] colortable;
+  delete [] inPixels;
+  delete [] outPixels;
+  
+  if (debug) {
+    cout << "return captureVeryCloseRegion" << endl;
+  }
 }
 
 // Loop over each pixel passed through the quant logic and count up how
