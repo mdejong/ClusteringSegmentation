@@ -264,6 +264,22 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         cout << "process tag " << tag << " containing " << spPtr->coords.size() << endl;
       }
       
+      // Copy current merge mask state into mask
+      
+      for ( int y = 0; y < mergeMat.rows; y++ ) {
+        for ( int x = 0; x < mergeMat.cols; x++ ) {
+          Vec3b vec = mergeMat.at<Vec3b>(y, x);
+          uint32_t pixel = Vec3BToUID(vec);
+          uint8_t bval;
+          if (pixel == 0x0) {
+            bval = 0;
+          } else {
+            bval = 0xFF;
+          }
+          maskMat.at<uint8_t>(y, x) = bval;
+        }
+      }
+      
       bool maskWritten =
       captureRegionMask(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, maskMat);
       

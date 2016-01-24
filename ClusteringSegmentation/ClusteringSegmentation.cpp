@@ -958,8 +958,9 @@ morphRegionMask(const Mat & inputImg,
 }
 
 // Given a tag indicating a superpixel generate a mask that captures the region in terms of
-// exact pixels. This method returns a Mat that indicate a boolean region mask where 0xFF
-// means that the pixel is inside the indicated region.
+// exact pixels. On input, the mask contains either 0x0 or 0xFF to indicate if a given
+// pixel was already consumed by a previous merge process. On return, the mask should contain
+// 0xFF for pixels that are known to be inside the region.
 
 bool
 captureRegionMask(SuperpixelImage &spImage,
@@ -994,13 +995,74 @@ captureRegionMask(SuperpixelImage &spImage,
     return false;
   }
   
-  // Init mask after possible early return
-  
-  mask = (Scalar) 0;
-  
   vector<Coord> regionCoords;
   
   morphRegionMask(inputImg, tag, coords, blockWidth, blockHeight, superpixelDim, regionCoords);
+  
+  // Remove pixels from regionCoords that are known to be on in the mask. This limits the pixels
+  // found with the region mask so that known regions that have already been processed will not
+  // be included in the regionCoords.
+  
+  if ((1)) {
+    unordered_map<Coord, bool> regionCoordsMap;
+    
+    for ( Coord c : regionCoords ) {
+      regionCoordsMap[c] = true;
+    }
+    
+    for ( int y = 0; y < mask.rows; y++ ) {
+      for ( int x = 0; x < mask.cols; x++ ) {
+        uint8_t bval = mask.at<uint8_t>(y, x);
+        if (bval != 0) {
+          // Do not consider this coord
+          Coord c(x, y);
+          regionCoordsMap.erase(c);
+        }
+      }
+    }
+    
+    vector<Coord> trimRegionCoords;
+    
+    for ( Coord c : regionCoords ) {
+      if (regionCoordsMap.count(c) > 0) {
+        trimRegionCoords.push_back(c);
+      }
+    }
+    
+    regionCoords = trimRegionCoords;
+    
+    if (debugDumpImages) {
+      Mat tmpResultImg(inputImg.rows, inputImg.cols, CV_8UC4);
+      tmpResultImg = Scalar(0,0,0,0);
+      
+      int numPixels = (int)regionCoords.size();
+      
+      for ( int i = 0; i < numPixels; i++ ) {
+        Coord c = regionCoords[i];
+        Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+        Vec4b vec4;
+        vec4[0] = vec[0];
+        vec4[1] = vec[1];
+        vec4[2] = vec[2];
+        vec4[3] = 0xFF;
+        tmpResultImg.at<Vec4b>(c.y, c.x) = vec4;
+      }
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_morph_minus_mask_alpha_input" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, tmpResultImg);
+        cout << "wrote " << fname << endl;
+        cout << "";
+      }
+    }
+  }
+  
+  // Init mask after possible early return
+  
+  mask = (Scalar) 0;
   
   vector<uint32_t> estClusterCenters;
   
