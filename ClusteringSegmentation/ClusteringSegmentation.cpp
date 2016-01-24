@@ -155,7 +155,7 @@ Mat generateSRM(const Mat &inputImg, double Q)
   // SRM
   
   const bool debugOutput = false;
-  const bool debugDumpImage = false;
+  const bool debugDumpImage = true;
   
   int numPixels = inputImg.rows * inputImg.cols;
   
@@ -193,8 +193,6 @@ Mat generateSRM(const Mat &inputImg, double Q)
   
   SRM(Q, inputImg.cols, inputImg.rows, channels, in, out, 0);
   
-  //uint32_t *outPixels = new uint32_t[numPixels]();
-  
   Mat outImg = inputImg.clone();
   outImg = (Scalar) 0;
   
@@ -208,8 +206,6 @@ Mat generateSRM(const Mat &inputImg, double Q)
       uint32_t G = out[(i*3)+1];
       uint32_t R = out[(i*3)+2];
       
-      //uint32_t pixel = (R << 16) | (G << 8) | B;
-      //outPixels[i] = pixel;
       i += 1;
       
       if ((debugOutput)) {
@@ -275,16 +271,14 @@ Mat generateSRM(const Mat &inputImg, double Q)
   }
   
   if (debugDumpImage) {
-    string filename = "srm.png";
-    imwrite(filename, outImg);
-    cout << "wrote " << filename << endl;
+      std::stringstream fnameStream;
+      fnameStream << "srm" << int(Q) << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, outImg);
+      cout << "wrote " << fname << endl;
   }
   
-  //  if (debugDumpImage) {
-  //    dumpQuantImage("srm.png", inputImg, outPixels);
-  //  }
-  
-  //  delete [] outPixels;
   delete [] in;
   delete [] out;
   
@@ -1265,7 +1259,7 @@ captureNotCloseRegion(SuperpixelImage &spImage,
   const bool debugDumpImages = true;
   
   if (debug) {
-    cout << "captureNotCloseRegion" << endl;
+    cout << "captureNotCloseRegion " << tag << endl;
   }
   
   int numPixels = (int)regionCoords.size();
@@ -3090,4 +3084,186 @@ recurseSuperpixelContainment(SuperpixelImage &spImage,
   }
   
   return rootTags;
+}
+
+// Segment an input image with multiple passes of SRM approach
+
+bool srmMultiSegment(const Mat & inputImg, Mat & tagsMat) {
+  // Run SRM logic to generate initial segmentation based on statistical "alikeness".
+  // Very large regions are likely to be very alike or even contain many pixels that
+  // are identical.
+  
+  const bool debugWriteIntermediateFiles = false;
+  
+  //    double Q = 16.0;
+  //    double Q = 32.0;
+  //    double Q = 64.0; // Not too small
+  double Q = 128.0; // keeps small circles together
+  //    double Q = 256.0;
+  //    double Q = 512.0;
+  
+  //double Qmore = Q + 128.0; // break up into more regions
+  double Qmore = 512.0; // break up into more regions
+  
+  Mat srmTags1 = generateSRM(inputImg, Q);
+  
+  Mat srmTags2 = generateSRM(inputImg, Qmore);
+  
+  // Collect the more precise segmentations into groups
+  
+  // Alloc object on stack
+  SuperpixelImage spImage2;
+  
+  bool worked = SuperpixelImage::parse(srmTags2, spImage2);
+  
+  if (!worked) {
+    return false;
+  }
+  
+  // Scan each grouping to determine when pixels identified as being in
+  // the same group in srmTags1 are not included in the group in srmTags2.
+  
+  vector<int32_t> sortedSuperpixelTags = spImage2.sortSuperpixelsBySize();
+  
+  vector<vector<Coord> > allMergeCoordsVec;
+  
+  for ( int32_t tag : sortedSuperpixelTags ) {
+    
+    // Find bbox for this superpixel region
+    
+    Superpixel *spPtr = spImage2.getSuperpixelPtr(tag);
+    
+    int32_t originX, originY, regionWidth, regionHeight;
+    Superpixel::bbox(originX, originY, regionWidth, regionHeight, spPtr->coords);
+    Rect roiRect(originX, originY, regionWidth, regionHeight);
+    
+    if (false && (originX == 0 && originY == 0 && regionWidth == inputImg.cols && regionHeight == inputImg.rows)) {
+      if (1) {
+        cout << "skip roi region that is the size of the whole image" << endl;
+      }
+      
+      continue;
+    }
+    
+    Mat roiInputMat = inputImg(roiRect);
+    
+    if (debugWriteIntermediateFiles) {
+      std::stringstream fnameStream;
+      fnameStream << "srm_multi" << "_tag_" << tag << "_check_region_bbox" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, roiInputMat);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+
+    // Mask the superpixel coordinates as alpha, so that only the in region
+    // pixels appear in the dump output.
+    
+    if (debugWriteIntermediateFiles) {
+      Mat alphaMaskedRegionPixels(inputImg.size(), CV_8UC4);
+      alphaMaskedRegionPixels = Scalar(0, 0, 0, 0);
+      
+      for ( Coord c : spPtr->coords ) {
+        Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+        Vec4b vec4;
+        vec4[0] = vec[0];
+        vec4[1] = vec[1];
+        vec4[2] = vec[2];
+        vec4[3] = 0xFF;
+        alphaMaskedRegionPixels.at<Vec4b>(c.y, c.x) = vec4;
+      }
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm_multi" << "_tag_" << tag << "_check_region_alpha_input" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, alphaMaskedRegionPixels);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    // Find all the UID values in srmTags1 that correspond to this region.
+    // The regions defined by spImage2 should be more precise, so if there
+    // are pixels with with the same tag then these pixels were split out
+    // of the group.
+    
+    unordered_map<int32_t, int32_t> srm1TagsInRegion;
+    
+    for ( Coord c : spPtr->coords ) {
+      Vec3b vec = srmTags1.at<Vec3b>(c.y, c.x);
+      uint32_t tag = Vec3BToUID(vec);
+      srm1TagsInRegion[tag] = 0;
+    }
+    
+    for ( auto & pair : srm1TagsInRegion ) {
+      uint32_t regionTag = pair.first;
+      fprintf(stdout, "region %d unique tag %d\n", tag, regionTag);
+    }
+
+    fprintf(stdout, "done\n");
+    
+    // Copy UID for this region by appending the coords to a vector of all
+    // merge coords for a specific group.
+  
+    // If multiple, chhose the largest set of coords and call that a region
+    
+    vector<Coord> coordsInRegion;
+    
+    assert(srm1TagsInRegion.size() != 0);
+
+    if (srm1TagsInRegion.size() == 1) {
+      for ( Coord c : spPtr->coords ) {
+        coordsInRegion.push_back(c);
+      }
+
+    } else {
+      for (auto it = begin(srm1TagsInRegion); it != end(srm1TagsInRegion); ++it) {
+        uint32_t regionTag = it->first;
+        
+        for ( Coord c : spPtr->coords ) {
+          Vec3b vec = srmTags1.at<Vec3b>(c.y, c.x);
+          uint32_t foundRegionTag = Vec3BToUID(vec);
+          if (regionTag == foundRegionTag) {
+            coordsInRegion.push_back(c);
+          }
+        }
+      }
+    }
+    
+    allMergeCoordsVec.push_back(coordsInRegion);
+
+  } // foreach tag in sortedSuperpixelTags
+  
+#if defined(DEBUG)
+  int numCoordsExpected = inputImg.rows * inputImg.cols;
+  int numCoordsTotal = 0;
+  
+  for ( auto vec : allMergeCoordsVec ) {
+    for ( Coord c : vec ) {
+      c = c;
+      numCoordsTotal += 1;
+    }
+  }
+  
+  assert(numCoordsTotal == numCoordsExpected);
+#endif // DEBUG
+
+  tagsMat = inputImg.clone();
+  
+  uint32_t mergeUID = 0;
+  
+  for ( auto vec : allMergeCoordsVec ) {
+    Vec3b mergeVec = PixelToVec3b(mergeUID);
+    
+    for ( Coord c : vec ) {
+      tagsMat.at<Vec3b>(c.y, c.x) = mergeVec;
+    }
+
+    mergeUID += 1;
+  }
+  
+  // Scan each pixel and record "votes" for the same neighbor
+
+  return true;
 }

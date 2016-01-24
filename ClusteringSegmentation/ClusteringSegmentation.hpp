@@ -107,6 +107,10 @@ void recurseSuperpixelIterate(const vector<int32_t> &tags,
   }
 }
 
+// Multi segmenting approach
+
+bool srmMultiSegment(const Mat & inputImg, Mat & tagsMat);
+
 // Implement merge of superpixels based on coordinates gather from SRM process
 
 #import "SuperpixelMergeManager.h"
