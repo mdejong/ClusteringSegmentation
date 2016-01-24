@@ -969,7 +969,7 @@ captureRegionMask(SuperpixelImage &spImage,
                   int blockWidth,
                   int blockHeight,
                   int superpixelDim,
-                  Mat &outBlockMask)
+                  Mat &mask)
 {
   const bool debug = true;
   const bool debugDumpImages = true;
@@ -978,9 +978,9 @@ captureRegionMask(SuperpixelImage &spImage,
     cout << "captureRegionMask" << endl;
   }
   
-  assert(outBlockMask.rows == inputImg.rows);
-  assert(outBlockMask.cols == inputImg.cols);
-  assert(outBlockMask.channels() == 1);
+  assert(mask.rows == inputImg.rows);
+  assert(mask.cols == inputImg.cols);
+  assert(mask.channels() == 1);
   
   auto &coords = spImage.getSuperpixelPtr(tag)->coords;
   
@@ -996,7 +996,7 @@ captureRegionMask(SuperpixelImage &spImage,
   
   // Init mask after possible early return
   
-  outBlockMask = (Scalar) 0;
+  mask = (Scalar) 0;
   
   vector<Coord> regionCoords;
   
@@ -1007,9 +1007,9 @@ captureRegionMask(SuperpixelImage &spImage,
   bool isVeryClose = estimateClusterCenters(inputImg, tag, regionCoords, estClusterCenters);
   
   if (isVeryClose) {
-    captureVeryCloseRegion(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, outBlockMask, regionCoords, coords, (int)estClusterCenters.size());
+    captureVeryCloseRegion(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, mask, regionCoords, coords, (int)estClusterCenters.size());
   } else {
-    captureNotCloseRegion(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, outBlockMask, regionCoords, coords, (int)estClusterCenters.size());
+    captureNotCloseRegion(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, mask, regionCoords, coords, (int)estClusterCenters.size());
   }
   
   if (debug) {
@@ -1034,7 +1034,7 @@ captureVeryCloseRegion(SuperpixelImage &spImage,
                   int blockWidth,
                   int blockHeight,
                   int superpixelDim,
-                  Mat &outBlockMask,
+                  Mat &mask,
                   const vector<Coord> &regionCoords,
                   const vector<Coord> &srmRegionCoords,
                   int estNumColors)
@@ -1216,7 +1216,7 @@ captureVeryCloseRegion(SuperpixelImage &spImage,
     bool isInside = pixelToInside[quantPixel].isInside;
     
     if (isInside) {
-      outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
+      mask.at<uint8_t>(c.y, c.x) = 0xFF;
       
       if (debug && debugOnOff) {
         printf("pixel 0x%08X at (%5d,%5d) is marked on (inside)\n", quantPixel, c.x, c.y);
@@ -1250,7 +1250,7 @@ captureNotCloseRegion(SuperpixelImage &spImage,
                        int blockWidth,
                        int blockHeight,
                        int superpixelDim,
-                       Mat &outBlockMask,
+                       Mat &mask,
                        const vector<Coord> &regionCoords,
                        const vector<Coord> &srmRegionCoords,
                        int estNumColors)
@@ -2635,7 +2635,7 @@ captureNotCloseRegion(SuperpixelImage &spImage,
       bool isInside = pixelToInside[quantPixel].isInside;
       
       if (isInside) {
-        outBlockMask.at<uint8_t>(c.y, c.x) = 0xFF;
+        mask.at<uint8_t>(c.y, c.x) = 0xFF;
         
         if (debug && debugOnOff) {
           printf("pixel 0x%08X at (%5d,%5d) is marked on (inside)\n", quantPixel, c.x, c.y);
