@@ -2852,7 +2852,8 @@ void insideOutsideTest(int32_t width,
 void
 recurseSuperpixelContainmentImpl(SuperpixelImage &spImage,
                                  unordered_map<int32_t, std::vector<int32_t> > &map,
-                                 int32_t tag)
+                                 int32_t tag,
+                                unordered_map<int32_t, int32_t> &superpixelTagToOffsetMap)
 {
   const bool debug = true;
   
@@ -2883,10 +2884,12 @@ recurseSuperpixelContainmentImpl(SuperpixelImage &spImage,
     }
   }
   
+  // Order neighborsSet by the offset in superpixelTagToOffsetMap
+  
   // Filter neighborsSet into a set of siblings by removing
   // the neighbors that are known to already be processed.
   
-  set<int32_t> siblings;
+  vector<int32_t> siblings;
   
   for ( int32_t neighborTag : neighborsSet ) {
     if (debug) {
@@ -2898,9 +2901,31 @@ recurseSuperpixelContainmentImpl(SuperpixelImage &spImage,
         cout << "already processed neighbor tag " << neighborTag << endl;
       }
     } else {
-      siblings.insert(neighborTag);
+      siblings.push_back(neighborTag);
     }
   }
+  
+  // order siblings by superpixelTagToOffsetMap
+  sort(begin(siblings), end(siblings),
+       [&](int tag1, int tag2) {
+         int32_t offset1 = superpixelTagToOffsetMap[tag1];
+         int32_t offset2 = superpixelTagToOffsetMap[tag2];
+         return offset1 < offset2;
+       });
+  
+  if (debug) {
+    int offset = 0;
+    
+    for ( int32_t siblingTag : siblings ) {
+      Superpixel *spPtr = spImage.getSuperpixelPtr(siblingTag);
+      
+      printf("sibling[%5d] : %d contains N = %d coords\n", offset, siblingTag, (int)spPtr->coords.size());
+      
+      offset += 1;
+    }
+  }
+  
+  // FIXME: might be better to impl siblings as a stack instead of a vector if N is large
   
   // Iterate over neighbors and recursively process, note that any
   // other siblings are inserted into the processed map in order
@@ -2939,7 +2964,7 @@ recurseSuperpixelContainmentImpl(SuperpixelImage &spImage,
     
     // Recurse into neighbors of neighbor at this point
     
-    recurseSuperpixelContainmentImpl(spImage, map, neighborTag);
+    recurseSuperpixelContainmentImpl(spImage, map, neighborTag, superpixelTagToOffsetMap);
     
     for ( int32_t sibling : siblings ) {
 #if defined(DEBUG)
@@ -3035,14 +3060,24 @@ recurseSuperpixelContainment(SuperpixelImage &spImage,
   
   vector<int32_t> sortedSuperpixelTags = spImage.sortSuperpixelsBySize();
 
-  unordered_map<int32_t,int32_t> rootTagToSize;
+  // Map superpixel UID to the offset in the sorted list, smaller offset
+  // means that the superpixel is larger.
   
-  for ( int32_t tag : rootSet ) {
-    rootTagToSize[tag] = 0;
+  unordered_map<int32_t, int32_t> superpixelTagToOffsetMap;
+  
+//  unordered_map<int32_t,int32_t> rootTagToSize;
+  
+  {
+    int offset = 0;
+    
+    for ( int32_t tag : rootSet ) {
+      superpixelTagToOffsetMap[tag] = offset;
+      offset += 1;
+    }
   }
   
   for ( int32_t tag : sortedSuperpixelTags ) {
-    if (rootTagToSize.count(tag) > 0) {
+    if (superpixelTagToOffsetMap.count(tag) > 0) {
       // This superpixel is in rootSet
       rootTags.push_back(tag);
     }
@@ -3070,7 +3105,7 @@ recurseSuperpixelContainment(SuperpixelImage &spImage,
       map[sibling] = vector<int32_t>();
     }
     
-    recurseSuperpixelContainmentImpl(spImage, map, tag);
+    recurseSuperpixelContainmentImpl(spImage, map, tag, superpixelTagToOffsetMap);
     
     for ( int32_t sibling : siblings ) {
 #if defined(DEBUG)
