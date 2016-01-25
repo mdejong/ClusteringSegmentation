@@ -52,10 +52,11 @@ captureNotCloseRegion(SuperpixelImage &spImage,
                       int blockWidth,
                       int blockHeight,
                       int superpixelDim,
-                      Mat &outBlockMask,
+                      Mat &mask,
                       const vector<Coord> &regionCoords,
                       const vector<Coord> &srmRegionCoords,
-                      int estNumColors);
+                      int estNumColors,
+                      const Mat &blockBasedQuantMat);
 
 // Given an input image and a pixel buffer that is of the same dimensions
 // write the buffer of pixels out as an image in a file.
@@ -297,7 +298,7 @@ Mat genHistogramsForBlocks(const Mat &inputImg,
                            int superpixelDim)
 {
   const bool debugOutput = false;
-  const bool dumpOutputImages = false;
+  const bool dumpOutputImages = true;
   
   uint32_t width = inputImg.cols;
   uint32_t height = inputImg.rows;
@@ -970,7 +971,8 @@ captureRegionMask(SuperpixelImage &spImage,
                   int blockWidth,
                   int blockHeight,
                   int superpixelDim,
-                  Mat &mask)
+                  Mat &mask,
+                  const Mat &blockBasedQuantMat)
 {
   const bool debug = true;
   const bool debugDumpImages = true;
@@ -1071,7 +1073,7 @@ captureRegionMask(SuperpixelImage &spImage,
   if (isVeryClose) {
     captureVeryCloseRegion(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, mask, regionCoords, coords, (int)estClusterCenters.size());
   } else {
-    captureNotCloseRegion(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, mask, regionCoords, coords, (int)estClusterCenters.size());
+    captureNotCloseRegion(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, mask, regionCoords, coords, (int)estClusterCenters.size(), blockBasedQuantMat);
   }
   
   if (debug) {
@@ -1315,7 +1317,8 @@ captureNotCloseRegion(SuperpixelImage &spImage,
                        Mat &mask,
                        const vector<Coord> &regionCoords,
                        const vector<Coord> &srmRegionCoords,
-                       int estNumColors)
+                       int estNumColors,
+                      const Mat &blockBasedQuantMat)
 {
   const bool debug = true;
   const bool debugDumpImages = true;
@@ -1337,16 +1340,16 @@ captureNotCloseRegion(SuperpixelImage &spImage,
     inPixels[i] = pixel;
   }
   
-  unordered_map<Coord, HistogramForBlock> blockMap;
-  
-  Mat blockMat =
-  genHistogramsForBlocks(inputImg, blockMap, blockWidth, blockHeight, superpixelDim);
+//  unordered_map<Coord, HistogramForBlock> blockMap;
+//  
+//  Mat blockMat =
+//  genHistogramsForBlocks(inputImg, blockMap, blockWidth, blockHeight, superpixelDim);
   
   // Generate mask Mat that is the same dimensions as blockMat but contains just one
   // byte for each pixel and acts as a mask. The white pixels indicate the blocks
   // that are included in the mask.
   
-  Mat blockMaskMat(blockMat.rows, blockMat.cols, CV_8UC1);
+  Mat blockMaskMat(blockBasedQuantMat.size(), CV_8UC1);
   blockMaskMat = (Scalar) 0;
   
   for ( Coord c : regionCoords ) {
@@ -1375,7 +1378,7 @@ captureNotCloseRegion(SuperpixelImage &spImage,
   
   unordered_map<uint32_t, uint32_t> pixelToNumVotesMap;
   
-  vote_for_identical_neighbors(pixelToNumVotesMap, blockMat, blockMaskMat);
+  vote_for_identical_neighbors(pixelToNumVotesMap, blockBasedQuantMat, blockMaskMat);
   
   vector<uint32_t> sortedPixelKeys = sort_keys_by_count(pixelToNumVotesMap, true);
   

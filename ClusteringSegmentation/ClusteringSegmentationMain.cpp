@@ -192,6 +192,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
   
   // Scan superpixels to determine containment tree
   
+  vector<int32_t> srmInsideOutOrder;
+  
   {
     // Fill with UID+1
     
@@ -215,7 +217,6 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     }
     
     stack<int32_t> insideOutStack;
-    vector<int32_t> srmInsideOutOrder;
     
     // Lambda
     auto lambdaFunc = [&](int32_t tag, const vector<int32_t> &children)->void {
@@ -239,6 +240,12 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       srmInsideOutOrder.push_back(tag);
     }
     
+  }
+  
+  // Scan all superpixels and implement region merge and split based on the input pixels
+  
+  {
+    
     Mat maskMat(inputImg.rows, inputImg.cols, CV_8UC1);
     Mat mergeMat(inputImg.rows, inputImg.cols, CV_8UC3);
     
@@ -257,6 +264,16 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         tagsAdlerBeforeMerge = my_adler32(tagsAdlerBeforeMerge, (unsigned char const *)&pixel, sizeof(uint32_t), 0);
       }
     }
+    
+    // Quant the entire image into small 4x4 blocks and then generate histograms
+    // for each block. The histogram data can be scanned significantly faster
+    // that rereading all the original pixel info.
+    
+    unordered_map<Coord, HistogramForBlock> coordToBlockHistogramMap;
+    
+    Mat blockBasedQuantMat = genHistogramsForBlocks(inputImg, coordToBlockHistogramMap, blockWidth, blockHeight, superpixelDim);
+    
+    // Loop over superpixels starting at the most contained and working outwards
     
     for ( int32_t tag : srmInsideOutOrder ) {
       if (debug) {
@@ -281,7 +298,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       }
       
       bool maskWritten =
-      captureRegionMask(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, maskMat);
+      captureRegionMask(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, maskMat, blockBasedQuantMat);
       
       if (maskWritten)
       {

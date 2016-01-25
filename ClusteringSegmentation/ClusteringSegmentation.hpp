@@ -62,7 +62,8 @@ captureRegionMask(SuperpixelImage &spImage,
                   int blockWidth,
                   int blockHeight,
                   int superpixelDim,
-                  Mat &outBlockMask);
+                  Mat &mask,
+                  const Mat &blockBasedQuantMat);
 
 // Foreach pixel in a colortable determine the "inside/outside" status of that
 // pixel based on a stats test as compared to the current known region.
