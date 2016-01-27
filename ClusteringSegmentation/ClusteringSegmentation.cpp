@@ -96,6 +96,12 @@ clockwiseScanForTagsAroundShape(
                                 const vector<Coord> &coords,
                                 vector<TagsAroundShape> &tagsAroundVec);
 
+// Given a set of pixels, scan those pixels and determine the peaks
+// in the histogram to find likely most common graph peak values.
+
+vector<uint32_t> gatherPeakPixels(const vector<uint32_t> & pixels,
+                                  unordered_map<uint32_t, uint32_t> & pixelToNumVotesMap);
+
 // This method will contract or expand a region defined by coordinates by N pixel.
 // In the case where the region cannot be expanded or contracted anymore this
 // method returns false.
@@ -1316,14 +1322,14 @@ captureRegion(SuperpixelImage &spImage,
       vecOfPixels.push_back(vec);
     }
     
-    //    Vec3b centerOfMass = centerOfMass3d(vecOfPixels);
-    //
-    //    if (debug) {
-    //      uint32_t p1 = Vec3BToUID(expandingCenterOfMass);
-    //      uint32_t p2 = Vec3BToUID(centerOfMass);
-    //
-    //      printf("expand region returned %5d coords, expandingCenterOfMass 0x%08X vs COM 0x%08X\n", (int)outCoords.size(), p1, p2);
-    //    }
+    Vec3b centerOfMass = centerOfMass3d(vecOfPixels);
+    
+//    if (debug) {
+//      uint32_t p1 = Vec3BToUID(expandingCenterOfMass);
+//      uint32_t p2 = Vec3BToUID(centerOfMass);
+//      
+//      printf("expand region returned %5d coords, expandingCenterOfMass 0x%08X vs COM 0x%08X\n", (int)outCoords.size(), p1, p2);
+//    }
     
     if (debug) {
       vector<SuperpixelEdge> edges = getEdgesInRegion(spImage, srmTags, tag, outCoords);
@@ -1557,7 +1563,6 @@ captureRegion(SuperpixelImage &spImage,
     cout << "";
   }
   
-  
   //  MOMO
   //
   //  foreach tag in vote_for_identical_neighbors(pixelToNumVotesMap, blockBasedQuantMat, blockMaskMat) {
@@ -1648,121 +1653,17 @@ captureRegion(SuperpixelImage &spImage,
   // Use peak detection logic to examine the 1D histogram in sorted order so as to find the
   // peaks in the distribution.
   
-  int N = 0;
-  vector<uint32_t> peakPixels;
+  vector<uint32_t> peakPixels = gatherPeakPixels(sortedColortable, pixelToNumVotesMap);
   
-  {
-    // FIXME: dynamically allocate buffers to fit input size ?
-    
-    double*     data[2];
-    //              double      row[2];
-    
-#define MAX_PEAK    256
-    
-    int         emi_peaks[MAX_PEAK];
-    int         absorp_peaks[MAX_PEAK];
-    
-    int         emi_count = 0;
-    int         absorp_count = 0;
-    
-    double      delta = 1e-6;
-    int         emission_first = 0;
-    
-    int numDataPoints = (int) sortedColortable.size();
-    
-    assert(numDataPoints <= 256);
-    
-    data[0] = (double*) malloc(sizeof(double) * MAX_PEAK);
-    data[1] = (double*) malloc(sizeof(double) * MAX_PEAK);
-    
-    memset(data[0], 0, sizeof(double) * MAX_PEAK);
-    memset(data[1], 0, sizeof(double) * MAX_PEAK);
-    
-    int i = 0;
-    
-    // Insert zero slow with zero count so that a peak can
-    // be detected in the first position.
-    i += 1;
-    
-    for ( uint32_t pixel : sortedColortable ) {
-      uint32_t count = pixelToNumVotesMap[pixel];
-      uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
-      
-      data[0][i] = pixelNoAlpha;
-      //data[0][i] = i;
-      data[1][i] = count;
-      
-      if ((0)) {
-        fprintf(stderr, "data[%05d] = 0x%08X -> count %d\n", i, pixelNoAlpha, count);
-      }
-      
-      i += 1;
-    }
-    
-    // +1 at the end of the samples
-    i += 1;
-    
-    // Print the input data with zeros at the front and the back
-    
-    for ( int j = 0; j < i; j++ ) {
-      uint32_t pixelNoAlpha = data[0][j];
-      uint32_t count = data[1][j];
-      
-      if (debug) {
-        fprintf(stderr, "pixel %05d : 0x%08X = %d\n", j, pixelNoAlpha, count);
-      }
-    }
-    
-    if(detect_peak(data[1], i,
-                   emi_peaks, &emi_count, MAX_PEAK,
-                   absorp_peaks, &absorp_count, MAX_PEAK,
-                   delta, emission_first))
-    {
-      fprintf(stderr, "There are too many peaks.\n");
-      exit(1);
-    }
-    
-    if (debug) {
-      fprintf(stdout, "num emi_peaks %d\n", emi_count);
-    }
-    
-    for(i = 0; i < emi_count; ++i) {
-      int offset = emi_peaks[i];
-      if (debug) {
-        fprintf(stdout, "%5d : %5d,%5d\n", offset, (int)data[0][offset], (int)data[1][offset]);
-      }
-      
-      uint32_t pixel = (uint32_t) round(data[0][offset]);
-      peakPixels.push_back(pixel);
-    }
-    
-    if (debug) {
-      fprintf(stdout, "num absorp_peaks %d\n", absorp_count);
-    }
-    
-    for(i = 0; i < absorp_count; ++i) {
-      int offset = absorp_peaks[i];
-      if (debug) {
-        fprintf(stdout, "%5d : %5d,%5d\n", offset, (int)data[0][offset],(int)data[1][offset]);
-      }
-    }
-    
-    free(data[0]);
-    free(data[1]);
-    
-    // FIXME: if there seems to be just 1 peak, then it is likely that the other
-    // points are another color range. Just assume N = 2 in that case ?
-    
-    N = (int) peakPixels.size();
-    
-    // Min N must be at least 1 at this point
-    
-    if (N < 2) {
-      N = 2;
-    }
-    
-    N = N * 4;
+  int N = (int) peakPixels.size();
+  
+  // Min N must be at least 1 at this point
+  
+  if (N < 2) {
+    N = 2;
   }
+  
+  N = N * 4;
   
   // Generate quant based on the input
   
@@ -3339,121 +3240,17 @@ captureNotCloseRegion(SuperpixelImage &spImage,
   // Use peak detection logic to examine the 1D histogram in sorted order so as to find the
   // peaks in the distribution.
   
-  int N = 0;
-  vector<uint32_t> peakPixels;
+  vector<uint32_t> peakPixels = gatherPeakPixels(sortedColortable, pixelToNumVotesMap);
   
-  {
-    // FIXME: dynamically allocate buffers to fit input size ?
-    
-    double*     data[2];
-    //              double      row[2];
-    
-#define MAX_PEAK    256
-    
-    int         emi_peaks[MAX_PEAK];
-    int         absorp_peaks[MAX_PEAK];
-    
-    int         emi_count = 0;
-    int         absorp_count = 0;
-    
-    double      delta = 1e-6;
-    int         emission_first = 0;
-    
-    int numDataPoints = (int) sortedColortable.size();
-    
-    assert(numDataPoints <= 256);
-    
-    data[0] = (double*) malloc(sizeof(double) * MAX_PEAK);
-    data[1] = (double*) malloc(sizeof(double) * MAX_PEAK);
-    
-    memset(data[0], 0, sizeof(double) * MAX_PEAK);
-    memset(data[1], 0, sizeof(double) * MAX_PEAK);
-    
-    int i = 0;
-    
-    // Insert zero slow with zero count so that a peak can
-    // be detected in the first position.
-    i += 1;
-    
-    for ( uint32_t pixel : sortedColortable ) {
-      uint32_t count = pixelToNumVotesMap[pixel];
-      uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
-      
-      data[0][i] = pixelNoAlpha;
-      //data[0][i] = i;
-      data[1][i] = count;
-      
-      if ((0)) {
-        fprintf(stderr, "data[%05d] = 0x%08X -> count %d\n", i, pixelNoAlpha, count);
-      }
-      
-      i += 1;
-    }
-    
-    // +1 at the end of the samples
-    i += 1;
-    
-    // Print the input data with zeros at the front and the back
-    
-    for ( int j = 0; j < i; j++ ) {
-      uint32_t pixelNoAlpha = data[0][j];
-      uint32_t count = data[1][j];
-      
-      if (debug) {
-        fprintf(stderr, "pixel %05d : 0x%08X = %d\n", j, pixelNoAlpha, count);
-      }
-    }
-    
-    if(detect_peak(data[1], i,
-                   emi_peaks, &emi_count, MAX_PEAK,
-                   absorp_peaks, &absorp_count, MAX_PEAK,
-                   delta, emission_first))
-    {
-      fprintf(stderr, "There are too many peaks.\n");
-      exit(1);
-    }
-    
-    if (debug) {
-    fprintf(stdout, "num emi_peaks %d\n", emi_count);
-    }
-    
-    for(i = 0; i < emi_count; ++i) {
-      int offset = emi_peaks[i];
-      if (debug) {
-        fprintf(stdout, "%5d : %5d,%5d\n", offset, (int)data[0][offset], (int)data[1][offset]);
-      }
-      
-      uint32_t pixel = (uint32_t) round(data[0][offset]);
-      peakPixels.push_back(pixel);
-    }
-    
-    if (debug) {
-    fprintf(stdout, "num absorp_peaks %d\n", absorp_count);
-    }
-    
-    for(i = 0; i < absorp_count; ++i) {
-      int offset = absorp_peaks[i];
-      if (debug) {
-        fprintf(stdout, "%5d : %5d,%5d\n", offset, (int)data[0][offset],(int)data[1][offset]);
-      }
-    }
-    
-    free(data[0]);
-    free(data[1]);
-    
-    // FIXME: if there seems to be just 1 peak, then it is likely that the other
-    // points are another color range. Just assume N = 2 in that case ?
-    
-    N = (int) peakPixels.size();
-    
-    // Min N must be at least 1 at this point
-    
-    if (N < 2) {
-      N = 2;
-    }
-    
-    N = N * 4;
+  int N = (int) peakPixels.size();
+  
+  // Min N must be at least 1 at this point
+  
+  if (N < 2) {
+    N = 2;
   }
+  
+  N = N * 4;
   
   /*
    
@@ -4798,6 +4595,114 @@ void insideOutsideTest(int32_t width,
   }
   
   return;
+}
+
+// Given a set of pixels, scan those pixels and determine the peaks
+// in the histogram to find likely most common graph peak values.
+
+vector<uint32_t> gatherPeakPixels(const vector<uint32_t> & pixels,
+                                  unordered_map<uint32_t, uint32_t> & pixelToNumVotesMap)
+{
+  const bool debug = true;
+  
+  vector<uint32_t> peakPixels;
+  
+  // FIXME: dynamically allocate buffers to fit input size ?
+  
+  double*     data[2];
+  //  double      row[2];
+  
+#define MAX_PEAK    256
+  
+  int         emi_peaks[MAX_PEAK];
+  int         absorp_peaks[MAX_PEAK];
+  
+  int         emi_count = 0;
+  int         absorp_count = 0;
+  
+  double      delta = 1e-6;
+  int         emission_first = 0;
+  
+  int numDataPoints = (int) pixels.size();
+  
+  assert(numDataPoints <= 256);
+  
+  data[0] = new double[MAX_PEAK]();
+  data[1] = new double[MAX_PEAK]();
+  
+  int i = 0;
+  
+  // Insert zero slow with zero count so that a peak can
+  // be detected in the first position.
+  i += 1;
+  
+  for ( uint32_t pixel : pixels ) {
+    uint32_t count = pixelToNumVotesMap[pixel];
+    uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
+    
+    data[0][i] = pixelNoAlpha;
+//    data[0][i] = i;
+    data[1][i] = count;
+    
+    if ((0)) {
+      fprintf(stderr, "data[%05d] = 0x%08X -> count %d\n", i, pixelNoAlpha, count);
+    }
+    
+    i += 1;
+  }
+  
+  // +1 at the end of the samples
+  i += 1;
+  
+  // Print the input data with zeros at the front and the back
+  
+  for ( int j = 0; j < i; j++ ) {
+    uint32_t pixelNoAlpha = data[0][j];
+    uint32_t count = data[1][j];
+    
+    if (debug) {
+      fprintf(stderr, "pixel %05d : 0x%08X = %d\n", j, pixelNoAlpha, count);
+    }
+  }
+  
+  if(detect_peak(data[1], i,
+                 emi_peaks, &emi_count, MAX_PEAK,
+                 absorp_peaks, &absorp_count, MAX_PEAK,
+                 delta, emission_first))
+  {
+    fprintf(stderr, "There are too many peaks.\n");
+    exit(1);
+  }
+  
+  if (debug) {
+    fprintf(stdout, "num emi_peaks %d\n", emi_count);
+  }
+  
+  for(i = 0; i < emi_count; ++i) {
+    int offset = emi_peaks[i];
+    if (debug) {
+      fprintf(stdout, "%5d : %5d,%5d\n", offset, (int)data[0][offset], (int)data[1][offset]);
+    }
+    
+    uint32_t pixel = (uint32_t) round(data[0][offset]);
+    peakPixels.push_back(pixel);
+  }
+  
+  if (debug) {
+    fprintf(stdout, "num absorp_peaks %d\n", absorp_count);
+  }
+  
+  for(i = 0; i < absorp_count; ++i) {
+    int offset = absorp_peaks[i];
+    if (debug) {
+      fprintf(stdout, "%5d : %5d,%5d\n", offset, (int)data[0][offset],(int)data[1][offset]);
+    }
+  }
+  
+  delete [] data[0];
+  delete [] data[1];
+  
+  return peakPixels;
 }
 
 // This method accepts a region defined by coords and returns the edges between
