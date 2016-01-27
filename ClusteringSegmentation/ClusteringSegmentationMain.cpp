@@ -229,17 +229,25 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     
     // Print in stack order
 
+    if (debug) {
     fprintf(stdout, "inside out order\n");
+    }
     
     while (!insideOutStack.empty())
     {
       int32_t tag = insideOutStack.top();
-      fprintf(stdout, "tag %5d has %5d children\n", tag, (int)containsTreeMap[tag].size());
+      if (debug) {
+        Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
+        fprintf(stdout, "tag %5d has %5d children and N = %d\n", tag, (int)containsTreeMap[tag].size(), (int)spPtr->coords.size());
+      }
       insideOutStack.pop();
       
       srmInsideOutOrder.push_back(tag);
     }
     
+    if (debug) {
+    fprintf(stdout, "done\n");
+    }
   }
   
   // Scan all superpixels and implement region merge and split based on the input pixels

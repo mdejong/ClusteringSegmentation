@@ -99,7 +99,8 @@ void recurseSuperpixelIterate(const vector<int32_t> &tags,
                               unordered_map<int32_t, vector<int32_t> > &map,
                               std::function<void(int32_t, const vector<int32_t> &)> f)
 {
-  for ( int32_t tag : tags ) {
+  for (auto it = tags.rbegin(); it != tags.rend(); ++it) {
+    int32_t tag = *it;
     vector<int32_t> &children = map[tag];
     
     f(tag, children);
