@@ -58,6 +58,56 @@ captureNotCloseRegion(SuperpixelImage &spImage,
                       int estNumColors,
                       const Mat &blockBasedQuantMat);
 
+void
+captureRegion(SuperpixelImage &spImage,
+              const Mat & inputImg,
+              const Mat & srmTags,
+              int32_t tag,
+              int blockWidth,
+              int blockHeight,
+              int superpixelDim,
+              Mat &mask,
+              const vector<Coord> &regionCoords,
+              const vector<Coord> &srmRegionCoords,
+              const Mat &blockBasedQuantMat);
+
+vector<SuperpixelEdge>
+getEdgesInRegion(SuperpixelImage &spImage,
+                 const Mat & tagsImg,
+                 int32_t tag,
+                 const vector<Coord> &coords);
+
+// Data and method for scanning ranges of tags around a shape.
+// The total number of divisions (start, end) depends on the
+// size of the bbox.
+
+typedef struct {
+  int start;
+  int end;
+  vector<int32_t> tags;
+  vector<Coord> coords;
+  bool flag;
+} TagsAroundShape;
+
+void
+clockwiseScanForTagsAroundShape(
+                                const Mat & tagsImg,
+                                int32_t tag,
+                                const vector<Coord> &coords,
+                                vector<TagsAroundShape> &tagsAroundVec);
+
+// This method will contract or expand a region defined by coordinates by N pixel.
+// In the case where the region cannot be expanded or contracted anymore this
+// method returns false.
+
+bool
+contractOrExpandRegion(const Mat & inputImg,
+                       int32_t tag,
+                       const vector<Coord> &coords,
+                       bool isExpand,
+                       int numPixels,
+                       vector<Coord> &outCoords);
+
 // Given an input image and a pixel buffer that is of the same dimensions
 // write the buffer of pixels out as an image in a file.
 
@@ -1066,21 +1116,1859 @@ captureRegionMask(SuperpixelImage &spImage,
   
   mask = (Scalar) 0;
   
-  vector<uint32_t> estClusterCenters;
+//  vector<uint32_t> estClusterCenters;
+//  
+//  bool isVeryClose = estimateClusterCenters(inputImg, tag, regionCoords, estClusterCenters);
+//  
+//  if (isVeryClose) {
+//    captureVeryCloseRegion(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, mask, regionCoords, coords, (int)estClusterCenters.size());
+//  } else {
+//    captureNotCloseRegion(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, mask, regionCoords, coords, (int)estClusterCenters.size(), blockBasedQuantMat);
+//  }
   
-  bool isVeryClose = estimateClusterCenters(inputImg, tag, regionCoords, estClusterCenters);
-  
-  if (isVeryClose) {
-    captureVeryCloseRegion(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, mask, regionCoords, coords, (int)estClusterCenters.size());
-  } else {
-    captureNotCloseRegion(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, mask, regionCoords, coords, (int)estClusterCenters.size(), blockBasedQuantMat);
-  }
+  captureRegion(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, mask, regionCoords, coords, blockBasedQuantMat);
   
   if (debug) {
     cout << "return captureRegionMask" << endl;
   }
   
   return true;
+}
+
+// This implementation will examine the bounds of a region after collapsing and then expanding the region back
+// out to discover where the true edges of regions are located.
+
+void
+captureRegion(SuperpixelImage &spImage,
+              const Mat & inputImg,
+              const Mat & srmTags,
+              int32_t tag,
+              int blockWidth,
+              int blockHeight,
+              int superpixelDim,
+              Mat &mask,
+              const vector<Coord> &regionCoords,
+              const vector<Coord> &srmRegionCoords,
+              const Mat &blockBasedQuantMat)
+{
+  const bool debug = true;
+  const bool debugDumpImages = true;
+  
+  if (debug) {
+    cout << "captureRegion " << tag << endl;
+  }
+  
+  // Gather the tags associated with all the regions
+  // indicated by regionCoords.
+  
+  vector<int32_t> allRegionTags;
+  
+  unordered_map<int32_t, int32_t> allRegionTagsMap;
+  
+  for ( Coord c : regionCoords ) {
+    Vec3b vec = srmTags.at<Vec3b>(c.y, c.x);
+    int32_t tag = Vec3BToUID(vec);
+    allRegionTagsMap[tag] = tag;
+  }
+  for ( auto &pair : allRegionTagsMap ) {
+    allRegionTags.push_back(pair.first);
+  }
+  
+  if (debug) {
+    cout << "allRegionTags:" << endl;
+    for ( int32_t tag : allRegionTags ) {
+      cout << tag << endl;
+    }
+    cout << "";
+  }
+  
+  // How many edge would there be in the expanded regionCoords ?
+  
+  vector<SuperpixelEdge> extendedRegionEdges;
+  
+  if (1) {
+    vector<SuperpixelEdge> edges = getEdgesInRegion(spImage, srmTags, tag, regionCoords);
+    
+    cout << "getEdgesInRegion returned " << edges.size() << " edges" << endl;
+    
+    for ( SuperpixelEdge edge : edges ) {
+      cout << "edge " << edge << endl;
+    }
+    
+    cout << "";
+    
+    extendedRegionEdges = edges;
+  }
+  
+  vector<Coord> outCoords;
+  
+  vector<vector<Coord> > contractStack;
+  vector<vector<Coord> > expandStack;
+  
+  // Contract the mask area starting from the region pixels
+  
+  int contractStep = 1;
+  
+  Vec3b contractingCenterOfMass(0,0,0);
+  
+  for ( ; 1 ; contractStep++) {
+    bool worked = contractOrExpandRegion(inputImg, tag, srmRegionCoords, false, contractStep, outCoords);
+    if (!worked) {
+      // Deduct 1 so that the step number is the value just before the iteration stopped
+      // due to a COM being the same or no more pixels in the mask.
+      
+      contractStep -= 1;
+      
+      break;
+    }
+    
+    // If outCoords step does not reduce the colors more then stop at this point
+    
+    vector<Vec3b> vecOfPixels;
+    
+    for ( Coord c : outCoords ) {
+      Vec3b vec = inputImg.at<Vec3b>(c.y,c.x);
+      vecOfPixels.push_back(vec);
+    }
+    
+    Vec3b centerOfMass = centerOfMass3d(vecOfPixels);
+    
+    if (debug) {
+      uint32_t p1 = Vec3BToUID(contractingCenterOfMass);
+      uint32_t p2 = Vec3BToUID(centerOfMass);
+      
+      printf("contract region returned %5d coords, contractingCenterOfMass 0x%08X vs COM 0x%08X\n", (int)outCoords.size(), p1, p2);
+    }
+    
+    if (centerOfMass == contractingCenterOfMass) {
+      if (debug) {
+        printf("stopping after %d contraction steps since internal center of mass color is consistent\n", contractStep);
+      }
+      
+      // Deduct 1 so that the step number is the value just before the iteration stopped
+      // due to a COM being the same or no more pixels in the mask.
+      
+      contractStep -= 1;
+      
+      break;
+    } else {
+      contractingCenterOfMass = centerOfMass;
+      
+      contractStack.push_back(outCoords);
+    }
+    
+    // If zero edges inside the region is found, then stop contracting
+    
+    if (debug) {
+      vector<SuperpixelEdge> edges = getEdgesInRegion(spImage, srmTags, tag, outCoords);
+      
+      cout << "getEdgesInRegion returned " << edges.size() << " edges" << endl;
+      
+      for ( SuperpixelEdge edge : edges ) {
+        cout << "edge " << edge << endl;
+      }
+      
+      cout << "";
+    }
+    
+    if (1) {
+      vector<SuperpixelEdge> edges = getEdgesInRegion(spImage, srmTags, tag, outCoords);
+      
+      if (edges.size() == 0) {
+        // No edges means that the interior region contains only pixels associated
+        // with the region identified by tag. Note that the contract step is
+        // left alone here so that the coords for this region step are appened
+        // to contractStack.
+        
+        if (debug) {
+          printf("stopping after %d contraction steps since no edges found inside region\n", contractStep);
+        }
+        
+        break;
+      }
+    }
+  }
+  
+  // Expand region out so that more pixels are included from 1 to N neighbors.
+  
+  int expandStep = 1;
+  bool oneMoreStep = false;
+  
+  //  Vec3b expandingCenterOfMass(0,0,0);
+  
+  for ( ; 1 ; expandStep++) {
+    bool worked = contractOrExpandRegion(inputImg, tag, srmRegionCoords, true, expandStep, outCoords);
+    if (!worked) {
+      // Deduct 1 so that the step number is the value just before the iteration stopped
+      // due to a COM being the same or no more pixels in the mask.
+      
+      expandStep -= 1;
+      
+      break;
+    }
+    
+    // If outCoords step does not reduce the colors more then stop at this point
+    
+    vector<Vec3b> vecOfPixels;
+    
+    for ( Coord c : outCoords ) {
+      Vec3b vec = inputImg.at<Vec3b>(c.y,c.x);
+      vecOfPixels.push_back(vec);
+    }
+    
+    //    Vec3b centerOfMass = centerOfMass3d(vecOfPixels);
+    //
+    //    if (debug) {
+    //      uint32_t p1 = Vec3BToUID(expandingCenterOfMass);
+    //      uint32_t p2 = Vec3BToUID(centerOfMass);
+    //
+    //      printf("expand region returned %5d coords, expandingCenterOfMass 0x%08X vs COM 0x%08X\n", (int)outCoords.size(), p1, p2);
+    //    }
+    
+    if (debug) {
+      vector<SuperpixelEdge> edges = getEdgesInRegion(spImage, srmTags, tag, outCoords);
+      
+      cout << "getEdgesInRegion returned " << edges.size() << " edges" << endl;
+      
+      for ( SuperpixelEdge edge : edges ) {
+        cout << "edge " << edge << endl;
+      }
+      
+      cout << "";
+    }
+    
+    if (oneMoreStep) {
+      //      if (debug) {
+      //        printf("stopping after %d expansion steps since internal center of mass color is consistent\n", expandStep);
+      //      }
+      
+      // Deduct 1 so that the step number is the value just before the iteration stopped
+      // due to a COM being the same or no more pixels in the mask.
+      
+      //expandStep -= 1;
+      
+      expandStack.push_back(outCoords);
+      
+      break;
+    } else {
+      //expandingCenterOfMass = centerOfMass;
+      
+      expandStack.push_back(outCoords);
+    }
+    
+    if (1) {
+      vector<SuperpixelEdge> edges = getEdgesInRegion(spImage, srmTags, tag, outCoords);
+      
+      if (edges.size() == extendedRegionEdges.size()) {
+        if (debug) {
+          printf("stopping after %d expansion steps since the number of edges %d matches the extended region num edges\n", expandStep, (int)edges.size());
+        }
+        
+        oneMoreStep = true;
+        
+        //break;
+      }
+    }
+  }
+  
+  // Use best expanded range of coords
+  
+  vector<Coord> bestRegionCoords = expandStack[expandStack.size() - 1];
+  
+  // Copy input pixels
+  
+  int numPixels = (int)bestRegionCoords.size();
+  
+  uint32_t *inPixels = new uint32_t[numPixels];
+  uint32_t *outPixels = new uint32_t[numPixels];
+  
+  for ( int i = 0; i < numPixels; i++ ) {
+    Coord c = bestRegionCoords[i];
+    
+    Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+    uint32_t pixel = Vec3BToUID(vec);
+    inPixels[i] = pixel;
+  }
+  
+  // Generate mask Mat that is the same dimensions as blockMat but contains just one
+  // byte for each pixel and acts as a mask. The white pixels indicate the blocks
+  // that are included in the mask.
+  
+  Mat blockMaskMat(blockBasedQuantMat.size(), CV_8UC1);
+  blockMaskMat = (Scalar) 0;
+  
+  for ( Coord c : bestRegionCoords ) {
+    // Convert (X,Y) to block (X,Y)
+    
+    int blockX = c.x / superpixelDim;
+    int blockY = c.y / superpixelDim;
+    
+    blockMaskMat.at<uint8_t>(blockY, blockX) = 0xFF;
+  }
+  
+  if (debugDumpImages) {
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_best_region_mask_blocks" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, blockMaskMat);
+    cout << "wrote " << fname << endl;
+  }
+  
+  if (debugDumpImages) {
+    Mat tmpMat(inputImg.size(), CV_8UC4);
+    tmpMat = Scalar(0, 0, 0, 0);
+    
+    for ( Coord c : bestRegionCoords ) {
+      Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+      Vec4b vec4;
+      vec4[0] = vec[0];
+      vec4[1] = vec[1];
+      vec4[2] = vec[2];
+      vec4[3] = 0xFF;
+      tmpMat.at<Vec4b>(c.y, c.x) = vec4;
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_best_region_alpha" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, tmpMat);
+    cout << "wrote " << fname << endl;
+    cout << "";
+  }
+  
+  // Do a clockwise scan of the pixels identified in the best region mask and
+  // gather all the tags in that direction. This is basically a line that is
+  // rotated around via a Matrix rotation.
+  
+  vector<TagsAroundShape> tagsAround;
+  
+  clockwiseScanForTagsAroundShape(srmTags, tag, bestRegionCoords, tagsAround);
+  
+  cout << "num TAS ranges N = " << tagsAround.size() << endl;
+  
+  for ( TagsAroundShape tas : tagsAround ) {
+    cout << "for TAS range " << tas.start << " to " << tas.end << " contains tags (";
+    for ( int32_t tag : tas.tags ) {
+      cout << tag << " ";
+    }
+    cout << ") and coords N = " << tas.coords.size();
+    cout << endl;
+    cout << "";
+    
+    // Display coords that correspond to this range
+    
+    if (debugDumpImages) {
+      Mat tmpMat(inputImg.size(), CV_8UC4);
+      tmpMat = Scalar(0, 0, 0, 0);
+      
+      for ( Coord c : tas.coords ) {
+        Vec4b vec4;
+        
+        Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+        
+        vec4[0] = vec[0];
+        vec4[1] = vec[1];
+        vec4[2] = vec[2];
+        vec4[3] = 0xFF;
+        tmpMat.at<Vec4b>(c.y, c.x) = vec4;
+      }
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_tas_range" << tas.start << "_" << tas.end << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, tmpMat);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+  }
+  
+  // Iteration must be in terms of the scan regions, since breaking the input up into
+  // known "secants" is required in order to process regions in terms of one
+  // gradient to the next. Note the special case where there is only 1 tag
+  // (likely this is a parent tag). In that case, do 1 merge from the interior
+  // region all the way out to the containing region.
+  
+  // Scan the vectors between major colors in large blocks in the expanded regions.
+  // This scan must be able to extract a certain region, like in N, S, E, W as
+  // a vector from one to another.
+  
+  unordered_map<uint32_t, uint32_t> pixelToNumVotesMap;
+  
+  vote_for_identical_neighbors(pixelToNumVotesMap, blockBasedQuantMat, blockMaskMat);
+  
+  vector<uint32_t> sortedPixelKeys = sort_keys_by_count(pixelToNumVotesMap, true);
+  
+  if (debug) {
+    fprintf(stdout, "nearby vector start/end points\n");
+    
+    for ( uint32_t pixel : sortedPixelKeys ) {
+      uint32_t count = pixelToNumVotesMap[pixel];
+      fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixel, pixel, count);
+    }
+    fprintf(stdout, "done\n");
+  }
+  
+  for ( int32_t otherTag : allRegionTags ) {
+    if (tag == otherTag) {
+      continue;
+    }
+    
+    Superpixel *spPtr = spImage.getSuperpixelPtr(otherTag);
+    int N = (int) spPtr->coords.size();
+    
+    cout << "otherTag " << otherTag << " N = " << N << endl;
+  }
+  
+  if (debugDumpImages) {
+    Mat tmpMat(inputImg.size(), CV_8UC4);
+    tmpMat = Scalar(0, 0, 0, 0);
+    
+    for ( Coord c : bestRegionCoords ) {
+      Vec4b vec4;
+      vec4 = tmpMat.at<Vec4b>(c.y, c.x);
+      if (vec4[3] == 0xFF) {
+        continue;
+      }
+      
+      Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+      uint32_t pixel = Vec3BToUID(vec);
+      
+      int blockX = c.x / superpixelDim;
+      int blockY = c.y / superpixelDim;
+      
+      Vec3b quantPixelVec = blockBasedQuantMat.at<Vec3b>(blockY, blockX);
+      
+      vec4[0] = quantPixelVec[0];
+      vec4[1] = quantPixelVec[1];
+      vec4[2] = quantPixelVec[2];
+      vec4[3] = 0xFF;
+      tmpMat.at<Vec4b>(c.y, c.x) = vec4;
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_best_other_votes" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, tmpMat);
+    cout << "wrote " << fname << endl;
+    cout << "";
+  }
+  
+  
+  //  MOMO
+  //
+  //  foreach tag in vote_for_identical_neighbors(pixelToNumVotesMap, blockBasedQuantMat, blockMaskMat) {
+  //
+  //  }
+  
+  // Gather the most likely region center color values based on voting
+  // for known neighbor values. This logic gathers vector centers
+  // in the nearby region.
+  
+  // Count neighbors that share a quant pixel value after conversion to blocks
+  
+  //  unordered_map<uint32_t, uint32_t> pixelToNumVotesMap;
+  //
+  //  vote_for_identical_neighbors(pixelToNumVotesMap, blockBasedQuantMat, blockMaskMat);
+  //
+  //  vector<uint32_t> sortedPixelKeys = sort_keys_by_count(pixelToNumVotesMap, true);
+  //
+  //  if (debug) {
+  //    fprintf(stdout, "nearby vector start/end points\n");
+  //
+  //    for ( uint32_t pixel : sortedPixelKeys ) {
+  //      uint32_t count = pixelToNumVotesMap[pixel];
+  //      fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixel, pixel, count);
+  //    }
+  //    fprintf(stdout, "done\n");
+  //  }
+  
+  vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(sortedPixelKeys);
+  
+  int numPoints = (int) sortedOffsets.size();
+  
+  vector<uint32_t> sortedColortable;
+  
+  for (int i = 0; i < numPoints; i++) {
+    int si = (int) sortedOffsets[i];
+    uint32_t pixel = sortedPixelKeys[si];
+    sortedColortable.push_back(pixel);
+  }
+  
+  if (debug) {
+    for ( uint32_t pixel : sortedColortable ) {
+      uint32_t count = pixelToNumVotesMap[pixel];
+      fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixel, pixel, count);
+    }
+    fprintf(stdout, "done\n");
+  }
+  
+  if (debugDumpImages) {
+    Mat sortedQtableOutputMat = Mat(numPoints, 1, CV_8UC3);
+    sortedQtableOutputMat = (Scalar) 0;
+    
+    for (int i = 0; i < numPoints; i++) {
+      int si = (int) sortedOffsets[i];
+      uint32_t pixel = sortedPixelKeys[si];
+      Vec3b vec = PixelToVec3b(pixel);
+      sortedQtableOutputMat.at<Vec3b>(i, 0) = vec;
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_quant_peaks_sorted" << ".png";
+    string filename = fnameStream.str();
+    
+    char *outQuantTableFilename = (char*) filename.c_str();
+    imwrite(outQuantTableFilename, sortedQtableOutputMat);
+    cout << "wrote " << outQuantTableFilename << endl;
+  }
+  
+  // Dump sorted pixel data as a CSV file, with int value and hex rep of int value for readability
+  
+  if (debugDumpImages) {
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_quant_peaks_sorted" << ".csv";
+    string fname = fnameStream.str();
+    
+    FILE *fout = fopen(fname.c_str(), "w+");
+    
+    for ( uint32_t pixel : sortedColortable ) {
+      uint32_t count = pixelToNumVotesMap[pixel];
+      uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
+      fprintf(fout, "%d,0x%08X,%d\n", pixelNoAlpha, pixelNoAlpha, count);
+    }
+    
+    fclose(fout);
+    cout << "wrote " << fname << endl;
+  }
+  
+  // Use peak detection logic to examine the 1D histogram in sorted order so as to find the
+  // peaks in the distribution.
+  
+  int N = 0;
+  vector<uint32_t> peakPixels;
+  
+  {
+    // FIXME: dynamically allocate buffers to fit input size ?
+    
+    double*     data[2];
+    //              double      row[2];
+    
+#define MAX_PEAK    256
+    
+    int         emi_peaks[MAX_PEAK];
+    int         absorp_peaks[MAX_PEAK];
+    
+    int         emi_count = 0;
+    int         absorp_count = 0;
+    
+    double      delta = 1e-6;
+    int         emission_first = 0;
+    
+    int numDataPoints = (int) sortedColortable.size();
+    
+    assert(numDataPoints <= 256);
+    
+    data[0] = (double*) malloc(sizeof(double) * MAX_PEAK);
+    data[1] = (double*) malloc(sizeof(double) * MAX_PEAK);
+    
+    memset(data[0], 0, sizeof(double) * MAX_PEAK);
+    memset(data[1], 0, sizeof(double) * MAX_PEAK);
+    
+    int i = 0;
+    
+    // Insert zero slow with zero count so that a peak can
+    // be detected in the first position.
+    i += 1;
+    
+    for ( uint32_t pixel : sortedColortable ) {
+      uint32_t count = pixelToNumVotesMap[pixel];
+      uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
+      
+      data[0][i] = pixelNoAlpha;
+      //data[0][i] = i;
+      data[1][i] = count;
+      
+      if ((0)) {
+        fprintf(stderr, "data[%05d] = 0x%08X -> count %d\n", i, pixelNoAlpha, count);
+      }
+      
+      i += 1;
+    }
+    
+    // +1 at the end of the samples
+    i += 1;
+    
+    // Print the input data with zeros at the front and the back
+    
+    for ( int j = 0; j < i; j++ ) {
+      uint32_t pixelNoAlpha = data[0][j];
+      uint32_t count = data[1][j];
+      
+      if (debug) {
+        fprintf(stderr, "pixel %05d : 0x%08X = %d\n", j, pixelNoAlpha, count);
+      }
+    }
+    
+    if(detect_peak(data[1], i,
+                   emi_peaks, &emi_count, MAX_PEAK,
+                   absorp_peaks, &absorp_count, MAX_PEAK,
+                   delta, emission_first))
+    {
+      fprintf(stderr, "There are too many peaks.\n");
+      exit(1);
+    }
+    
+    if (debug) {
+      fprintf(stdout, "num emi_peaks %d\n", emi_count);
+    }
+    
+    for(i = 0; i < emi_count; ++i) {
+      int offset = emi_peaks[i];
+      if (debug) {
+        fprintf(stdout, "%5d : %5d,%5d\n", offset, (int)data[0][offset], (int)data[1][offset]);
+      }
+      
+      uint32_t pixel = (uint32_t) round(data[0][offset]);
+      peakPixels.push_back(pixel);
+    }
+    
+    if (debug) {
+      fprintf(stdout, "num absorp_peaks %d\n", absorp_count);
+    }
+    
+    for(i = 0; i < absorp_count; ++i) {
+      int offset = absorp_peaks[i];
+      if (debug) {
+        fprintf(stdout, "%5d : %5d,%5d\n", offset, (int)data[0][offset],(int)data[1][offset]);
+      }
+    }
+    
+    free(data[0]);
+    free(data[1]);
+    
+    // FIXME: if there seems to be just 1 peak, then it is likely that the other
+    // points are another color range. Just assume N = 2 in that case ?
+    
+    N = (int) peakPixels.size();
+    
+    // Min N must be at least 1 at this point
+    
+    if (N < 2) {
+      N = 2;
+    }
+    
+    N = N * 4;
+  }
+  
+  // Generate quant based on the input
+  
+  const int numClusters = N;
+  
+  if (debug) {
+    cout << "numClusters detected as " << numClusters << endl;
+  }
+  
+  uint32_t *colortable = new uint32_t[numClusters];
+  
+  uint32_t numActualClusters = numClusters;
+  
+  int allPixelsUnique = 0;
+  
+  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
+  
+  // Write quant output where each original pixel is replaced with the closest
+  // colortable entry.
+  
+  if (debugDumpImages) {
+    Mat tmpResultImg = inputImg.clone();
+    tmpResultImg = Scalar(0,0,0xFF);
+    
+    for ( int i = 0; i < numPixels; i++ ) {
+      Coord c = bestRegionCoords[i];
+      uint32_t pixel = outPixels[i];
+      Vec3b vec = PixelToVec3b(pixel);
+      tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+    }
+    
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_quant_output" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, tmpResultImg);
+      cout << "wrote " << fname << endl;
+    }
+    
+    // table
+    
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_quant_table" << ".png";
+      string fname = fnameStream.str();
+      
+      dumpQuantTableImage(fname, inputImg, colortable, numActualClusters);
+    }
+  }
+  
+  // Generate color sorted clusters
+  
+  {
+    vector<uint32_t> clusterCenterPixels;
+    
+    for ( int i = 0; i < numActualClusters; i++) {
+      uint32_t pixel = colortable[i];
+      clusterCenterPixels.push_back(pixel);
+    }
+    
+#if defined(DEBUG)
+    if ((1)) {
+      unordered_map<uint32_t, uint32_t> seen;
+      
+      for ( int i = 0; i < numActualClusters; i++ ) {
+        uint32_t pixel;
+        pixel = colortable[i];
+        
+        if (seen.count(pixel) > 0) {
+        } else {
+          // Note that only the first seen index is retained, this means that a repeated
+          // pixel value is treated as a dup.
+          
+          seen[pixel] = i;
+        }
+      }
+      
+      int numQuantUnique = (int)seen.size();
+      assert(numQuantUnique == numActualClusters);
+    }
+#endif // DEBUG
+    
+    if (debug) {
+      fprintf(stdout, "numClusters %5d : numActualClusters %5d \n", numClusters, numActualClusters);
+      
+      unordered_map<uint32_t, uint32_t> seen;
+      
+      for ( int i = 0; i < numActualClusters; i++ ) {
+        uint32_t pixel;
+        pixel = colortable[i];
+        
+        if (seen.count(pixel) > 0) {
+          fprintf(stdout, "cmap[%3d] = 0x%08X (DUP of %d)\n", i, pixel, seen[pixel]);
+        } else {
+          fprintf(stdout, "cmap[%3d] = 0x%08X\n", i, pixel);
+          
+          // Note that only the first seen index is retained, this means that a repeated
+          // pixel value is treated as a dup.
+          
+          seen[pixel] = i;
+        }
+      }
+      
+      fprintf(stdout, "cmap contains %3d unique entries\n", (int)seen.size());
+      
+      int numQuantUnique = (int)seen.size();
+      
+      assert(numQuantUnique == numActualClusters);
+    }
+    
+    vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(clusterCenterPixels);
+    
+    // Once cluster centers have been sorted by 3D color cube distance, emit as PNG
+    
+    Mat sortedQtableOutputMat = Mat(numActualClusters, 1, CV_8UC3);
+    sortedQtableOutputMat = (Scalar) 0;
+    
+    vector<uint32_t> sortedColortable;
+    
+    for (int i = 0; i < numActualClusters; i++) {
+      int si = (int) sortedOffsets[i];
+      uint32_t pixel = colortable[si];
+      Vec3b vec = PixelToVec3b(pixel);
+      sortedQtableOutputMat.at<Vec3b>(i, 0) = vec;
+      
+      sortedColortable.push_back(pixel);
+    }
+    
+    if (debugDumpImages)
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_quant_table_sorted" << ".png";
+      string filename = fnameStream.str();
+      
+      char *outQuantTableFilename = (char*) filename.c_str();
+      imwrite(outQuantTableFilename, sortedQtableOutputMat);
+      cout << "wrote " << outQuantTableFilename << endl;
+    }
+    
+    // Map pixels to sorted colortable offset
+    
+    unordered_map<uint32_t, uint32_t> pixel_to_sorted_offset;
+    
+    assert(numActualClusters <= 256);
+    
+    for (int i = 0; i < numActualClusters; i++) {
+      int si = (int) sortedOffsets[i];
+      uint32_t pixel = colortable[si];
+      pixel_to_sorted_offset[pixel] = si;
+    }
+    
+    Mat sortedQuantOutputMat = inputImg.clone();
+    sortedQuantOutputMat = Scalar(0,0,0xFF);
+    
+    for ( int i = 0; i < numPixels; i++ ) {
+      Coord c = bestRegionCoords[i];
+      uint32_t pixel = outPixels[i];
+      
+      assert(pixel_to_sorted_offset.count(pixel) > 0);
+      uint32_t offset = pixel_to_sorted_offset[pixel];
+      
+      if ((debug) && false) {
+        char buffer[1024];
+        snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is %d -> offset %d\n", c.x, c.y, pixel, offset);
+        cout << buffer;
+      }
+      
+      assert(offset <= 256);
+      uint32_t grayscalePixel = (offset << 16) | (offset << 8) | offset;
+      
+      Vec3b vec = PixelToVec3b(grayscalePixel);
+      sortedQuantOutputMat.at<Vec3b>(c.y, c.x) = vec;
+    }
+    
+    if (debugDumpImages)
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_quant_table_offsets" << ".png";
+      string filename = fnameStream.str();
+      
+      char *outQuantFilename = (char*)filename.c_str();
+      imwrite(outQuantFilename, sortedQuantOutputMat);
+      cout << "wrote " << outQuantFilename << endl;
+    }
+  }
+  
+  // All the input region pixels have not been passed through a local quant operation
+  // and a most common color for a given srm tag can noe be calculated. This generates
+  // vector end points from region to region in terms of the output quant colors.
+  
+  unordered_map<int32_t, unordered_map<uint32_t, uint32_t> > regionToQuantPixelsMap;
+  
+  for ( int i = 0; i < numPixels; i++ ) {
+    Coord c = bestRegionCoords[i];
+    uint32_t quantPixel = outPixels[i];
+    
+    Vec3b srmVec = srmTags.at<Vec3b>(c.y, c.x);
+    int32_t srmTag = Vec3BToUID(srmVec);
+    
+    unordered_map<uint32_t, uint32_t> &pixelHistogram = regionToQuantPixelsMap[srmTag];
+    pixelHistogram[quantPixel] += 1;
+  }
+  
+  // Calculate the largest count pixel for each histogram
+  
+  unordered_map<uint32_t, uint32_t> maxQuantPixelFromRegionMap;
+  
+  for ( auto &pair : regionToQuantPixelsMap ) {
+    int32_t tag = pair.first;
+    unordered_map<uint32_t, uint32_t> &pixelHistogram = pair.second;
+    
+    int maxCount = 0;
+    uint32_t maxPixel = 0;
+    
+    for ( auto &pair : pixelHistogram ) {
+      uint32_t pixel = pair.first;
+      uint32_t count = pair.second;
+      
+      if (count > maxCount) {
+        maxCount = count;
+        maxPixel = pixel;
+      }
+    }
+    
+    assert(maxCount > 0);
+    maxQuantPixelFromRegionMap[tag] = maxPixel;
+  }
+  
+  if (debug) {
+    for ( auto &pair : regionToQuantPixelsMap ) {
+      int32_t tag = pair.first;
+      unordered_map<uint32_t, uint32_t> &pixelHistogram = pair.second;
+      
+      printf("srm region %d\n", tag);
+      for ( auto &pair : pixelHistogram ) {
+        uint32_t pixel = pair.first;
+        uint32_t count = pair.second;
+        printf("pixel 0x%08X -> count %5d\n", pixel, count);
+      }
+      
+      printf("max pixel for region 0x%08X\n", maxQuantPixelFromRegionMap[tag]);
+    }
+    
+    printf("done\n");
+  }
+  
+  // With a cluster center pixel determined in terms of the most common pixel
+  // in a given region, generate a vote table that determines where specific
+  // colors fall between vectors.
+  
+  if (debugDumpImages) {
+    int numPoints = (int) maxQuantPixelFromRegionMap.size();
+    
+    Mat outputMat = Mat(numPoints, 1, CV_8UC3);
+    outputMat = (Scalar) 0;
+    
+    int i = 0;
+    
+    vector<uint32_t> clusterCenterPixels;
+    
+    for ( auto &pair : regionToQuantPixelsMap ) {
+      int32_t tag = pair.first;
+      uint32_t pixel = maxQuantPixelFromRegionMap[tag];
+      clusterCenterPixels.push_back(pixel);
+    }
+    
+    for ( uint32_t pixel : clusterCenterPixels ) {
+      Vec3b vec = PixelToVec3b(pixel);
+      outputMat.at<Vec3b>(i, 0) = vec;
+      i += 1;
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_nearby_cluster_endpoints" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, outputMat);
+    cout << "wrote " << fname << endl;
+  }
+  
+  // Generate vectors that determine how different colors that are nearby each other
+  // in 2D space map to other nearby colors. It is only possible to determine that
+  // regions are "neighbors" and that those regions then have gradient vectors from
+  // one to the other. Colors that are near each other in 3D space may not be near
+  // each other in 2D space, so only a pair of dominate colors at a time can be
+  // considered.
+  
+  vector<pair<int32_t,int32_t> > neighborsVecOfPairs;
+  
+  //  auto &neighborsSet = spImage.edgeTable.getNeighborsSet(tag);
+  
+  // Gather all tags in the extended region (masked as blocks)
+  
+  set<int32_t> neighborsSet;
+  
+  set<pair<int32_t,int32_t> > allNeighborsPairsSet;
+  
+  for ( int32_t tag : allRegionTags ) {
+    neighborsSet.insert(tag);
+  }
+  
+  // Save all pairs where both sides appear in neighborsSet.
+  
+  for ( int32_t neighborTag : neighborsSet ) {
+    auto &neighborsOfNeighborSet = spImage.edgeTable.getNeighborsSet(neighborTag);
+    
+    for ( int32_t neighborOfNeighborTag : neighborsOfNeighborSet ) {
+      if (neighborsSet.count(neighborOfNeighborTag) > 0) {
+        // Both neighborTag and neighborOfNeighborTag are in neighborsSet
+        int32_t t1 = neighborTag;
+        int32_t t2 = neighborOfNeighborTag;
+        if (t1 > t2) {
+          int32_t tmp = t1;
+          t1 = t2;
+          t2 = tmp;
+        }
+        pair<int32_t,int32_t> pair = make_pair(t1, t2);
+        allNeighborsPairsSet.insert(pair);
+      }
+    }
+  }
+  
+  if (debug) {
+    cout << "all neighbor pairs: " << endl;
+    
+    for ( auto & pair : allNeighborsPairsSet ) {
+      cout << pair.first << " -> " << pair.second << endl;
+    }
+  }
+  
+  //  for ( int32_t neighborTag : neighborsSet ) {
+  //    pair<int32_t,int32_t> pair = make_pair(tag, neighborTag);
+  //    neighborsVecOfPairs.push_back(pair);
+  //  }
+  
+  for ( auto & pair : allNeighborsPairsSet ) {
+    neighborsVecOfPairs.push_back(pair);
+  }
+  
+  if (debug) {
+    cout << "neighborsVecOfPairs: " << endl;
+    
+    for ( auto &pair : neighborsVecOfPairs ) {
+      int32_t tag1 = pair.first;
+      int32_t tag2 = pair.second;
+      cout << tag1 << " -> " << tag2 << endl;
+    }
+    
+    cout << "done" << endl;
+  }
+  
+  // Examine points in 3D space by gathering center of mass coordinates
+  // for (B,G,R) values and emit as an image that contains the peak
+  // points and the center of mass point.
+  
+  if ((1)) {
+    vector<Vec3b> clusterCenterPoints;
+    
+    for (int i = 0; i < numActualClusters; i++) {
+      uint32_t pixel = colortable[i];
+      Vec3b vec = PixelToVec3b(pixel);
+      clusterCenterPoints.push_back(vec);
+    }
+    
+    Vec3b centerOfMass = centerOfMass3d(clusterCenterPoints);
+    
+    if (debugDumpImages) {
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_peak_center_of_mass" << ".png";
+      string fname = fnameStream.str();
+      
+      // Write image that contains one color in each row in a N x 2 image
+      
+      int numPoints = (int) peakPixels.size() + 1;
+      
+      Mat outputMat = Mat(numPoints, 1, CV_8UC3);
+      outputMat = (Scalar) 0;
+      
+      int i = 0;
+      
+      for ( uint32_t pixel : peakPixels ) {
+        pixel = pixel & 0x00FFFFFF;
+        if (debug) {
+          printf("peak[%5d] = 0x%08X\n", i, pixel);
+        }
+        Vec3b vec = PixelToVec3b(pixel);
+        outputMat.at<Vec3b>(i, 0) = vec;
+        i += 1;
+      }
+      
+      // Add center of mass pixel
+      
+      outputMat.at<Vec3b>(i, 0) = centerOfMass;
+      
+      if (debug) {
+        printf("peak com = 0x%02X%02X%02X\n", centerOfMass[0], centerOfMass[1], centerOfMass[2]);
+      }
+      
+      imwrite(fname, outputMat);
+      cout << "wrote " << fname << endl;
+    }
+  }
+  
+  // Pass all input points to the fitLine() method in attempt to get a best
+  // fit line.
+  
+  if ((1)) {
+    vector<Vec3b> allRegionPoints;
+    
+    for (int i = 0; i < numPixels; i++) {
+      uint32_t pixel = inPixels[i];
+      Vec3b vec = PixelToVec3b(pixel);
+      allRegionPoints.push_back(vec);
+    }
+    
+    vector<float> lineVec;
+    vector<Vec3b> linePoints;
+    
+    int distType = CV_DIST_L12;
+    //int distType = CV_DIST_FAIR;
+    
+    fitLine(allRegionPoints, lineVec, distType, 0, 0.1, 0.1);
+    
+    // In case of 3D fitting (vx, vy, vz, x0, y0, z0)
+    // where (vx, vy, vz) is a normalized vector collinear to the line
+    // and (x0, y0, z0) is a point on the line.
+    
+    Vec3b centerOfMass(round(lineVec[3]), round(lineVec[4]), round(lineVec[5]));
+    
+    for (int i = 0; i < 300; i++) {
+      linePoints.push_back(centerOfMass);
+      linePoints.push_back(centerOfMass); // Dup COM
+    }
+    
+    Vec3f colinearF(lineVec[0], lineVec[1], lineVec[2]);
+    Vec3f centerOfMassF(centerOfMass[0], centerOfMass[1], centerOfMass[2]);
+    
+    // Add another point away from the com
+    
+    int scalar = 30; // num points in (x,y,z) space
+    
+    Vec3f comPlusUnitF = centerOfMassF + (colinearF * scalar);
+    Vec3b comPlusUnit(round(comPlusUnitF[0]), round(comPlusUnitF[1]), round(comPlusUnitF[2]));
+    
+    Vec3f comMinusUnitF = centerOfMassF - (colinearF * scalar);
+    Vec3b comMinusUnit(round(comMinusUnitF[0]), round(comMinusUnitF[1]), round(comMinusUnitF[2]));
+    
+    if (debug) {
+      cout << "centerOfMassF " << centerOfMassF << endl;
+      cout << "colinearF " << colinearF << endl;
+      cout << "comPlusUnitF " << comPlusUnitF << endl;
+      cout << "comMinusUnitF " << comMinusUnitF << endl;
+      cout << "comPlusUnit " << comPlusUnit << endl;
+      cout << "comMinusUnit " << comMinusUnit << endl;
+    }
+    
+    for (int i = 0; i < 300; i++) {
+      linePoints.push_back(comPlusUnit);
+      linePoints.push_back(comMinusUnit);
+    }
+    
+    if (debugDumpImages) {
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_all_center_of_mass" << ".png";
+      string fname = fnameStream.str();
+      
+      // Write image that contains one color in each row in a N x 2 image
+      
+      int numPoints = (int) allRegionPoints.size() + (int) linePoints.size();
+      
+      Mat outputMat = Mat(numPoints, 1, CV_8UC3);
+      outputMat = (Scalar) 0;
+      
+      int i = 0;
+      
+      for ( Vec3b vec : allRegionPoints ) {
+        uint32_t pixel = Vec3BToUID(vec);
+        pixel = pixel & 0x00FFFFFF;
+        if (debug) {
+          printf("peak[%5d] = 0x%08X\n", i, pixel);
+        }
+        //Vec3b vec = PixelToVec3b(pixel);
+        outputMat.at<Vec3b>(i, 0) = vec;
+        i += 1;
+      }
+      
+      // Add each line point
+      
+      for ( Vec3b vec : linePoints ) {
+        outputMat.at<Vec3b>(i, 0) = vec;
+        
+        if (debug) {
+          printf("line point %5d = 0x%02X%02X%02X\n", i, vec[0], vec[1], vec[2]);
+        }
+        
+        i += 1;
+      }
+      
+      imwrite(fname, outputMat);
+      cout << "wrote " << fname << endl;
+    }
+  }
+  
+  // Generate a best fit vector from the region colors that have been passed
+  // through and initial even region quant. This should get rid of outliers
+  // and generate a clean best fit line.
+  
+  if ((1)) {
+    vector<Vec3b> quantPoints;
+    
+    const bool onlyLineOutput = true;
+    
+    for (int i = 0; i < numPixels; i++) {
+      uint32_t pixel = outPixels[i];
+      Vec3b vec = PixelToVec3b(pixel);
+      quantPoints.push_back(vec);
+    }
+    
+    vector<float> lineVec;
+    vector<Vec3b> linePoints;
+    
+    int distType = CV_DIST_L12;
+    //int distType = CV_DIST_FAIR;
+    
+    fitLine(quantPoints, lineVec, distType, 0, 0.1, 0.1);
+    
+    // In case of 3D fitting (vx, vy, vz, x0, y0, z0)
+    // where (vx, vy, vz) is a normalized vector collinear to the line
+    // and (x0, y0, z0) is a point on the line.
+    
+    Vec3b centerOfMass(round(lineVec[3]), round(lineVec[4]), round(lineVec[5]));
+    
+    if (onlyLineOutput == false) {
+      for (int i = 0; i < 300; i++) {
+        linePoints.push_back(centerOfMass);
+        linePoints.push_back(centerOfMass); // Dup COM
+      }
+    } else {
+      linePoints.push_back(centerOfMass);
+    }
+    
+    Vec3f colinearF(lineVec[0], lineVec[1], lineVec[2]);
+    Vec3f centerOfMassF(centerOfMass[0], centerOfMass[1], centerOfMass[2]);
+    
+    // Add another point away from the com
+    
+    int scalar = 30; // num points in (x,y,z) space
+    
+    Vec3f comPlusUnitF = centerOfMassF + (colinearF * scalar);
+    Vec3b comPlusUnit(round(comPlusUnitF[0]), round(comPlusUnitF[1]), round(comPlusUnitF[2]));
+    
+    Vec3f comMinusUnitF = centerOfMassF - (colinearF * scalar);
+    Vec3b comMinusUnit(round(comMinusUnitF[0]), round(comMinusUnitF[1]), round(comMinusUnitF[2]));
+    
+    if (debug) {
+      cout << "centerOfMassF " << centerOfMassF << endl;
+      cout << "colinearF " << colinearF << endl;
+      cout << "comPlusUnitF " << comPlusUnitF << endl;
+      cout << "comMinusUnitF " << comMinusUnitF << endl;
+      cout << "comPlusUnit " << comPlusUnit << endl;
+      cout << "comMinusUnit " << comMinusUnit << endl;
+    }
+    
+    if (onlyLineOutput == false) {
+      for (int i = 0; i < 300; i++) {
+        linePoints.push_back(comPlusUnit);
+        linePoints.push_back(comMinusUnit);
+      }
+    } else {
+      // Generate line points from -1 -> 0 -> +1 assuming that the
+      // scale is the total colorspace size.
+      
+      for (int scalar = 1; scalar < 255; scalar++ ) {
+        Vec3f comPlusUnitF = centerOfMassF + (colinearF * scalar);
+        Vec3b comPlusUnit(round(comPlusUnitF[0]), round(comPlusUnitF[1]), round(comPlusUnitF[2]));
+        
+        Vec3f comMinusUnitF = centerOfMassF - (colinearF * scalar);
+        Vec3b comMinusUnit(round(comMinusUnitF[0]), round(comMinusUnitF[1]), round(comMinusUnitF[2]));
+        
+        if (comPlusUnitF[0] <= 255 && comPlusUnitF[1] <= 255 && comPlusUnitF[0] <= 255) {
+          linePoints.push_back(comPlusUnit);
+          
+          if (debug) {
+            cout << "comPlusUnit " << comPlusUnit << endl;
+          }
+        }
+        
+        if (comMinusUnitF[0] >= 0 && comMinusUnitF[1] >= 0 && comMinusUnitF[0] >= 0) {
+          linePoints.push_back(comMinusUnit);
+          
+          if (debug) {
+            cout << "comMinusUnit " << comMinusUnit << endl;
+          }
+        }
+      }
+      
+    }
+    
+    if (debugDumpImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_quant_center_of_mass" << ".png";
+      string fname = fnameStream.str();
+      
+      // Write image that contains one color in each row in a N x 2 image
+      
+      int numPoints;
+      
+      if (onlyLineOutput == false) {
+        numPoints = (int) quantPoints.size() + (int) linePoints.size();
+      } else {
+        numPoints = (int) linePoints.size();
+      }
+      
+      Mat outputMat = Mat(numPoints, 1, CV_8UC3);
+      outputMat = (Scalar) 0;
+      
+      int i = 0;
+      
+      if (onlyLineOutput == false) {
+        
+        for ( Vec3b vec : quantPoints ) {
+          uint32_t pixel = Vec3BToUID(vec);
+          pixel = pixel & 0x00FFFFFF;
+          if (debug) {
+            printf("quant[%5d] = 0x%08X\n", i, pixel);
+          }
+          //Vec3b vec = PixelToVec3b(pixel);
+          outputMat.at<Vec3b>(i, 0) = vec;
+          i += 1;
+        }
+        
+      }
+      
+      // Add each line point
+      
+      for ( Vec3b vec : linePoints ) {
+        outputMat.at<Vec3b>(i, 0) = vec;
+        
+        if (debug) {
+          printf("line point %5d = 0x%02X%02X%02X\n", i, vec[0], vec[1], vec[2]);
+        }
+        
+        i += 1;
+      }
+      
+      imwrite(fname, outputMat);
+      cout << "wrote " << fname << endl;
+    }
+  }
+  
+  // Recalculate a colortable by looking at vectors to neighbors.
+  // Each point indicated as the most common point inside a neighbor
+  // is explicitly added to the colortable (unless it is exactly there
+  // already. This logic also adds a bookend pixel very near to the
+  // target color (assuming the target region/color is smooth) so that
+  // values very near the target color will quant to a value that is
+  // not exactly the target color.
+  
+  unordered_map<uint32_t, uint32_t> pixelToQuantCountTable;
+  
+  vector<vector<Vec3b> > vectorOfPointsForNeighborsVecOfPairs;
+  
+  //  for (int i = 0; i < numActualClusters; i++) {
+  //    uint32_t pixel = colortable[i];
+  //    pixelToQuantCountTable[pixel] = i;
+  //  }
+  
+  for ( auto &pair : neighborsVecOfPairs ) {
+    int32_t tag1 = pair.first;
+    int32_t tag2 = pair.second;
+    cout << tag1 << " -> " << tag2 << endl;
+    
+    uint32_t insidePixel = maxQuantPixelFromRegionMap[tag1];
+    
+    printf("region inside  (%6d) best pixel 0x%08X\n", tag1, insidePixel);
+    
+    uint32_t outsidePixel = maxQuantPixelFromRegionMap[tag2];
+    
+    printf("region outside (%6d) best pixel 0x%08X\n", tag2, outsidePixel);
+    
+    // src
+    
+    if (pixelToQuantCountTable.count(insidePixel) == 0) {
+      pixelToQuantCountTable[insidePixel] = 0;
+      
+      if (debug) {
+        printf("added vector origin pixel 0x%08X\n", insidePixel);
+      }
+    } else {
+      if (debug) {
+        printf("colortable already contains vector origin pixel 0x%08X\n", insidePixel);
+      }
+    }
+    
+    // dst
+    
+    if (pixelToQuantCountTable.count(outsidePixel) == 0) {
+      pixelToQuantCountTable[outsidePixel] = 0;
+      
+      if (debug) {
+        printf("added vector dst pixel 0x%08X\n", outsidePixel);
+      }
+    } else {
+      if (debug) {
+        printf("colortable already contains vector dst pixel 0x%08X\n", outsidePixel);
+      }
+    }
+    
+    // FIXME: iterate from insidePixel to outsidePixel and generate any pixel values
+    // that differ by a pixel. This is basically just generating a line from one
+    // point to the other but the value is that these values can then be passed through
+    // the generated quant table to get a list of output colortable values that are "inside"
+    
+    int32_t sR, sG, sB;
+    
+    xyzDelta(insidePixel, outsidePixel, sR, sG, sB);
+    
+    if (debug) {
+      printf("inside -> outside delta 0x%08X -> 0x%08X = (B G R) (%d %d %d)\n", insidePixel, outsidePixel, sB, sG, sR);
+    }
+    
+    float scale = sqrt(float(sR*sR + sG*sG + sB*sB));
+    
+    Vec3f unitVec = xyzDeltaToUnitVec3f(sR, sG, sB);
+    
+    if (debug) {
+      cout << "unit vector " << unitVec << endl;
+    }
+    
+    Vec3f insideVec(insidePixel & 0xFF, (insidePixel >> 8) & 0xFF, (insidePixel >> 16) & 0xFF);
+    Vec3b outsideVec(outsidePixel & 0xFF, (outsidePixel >> 8) & 0xFF, (outsidePixel >> 16) & 0xFF);
+    
+    vector<Vec3b> linePoints;
+    
+    int numSteps = round(scale) + 2;
+    
+    bool done = false;
+    
+    for ( int i = 0; !done && i < numSteps; i++ ) {
+      // Skip offsets 0 and 1 and N-2, N-1
+      
+      Vec3f pointVec = insideVec + (unitVec * i);
+      
+      if (debug && 1) {
+        cout << "at step " << i << " scaled vec " << (unitVec * i) << endl;
+        cout << "at step " << i << " point vec " << pointVec << endl;
+      }
+      
+      Vec3b roundedPointVec(round(pointVec[0]), round(pointVec[1]), round(pointVec[2]));
+      
+      if (debug) {
+        uint32_t pixel = Vec3BToUID(roundedPointVec);
+        printf("at step %5d point is (B G R) (%5d %5d %5d) aka 0x%08X\n", i, roundedPointVec[0], roundedPointVec[1], roundedPointVec[2], pixel);
+      }
+      
+      if (roundedPointVec == outsideVec) {
+        // Reached the end point, stop processing now
+        done = true;
+      } else if (linePoints.size() > 0) {
+        Vec3b lastPoint = linePoints[linePoints.size() - 1];
+        if (roundedPointVec == lastPoint) {
+          // In this case, the delta is so small that the int value did not change, skip
+          continue;
+        }
+      }
+      
+      linePoints.push_back(roundedPointVec);
+    }
+    
+    // Verify that first point matches insidePixel and that last point matches outsidePixel
+    
+    {
+      uint32_t p0 = Vec3BToUID(linePoints[0]);
+      uint32_t pLast = Vec3BToUID(linePoints[linePoints.size() - 1]);
+      
+      assert(p0 == insidePixel);
+      assert(pLast == outsidePixel);
+    }
+    
+    if (debugDumpImages) {
+      // Dump points generated on the line that make up the vector
+      
+      int numPoints = (int) linePoints.size();
+      
+      Mat qtableOutputMat = Mat(numPoints, 1, CV_8UC3);
+      qtableOutputMat = (Scalar) 0;
+      
+      for (int i = 0; i < numPoints; i++) {
+        Vec3b vec = linePoints[i];
+        qtableOutputMat.at<Vec3b>(i, 0) = vec;
+      }
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_vec_" << tag1 << "_to_" << tag2 << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, qtableOutputMat);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    vectorOfPointsForNeighborsVecOfPairs.push_back(linePoints);
+    
+    /*
+     
+     // Add bookend (second to last point in linePoints) to colortable
+     
+     Vec3b beVec = linePoints[linePoints.size() - 1 - 1];
+     
+     uint32_t bePixel = Vec3BToUID(beVec);
+     
+     if (pixelToQuantCountTable.count(bePixel) == 0) {
+     pixelToQuantCountTable[bePixel] = 0;
+     
+     if (debug) {
+     printf("added bookend pixel 0x%08X\n", bePixel);
+     }
+     } else {
+     if (debug) {
+     printf("colortable already contains bookend pixel 0x%08X\n", bePixel);
+     }
+     }
+     
+     */
+    
+    for ( Vec3b vec : linePoints ) {
+      uint32_t pixel = Vec3BToUID(vec);
+      pixelToQuantCountTable[pixel] = 0;
+    }
+    
+    // Add all points to colortable
+  }
+  
+  
+  int numColors = (int)pixelToQuantCountTable.size();
+  delete [] colortable;
+  colortable = new uint32_t[numColors];
+  
+  {
+    int i = 0;
+    for ( auto &pair : pixelToQuantCountTable ) {
+      uint32_t key = pair.first;
+      assert(key == (key & 0x00FFFFFF)); // verify alpha is zero
+      colortable[i] = key;
+      i++;
+    }
+  }
+  
+  if (debug) {
+    cout << "numActualClusters was " << numActualClusters << " while output numColors is " << numColors << endl;
+  }
+  
+  // Resort cluster centers
+  
+  vector<uint32_t> resortedColortable;
+  
+  {
+    for (int i = 0; i < numColors; i++) {
+      resortedColortable.push_back(colortable[i]);
+    }
+    
+    vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(resortedColortable);
+    
+    resortedColortable.clear();
+    
+    for (int i = 0; i < numColors; i++) {
+      int si = (int) sortedOffsets[i];
+      uint32_t pixel = colortable[si];
+      resortedColortable.push_back(pixel);
+    }
+    
+    // Copy pixel values in sorted order back into colortable
+    
+    for (int i = 0; i < numColors; i++) {
+      uint32_t pixel = resortedColortable[i];
+      colortable[i] = pixel;
+    }
+  }
+  
+  if (debugDumpImages)
+  {
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_quant_table2" << ".png";
+    string fname = fnameStream.str();
+    
+    dumpQuantTableImage(fname, inputImg, colortable, numColors);
+  }
+  
+  if (debug) {
+    for ( int i = 0; i < numColors; i++) {
+      uint32_t pixel = colortable[i];
+      fprintf(stdout, "colortable[%5d] = 0x%08X\n", i, pixel);
+    }
+  }
+  
+  // Regenerate "inPixels" and keep only pixels that quant to one of
+  // the outPixels known to be in the vector. Can ignore pixels that
+  // are so far outside that they quant to something else.
+  
+  // If the current "outPixels" quant pixel is
+  
+  // the colors known to be between the
+  
+  // Run input pixels through closest color quant logic using the
+  // generated colortable. Note that the colortable should be
+  // split such that one range of the colortable should be seen
+  // as "inside" while the other range is "outside".
+  
+  map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
+  
+  // Dump output, which is the input colors run through the color table
+  
+  if (debugDumpImages) {
+    Mat tmpResultImg = inputImg.clone();
+    tmpResultImg = Scalar(0,0,0xFF);
+    
+    for ( int i = 0; i < numPixels; i++ ) {
+      Coord c = bestRegionCoords[i];
+      uint32_t pixel = outPixels[i];
+      Vec3b vec = PixelToVec3b(pixel);
+      tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+    }
+    
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_quant_output2" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, tmpResultImg);
+      cout << "wrote " << fname << endl;
+    }
+  }
+  
+  // Vote inside/outside
+  
+  unordered_map<uint32_t, InsideOutsideRecord> pixelToInside;
+  
+  insideOutsideTest(inputImg.rows, inputImg.cols, srmRegionCoords, tag, bestRegionCoords, outPixels, resortedColortable, pixelToInside);
+  
+  // Emit vote result table which basically shows the sorted pixel and the vote boolean as black or white
+  
+  if (debugDumpImages)
+  {
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_quant_table3_votes" << ".png";
+    string fname = fnameStream.str();
+    
+    // Write image that contains one color in each row in a N x 2 image
+    
+    int numColortableEntries = (int) resortedColortable.size();
+    
+    Mat qtableOutputMat = Mat(numColortableEntries, 2, CV_8UC3);
+    qtableOutputMat = (Scalar) 0;
+    
+    for (int i = 0; i < numColortableEntries; i++) {
+      uint32_t pixel = resortedColortable[i];
+      Vec3b vec = PixelToVec3b(pixel);
+      qtableOutputMat.at<Vec3b>(i, 0) = vec;
+      
+      bool isInside = pixelToInside[pixel].isInside;
+      
+      if (isInside) {
+        vec = Vec3b(0xFF, 0xFF, 0xFF);
+      } else {
+        vec = Vec3b(0, 0, 0);
+      }
+      
+      qtableOutputMat.at<Vec3b>(i, 1) = vec;
+    }
+    
+    imwrite(fname, qtableOutputMat);
+    cout << "wrote " << fname << endl;
+  }
+  
+  // Determine the dominate vector(s) as we iterate through the colortable
+  // so that vectors add as long as they are actually in the same vector
+  // line.
+  
+  vector<vector<uint32_t> > vecOfPixels;
+  vector<vector<Vec3f> > vecOfVectors;
+  
+  vecOfPixels.push_back(vector<uint32_t>());
+  vector<uint32_t> *currentVecPtr = &vecOfPixels[0];
+  
+  vecOfVectors.push_back(vector<Vec3f>());
+  vector<Vec3f> *currentVecOfVec3bPtr = &vecOfVectors[0];
+  
+  uint32_t prevPixel = 0x0;
+  
+  for ( int i = 0; i < numColors; i++) {
+    uint32_t pixel = resortedColortable[i];
+    fprintf(stdout, "resorted colortable[%5d] = 0x%08X\n", i, pixel);
+    
+    int prevSize = (int) currentVecPtr->size();
+    currentVecPtr->push_back(pixel);
+    
+    if (prevSize == 0) {
+      // currentVecPtr is currently empty, so append the first pixel
+      // and continue on with the next pixel.
+    } else {
+      // At least 2 pixels, initial vector between pixels can now
+      // be determined for the first time.
+      
+      int32_t sR, sG, sB;
+      
+      xyzDelta(prevPixel, pixel, sR, sG, sB);
+      
+      if (debug) {
+        printf("peakToPeakDelta 0x%08X -> 0x%08X = (%d %d %d)\n", prevPixel, pixel, sR, sG, sB);
+      }
+      
+      Vec3f unitVec = xyzDeltaToUnitVec3f(sR, sG, sB);
+      
+      if (debug) {
+        cout << "unit vector " << unitVec << endl;
+      }
+      
+      currentVecOfVec3bPtr->push_back(unitVec);
+    }
+    
+    prevPixel = pixel;
+  }
+  
+  for ( uint32_t pixel : *currentVecPtr ) {
+    printf("0x%08X\n", pixel);
+  }
+  
+  for ( Vec3f vec : *currentVecOfVec3bPtr ) {
+    cout << "vec " << vec << endl;
+  }
+  
+  //  Should see this set of vectors as shifting from one
+  //  general slope to a new slope at offset 5
+  //  the fact that earlier slopes are not exactly
+  //  the same is not critical. Last 5 are basically
+  //  the same
+  
+  //  vec [0.0794929, 0.0794929, 0.993661]
+  //  vec [0.111784, 0.111784, 0.987425]
+  //  vec [-0.131796, -0.131796, 0.982476]
+  //  vec [0.535899, 0.535899, 0.652399]
+  //  vec [0.730889, 0.426352, -0.53294]
+  //  vec [0.732098, 0.413795, -0.541116]
+  //  vec [0.732728, 0.429867, -0.527564]
+  //  vec [0.733142, 0.4339, -0.523673]
+  
+  
+  // FIXME: the better approach would be to decrease until the region seems to stabilize around
+  // on single color or one quant color and then expand until there is a jump up in the number
+  // of colors or quant num. This has the effect of trimming off any "splay" pixels that are
+  // improperly identified in the region and then expanding the region to account for any "under".
+  // Expanding only according to the original SRM shape is not going to be correct in the case
+  // of splay pixels.
+  
+  // An upper bound on the region bounds could be the containing region bounds.
+  
+  if (1) {
+    // Clear pixelToInside votes and recalculate in terms of quant pixels
+    // such that the vectors clearly identified from one region to another
+    // are known to be "inside" and any pixels from any other possible
+    // vectors are known to be "outside".
+    
+    //    pixelToInside.clear();
+    
+    for ( auto & pair : pixelToInside ) {
+      InsideOutsideRecord &rec = pair.second;
+      
+      rec.isInside = false;
+    }
+    
+    cout << "neighborsVecOfPairs: " << endl;
+    
+    int offset = 0;
+    
+    for ( auto &pair : neighborsVecOfPairs ) {
+      int32_t tag1 = pair.first;
+      int32_t tag2 = pair.second;
+      cout << tag1 << " -> " << tag2 << endl;
+      
+      uint32_t insidePixel = maxQuantPixelFromRegionMap[tag1];
+      
+      printf("region inside  (%6d) best pixel 0x%08X\n", tag1, insidePixel);
+      
+      uint32_t outsidePixel = maxQuantPixelFromRegionMap[tag2];
+      
+      printf("region outside (%6d) best pixel 0x%08X\n", tag1, outsidePixel);
+      
+      vector<Vec3b> linePoints = vectorOfPointsForNeighborsVecOfPairs[offset];
+      
+      // For each of the quant pixels identified in linePoints, check to see
+      // if one of these line points is defined in the colortable. A point
+      // that is on this vector is "inside" except for the last point.
+      
+      int lastIndex = (int)linePoints.size() - 1;
+      
+      for ( int i = 0; i < lastIndex; i++ ) {
+        Vec3b vec = linePoints[i];
+        uint32_t pixel = Vec3BToUID(vec);
+        
+        printf("check inside outside rec for pixel 0x%08X\n", pixel);
+        
+        if (pixelToInside.count(pixel) > 0) {
+          InsideOutsideRecord &rec = pixelToInside[pixel];
+          rec.isInside = true;
+          
+          printf("switch on inside outside rec for pixel 0x%08X\n", pixel);
+        }
+      }
+      
+      // Map coordinates along the line from the src to the dst and
+      // determine the coordinates that would quant to "inside".
+      
+      // Determine the pixel that quant to
+      
+      offset += 1;
+    }
+    
+    printf("done\n");
+  }
+  
+  
+  if (debugDumpImages)
+  {
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_quant_table4_votes" << ".png";
+    string fname = fnameStream.str();
+    
+    // Write image that contains one color in each row in a N x 2 image
+    
+    int numColortableEntries = (int) resortedColortable.size();
+    
+    Mat qtableOutputMat = Mat(numColortableEntries, 2, CV_8UC3);
+    qtableOutputMat = (Scalar) 0;
+    
+    for (int i = 0; i < numColortableEntries; i++) {
+      uint32_t pixel = resortedColortable[i];
+      Vec3b vec = PixelToVec3b(pixel);
+      qtableOutputMat.at<Vec3b>(i, 0) = vec;
+      
+      bool isInside = pixelToInside[pixel].isInside;
+      
+      if (isInside) {
+        vec = Vec3b(0xFF, 0xFF, 0xFF);
+      } else {
+        vec = Vec3b(0, 0, 0);
+      }
+      
+      qtableOutputMat.at<Vec3b>(i, 1) = vec;
+    }
+    
+    imwrite(fname, qtableOutputMat);
+    cout << "wrote " << fname << endl;
+  }
+  
+  // If after the voting, it becomes clear that one of the regions
+  // is always outside the in/out region defined by the tags, then
+  // pixels in that range can be left out of the vector calculation.
+  // For example, the black outside the red in OneCircleInsideAnother.png.
+  // In this case, the pixels that quant to the black to red vector
+  // can all be ignored and the blue to red vector can be extracted
+  // cleanly. This is useful to turn off the in/out vote of certain
+  // pixels if on with zero votes and to "capture" all the possible
+  // pixels along the vector line up to the bookend and identify those
+  // as in/out. The extends of the inner region should fully capture
+  // gradient pixels at the bound, so that if the outer region is
+  // otherwise uniform then it will not need to know about the inner
+  // region color use at all and can be free to predict as if the
+  // inner region shift does not happen.
+  
+  // Each pixel in the input is now mapped to a boolean condition that
+  // indicates if that pixel is inside or outside the shape.
+  
+  const bool debugOnOff = false;
+  
+  for ( int i = 0; i < numPixels; i++ ) {
+    Coord c = bestRegionCoords[i];
+    uint32_t quantPixel = outPixels[i];
+    
+#if defined(DEBUG)
+    assert(pixelToInside.count(quantPixel));
+#endif // DEBUG
+    bool isInside = pixelToInside[quantPixel].isInside;
+    
+    if (isInside) {
+      mask.at<uint8_t>(c.y, c.x) = 0xFF;
+      
+      if (debug && debugOnOff) {
+        printf("pixel 0x%08X at (%5d,%5d) is marked on (inside)\n", quantPixel, c.x, c.y);
+      }
+    } else {
+      if (debug && debugOnOff) {
+        printf("pixel 0x%08X at (%5d,%5d) is marked off (outside)\n", quantPixel, c.x, c.y);
+      }
+    }
+  }
+  
+  if (debug) {
+    cout << "return captureRegion" << endl;
+  }
+  
+  delete [] colortable;
+  
+  return;
 }
 
 // In this case the pixels are from a very small colortable or all the entries
@@ -2910,6 +4798,815 @@ void insideOutsideTest(int32_t width,
   }
   
   return;
+}
+
+// This method accepts a region defined by coords and returns the edges between
+// superpixels in the region.
+
+void
+clockwiseScanForTagsAroundShape(
+                                const Mat & tagsImg,
+                                int32_t tag,
+                                const vector<Coord> &regionCoords,
+                                vector<TagsAroundShape> &tagsAroundVec)
+{
+  const bool debug = true;
+  const bool debugDumpImages = true;
+  const bool debugDumpStepImages = true;
+  
+  if (debug) {
+    cout << "clockwiseScanForTagsAroundShape " << tag << endl;
+  }
+  
+  // The tagsImg mat contains tags, so generate lines around the 360 degrees
+  // of rotation and determine which tags the line pixels hit.
+  
+  int32_t originX, originY, regionWidth, regionHeight;
+  Superpixel::bbox(originX, originY, regionWidth, regionHeight, regionCoords);
+  Rect roiRect(originX, originY, regionWidth, regionHeight);
+  
+  Coord originCoord(originX, originY);
+  
+  Mat renderMat(roiRect.size(), CV_8UC1);
+  
+  renderMat = Scalar(0);
+  
+  // Generate coords that iterate around the region bbox starting from up which
+  // is taken to be degree zero.
+  
+  vector<Coord> outlineCoords;
+  
+  // top right half
+  {
+    int y = 0;
+    int xMax = regionWidth - 1;
+    
+    for ( int x = regionWidth / 2; x < xMax; x++ ) {
+      Coord c(x, y);
+      outlineCoords.push_back(c);
+    }
+  }
+  
+  // right side
+  {
+    int x = regionWidth - 1;
+    int yMax = regionHeight - 1;
+    
+    for ( int y = 0; y < yMax; y++ ) {
+      Coord c(x, y);
+      outlineCoords.push_back(c);
+    }
+  }
+  
+  // bottom side
+  {
+    int y = regionHeight - 1;
+    
+    for ( int x = regionWidth - 1; x > 0; x-- ) {
+      Coord c(x, y);
+      outlineCoords.push_back(c);
+    }
+  }
+  
+  // left side
+  {
+    int x = 0;
+    
+    for ( int y = regionHeight - 1; y > 0; y-- ) {
+      Coord c(x, y);
+      outlineCoords.push_back(c);
+    }
+  }
+  
+  // top left half
+  {
+    int y = 0;
+    int xMax = regionWidth / 2;
+    
+    for ( int x = 0; x < xMax; x++ ) {
+      Coord c(x, y);
+      outlineCoords.push_back(c);
+    }
+  }
+  
+  // Render points in outlineCoords to binary mat and debug dump
+  
+  if (debugDumpImages) {
+    renderMat = Scalar(0);
+    
+    for ( Coord c : outlineCoords ) {
+      renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_region_outline_coords" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, renderMat);
+    cout << "wrote " << fname << endl;
+    cout << "";
+  }
+  
+#if defined(DEBUG)
+  for ( int i = 1; i < outlineCoords.size(); i++ ) {
+    Coord prevCoord = outlineCoords[i-1];
+    Coord currentCoord = outlineCoords[i];
+    if (currentCoord == prevCoord) {
+      assert(0); // must not repeat
+    }
+  }
+#endif // DEBUG
+  
+  // Map from global coordinates to the specific tag at that coordinate
+  // but ignore the current shape tag since most coords will be for the
+  // interior of the shape.
+  
+  unordered_map<Coord, int32_t> tagMap;
+  
+  for ( Coord c : regionCoords ) {
+    Vec3b vec = tagsImg.at<Vec3b>(c.y, c.x);
+    int32_t inRegionTag = Vec3BToUID(vec);
+    if (inRegionTag == tag) {
+      continue;
+    }
+    tagMap[c] = inRegionTag;
+    if (debug) {
+      cout << "add mapping for " << c << " -> " << vec << endl;
+    }
+  }
+  
+  // Render from region center to each coordinate around the outside edge of the bbox
+  // and store the vector of tags found along the line.
+  
+  // Determine region center point
+  
+  // Find a single "center" pixel in region of interest matrix. This logic
+  // accepts an input matrix that contains binary pixel values (0x0 or 0xFF)
+  // and computes a consistent center pixel. When this method returns the
+  // region binMat is unchanged. The orderMat is set to the size of the roi and
+  // it is filled with distance transformed gray values. Note that this method
+  // has to create a buffer zone of 1 pixel so that pixels on the edge have
+  // a very small distance.
+  
+  renderMat = Scalar(0);
+  
+  // FIXME: could pass this in, but just query for now
+  
+  vector<Coord> currentTagCoords;
+  
+  for ( Coord c : regionCoords ) {
+    Vec3b vec = tagsImg.at<Vec3b>(c.y, c.x);
+    int32_t regionTag = Vec3BToUID(vec);
+    if (tag == regionTag) {
+      currentTagCoords.push_back(c);
+    }
+  }
+  
+  for ( Coord c : currentTagCoords ) {
+    c = c - originCoord;
+    renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
+  }
+  
+  Mat outDistMat;
+  Coord regionCenter = findRegionCenter(renderMat, Rect2d(0,0,regionWidth,regionHeight), outDistMat, tag);
+  
+  Point2i center(regionCenter.x, regionCenter.y);
+  
+  // Iterate over each vector of (center, edgePoint) along the bbox bounds
+  
+  vector<set<int32_t> > allTagSetsForVectors;
+  
+  // Store coords found for each vector
+  
+  vector<vector<Coord> > allCoordForVectors;
+  
+  int stepi = 0;
+  int stepMax = (int) outlineCoords.size();
+  
+  for ( ; stepi < stepMax; stepi++ ) {
+    
+    set<int32_t> tagsForVector;
+    vector<Coord> coordsForVector;
+    
+    Coord edgeCoord = outlineCoords[stepi];
+    
+    Point2i edgePoint(edgeCoord.x, edgeCoord.y);
+    
+    renderMat = Scalar(0);
+    line(renderMat, center, edgePoint, Scalar(0xFF));
+    
+    if (debug) {
+      cout << "render center line from " << center << " to " << edgePoint << endl;
+    }
+    
+    if (debugDumpImages && debugDumpStepImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_step" << stepi << "_region_vec" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, renderMat);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    vector<Point> locations;
+    findNonZero(renderMat, locations);
+    
+    for ( Point p : locations ) {
+      Coord c(p.x, p.y);
+      c = originCoord + c;
+      if (tagMap.count(c) > 0) {
+        int32_t regionTag = tagMap[c];
+        tagsForVector.insert(regionTag);
+        coordsForVector.push_back(c);
+      }
+    }
+    
+    allTagSetsForVectors.push_back(tagsForVector);
+    allCoordForVectors.push_back(coordsForVector);
+    
+    if (debugDumpImages && debugDumpStepImages) {
+      Mat regionRoiMat = tagsImg(roiRect);
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_step" << stepi << "_region_input_tags_roi" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, regionRoiMat);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    if (debugDumpImages && debugDumpStepImages) {
+      // Dump tags that are defined as on in regionCoords
+      
+      Mat allTagsOn = tagsImg.clone();
+      allTagsOn = Scalar(0,0,0);
+      
+      for ( Coord c : regionCoords ) {
+        allTagsOn.at<Vec3b>(c.y, c.x) = tagsImg.at<Vec3b>(c.y, c.x);
+      }
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_step" << stepi << "_region_input_tags" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, allTagsOn);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    if (debugDumpImages && debugDumpStepImages) {
+      renderMat = Scalar(0);
+      
+      for ( Point p : locations ) {
+        Coord c(p.x, p.y);
+        c = originCoord + c;
+        if (tagMap.count(c) > 0) {
+          c = c - originCoord;
+          renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
+        }
+      }
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_step" << stepi << "_hits_for_tag_vec" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, renderMat);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    if (debugDumpImages && debugDumpStepImages) {
+      // Dump tags that are defined as on in regionCoords
+      
+      Mat allTagsHit = tagsImg.clone();
+      allTagsHit = Scalar(0,0,0);
+      
+      for ( Point p : locations ) {
+        Coord c(p.x, p.y);
+        c = originCoord + c;
+        if (tagMap.count(c) > 0) {
+          allTagsHit.at<Vec3b>(c.y, c.x) = tagsImg.at<Vec3b>(c.y, c.x);
+        }
+      }
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_step" << stepi << "_hit_tags_for_tag_vec" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, allTagsHit);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+  }
+  
+  // Identify all the tags found in the region and with a tag other than this one
+  
+  unordered_map<int32_t, bool> allTagsCombined;
+  
+  for ( set<int32_t> & tagSet : allTagSetsForVectors ) {
+    for ( int32_t regionTag : tagSet ) {
+      allTagsCombined[regionTag] = true;
+    }
+  }
+  
+  if (debug) {
+    cout << "all tags found around region" << endl;
+    
+    for ( auto & pair : allTagsCombined ) {
+      int32_t regionTag = pair.first;
+      printf("tag = 0x%08X aka %d\n", regionTag, regionTag);
+    }
+  }
+  
+  if (debugDumpImages) {
+    // Dump tags that are defined as on in regionCoords
+    
+    Mat allTagsHit = tagsImg.clone();
+    allTagsHit = Scalar(0,0,0);
+    
+    for ( Coord c : regionCoords ) {
+      Vec3b vec = tagsImg.at<Vec3b>(c.y, c.x);
+      int32_t regionTag = Vec3BToUID(vec);
+      
+      if (allTagsCombined.count(regionTag) > 0) {
+        allTagsHit.at<Vec3b>(c.y, c.x) = vec;
+        
+        if (debug) {
+          printf("found region tag %9d at coord (%5d, %5d)\n", regionTag, c.x, c.y);
+        }
+      }
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_hit_tags_in_scan_region" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, allTagsHit);
+    cout << "wrote " << fname << endl;
+    cout << "";
+  }
+  
+  // Condense tags in regions starting from the top. A region range is condensed as long
+  // as the tags in the range are the same or if there are no tags.
+  
+  unordered_map<Coord, bool> uniqueCoords;
+  
+  for ( stepi = 0 ; stepi < stepMax; ) {
+    if (debug) {
+      cout << "consider stepi " << stepi << endl;
+    }
+    
+    set<int32_t> &currentSet = allTagSetsForVectors[stepi];
+    
+    int nextStepi = stepi + 1;
+    
+    for ( ; nextStepi < stepMax; nextStepi++ ) {
+      set<int32_t> &nextSet = allTagSetsForVectors[nextStepi];
+      
+      // If the sets are identical then merge the regions.
+      
+      if (currentSet == nextSet) {
+        if (debug && false) {
+          cout << "set 1" << endl;
+          for ( int32_t tag : currentSet ) {
+            cout << tag << endl;
+          }
+          cout << "set 2" << endl;
+          for ( int32_t tag : nextSet ) {
+            cout << tag << endl;
+          }
+        }
+      } else {
+        nextStepi -= 1;
+        break;
+      }
+    }
+    
+    // Range is (stepi, nextStepi)
+    
+    if (debug) {
+      cout << "step same range (" << stepi << "," << nextStepi << ")" << endl;
+    }
+    
+    tagsAroundVec.push_back(TagsAroundShape());
+    TagsAroundShape &tas = tagsAroundVec[tagsAroundVec.size() - 1];
+    
+    tas.start = stepi;
+    tas.end = nextStepi;
+    
+    vector<int32_t> vecOfTags;
+    
+    for ( int32_t tag : currentSet ) {
+      vecOfTags.push_back(tag);
+    }
+    
+    tas.tags = vecOfTags;
+    
+    // Gather all unique coords from combined range
+    
+#if defined(DEBUG)
+    for ( auto &pair : uniqueCoords ) {
+      bool uniqueThisLoop = pair.second;
+      assert(uniqueThisLoop == false);
+    }
+#endif // DEBUG
+    
+    int maxStepi = (nextStepi + 1);
+    for ( int i = stepi ; i < maxStepi; i++ ) {
+      for ( Coord c : allCoordForVectors[i] ) {
+        if (uniqueCoords.count(c) == 0) {
+          uniqueCoords[c] = true;
+        }
+      }
+    }
+    assert(uniqueCoords.size() > 0);
+    
+    vector<Coord> &uniqueCoordsVec = tas.coords;
+    for ( auto &pair : uniqueCoords ) {
+      Coord c = pair.first;
+      bool uniqueThisLoop = pair.second;
+      if (uniqueThisLoop) {
+        pair.second = false;
+        uniqueCoordsVec.push_back(c);
+      }
+    }
+    // FIXME: is is possible to a coord to have been consumed
+    // by a previous step? Just skip in that case?
+    assert(uniqueCoordsVec.size() > 0);
+    
+#if defined(DEBUG)
+    assert((nextStepi + 1) > stepi);
+#endif // DEBUG
+    stepi = nextStepi + 1;
+  }
+  
+  // In the special case where the final range is larger than 1 element
+  // and the range extends to 12 oclock and the sets match, then combine
+  // the last range with the first one.
+  
+  if (allTagSetsForVectors.size() > 2) {
+    // Check for the special case of the first and second sets being exactly equal,
+    // in this case iterate backwards from 12 oclock so that and initial same range
+    // at the front of the vector is moved to the start of the vector.
+    
+    set<int32_t> &firstSet = allTagSetsForVectors[0];
+    
+    set<int32_t> &lastSet = allTagSetsForVectors[stepMax - 1];
+    
+    if (firstSet == lastSet) {
+      if (debug) {
+        cout << "first and last range sets are the same" << endl;
+      }
+      
+      TagsAroundShape &firstTas = tagsAroundVec[0];
+      TagsAroundShape &lastTas = tagsAroundVec[tagsAroundVec.size() - 1];
+      
+      firstTas.start = lastTas.start;
+      //firstTas.end = nextStepi;
+      
+      for ( Coord c : lastTas.coords ) {
+        firstTas.coords.push_back(c);
+      }
+      
+      int numBefore = (int) tagsAroundVec.size();
+      tagsAroundVec.erase(end(tagsAroundVec) - 1);
+      int numAfter = (int) tagsAroundVec.size();
+      assert(numBefore == (numAfter + 1));
+    }
+  }
+  
+  // Mark entries that are simple clusters of N tags
+  
+  for ( TagsAroundShape &tas : tagsAroundVec ) {
+    if (tas.start == tas.end) {
+      tas.flag = true;
+    } else {
+      tas.flag = false;
+    }
+  }
+  
+  // Do a second scan of the resulting TagsAroundShape elements and combine ranges that consist of just
+  // one single step
+  
+  stepMax = (int) tagsAroundVec.size() - 1;
+  
+  bool mergeNext = false;
+  
+  for ( stepi = 0; stepi < stepMax; stepi += 1) {
+    TagsAroundShape &oneTas = tagsAroundVec[stepi];
+    TagsAroundShape &nextTas = tagsAroundVec[stepi+1];
+    
+    if (oneTas.flag && nextTas.flag) {
+      // Merge 2 in a row that differ in set contents
+      
+      oneTas.end = nextTas.end;
+      
+      set<int32_t> uniqueTags;
+      
+      for ( int32_t tag : oneTas.tags ) {
+        uniqueTags.insert(tag);
+      }
+      
+      for ( int32_t tag : nextTas.tags ) {
+        uniqueTags.insert(tag);
+      }
+      
+      oneTas.tags.clear();
+      
+      for ( int32_t tag : uniqueTags ) {
+        oneTas.tags.push_back(tag);
+      }
+      
+      for ( Coord c : nextTas.coords ) {
+        oneTas.coords.push_back(c);
+      }
+      
+      tagsAroundVec.erase(begin(tagsAroundVec) + stepi+1);
+      stepMax = (int) tagsAroundVec.size() - 1;
+      mergeNext = true;
+    } else {
+      mergeNext = false;
+    }
+  }
+  
+  if (debug) {
+    cout << "return clockwiseScanForTagsAroundShape " << tag << " with N = " << tagsAroundVec.size() << " ranges" << endl;
+  }
+  
+  return;
+}
+
+// This method accepts a region defined by coords and returns the edges between
+// superpixels in the region.
+
+vector<SuperpixelEdge>
+getEdgesInRegion(SuperpixelImage &spImage,
+                 const Mat & tagsImg,
+                 int32_t tag,
+                 const vector<Coord> &coords)
+{
+  const bool debug = true;
+  
+  // Generate vectors that determine how different colors that are nearby each other
+  // in 2D space map to other nearby colors. It is only possible to determine that
+  // regions are "neighbors" and that those regions then have gradient vectors from
+  // one to the other. Colors that are near each other in 3D space may not be near
+  // each other in 2D space, so only a pair of dominate colors at a time can be
+  // considered.
+  
+  // Gather the tags associated with all the regions
+  // indicated by regionCoords.
+  
+  unordered_map<int32_t, int32_t> allRegionTagsMap;
+  
+  for ( Coord c : coords ) {
+    Vec3b vec = tagsImg.at<Vec3b>(c.y, c.x);
+    int32_t tag = Vec3BToUID(vec);
+    allRegionTagsMap[tag] = tag;
+  }
+  
+  if (allRegionTagsMap.size() < 2) {
+    // Cannot possibly find an edge if there are not at least 2 tags
+    
+    if (debug) {
+      cout << "did not find at least 2 tags, so no edges are inside region" << endl;
+    }
+    
+    return vector<SuperpixelEdge>();
+  }
+  
+  vector<int32_t> allUniqueRegionTags;
+  
+  for ( auto &pair : allRegionTagsMap ) {
+    allUniqueRegionTags.push_back(pair.first);
+  }
+  
+  if (debug) {
+    cout << "allUniqueRegionTags:" << endl;
+    for ( int32_t tag : allUniqueRegionTags ) {
+      cout << tag << endl;
+    }
+    cout << "";
+  }
+  
+  // Gather all tags in the extended region (masked as blocks)
+  
+  set<int32_t> neighborsSet;
+  
+  unordered_map<SuperpixelEdge, bool> allNeighborsPairsMap;
+  
+  for ( int32_t tag : allUniqueRegionTags ) {
+    neighborsSet.insert(tag);
+  }
+  
+  // Save all pairs where both sides appear in neighborsSet.
+  
+  for ( int32_t neighborTag : neighborsSet ) {
+    auto &neighborsOfNeighborSet = spImage.edgeTable.getNeighborsSet(neighborTag);
+    
+    for ( int32_t neighborOfNeighborTag : neighborsOfNeighborSet ) {
+      if (neighborsSet.count(neighborOfNeighborTag) > 0) {
+        // Both neighborTag and neighborOfNeighborTag are in neighborsSet
+        SuperpixelEdge edge(neighborTag, neighborOfNeighborTag);
+        allNeighborsPairsMap[edge] = true;
+      }
+    }
+  }
+  
+  if (debug) {
+    cout << "all neighbor pairs: " << endl;
+    
+    for ( auto & pair : allNeighborsPairsMap ) {
+      cout << pair.first << " -> " << pair.second << endl;
+    }
+  }
+  
+  vector<SuperpixelEdge> neighborsVecOfPairs;
+  
+  for ( auto & pair : allNeighborsPairsMap ) {
+    neighborsVecOfPairs.push_back(pair.first);
+  }
+  
+  if (debug) {
+    cout << "neighborsVecOfPairs: " << endl;
+    
+    for ( auto & edge : neighborsVecOfPairs ) {
+      cout << edge << endl;
+    }
+    
+    cout << "done" << endl;
+  }
+  
+  return neighborsVecOfPairs;
+}
+
+// This method will contract or expand a region defined by coordinates by N pixel.
+// In the case where the region cannot be expanded or contracted anymore this
+// method returns false.
+
+bool
+contractOrExpandRegion(const Mat & inputImg,
+                       int32_t tag,
+                       const vector<Coord> &coords,
+                       bool isExpand,
+                       int numPixels,
+                       vector<Coord> &outCoords)
+{
+  const bool debug = true;
+  const bool debugDumpImages = true;
+  const bool debugDumpInputStateImages = true;
+  
+  if (debug) {
+    cout << "contractOrExpandRegion " << tag << " with N = " << coords.size() << " and isExpand " << isExpand << endl;
+  }
+  
+  outCoords.clear();
+  
+  int32_t originX, originY, regionWidth, regionHeight;
+  Superpixel::bbox(originX, originY, regionWidth, regionHeight, coords);
+  
+  if (debug) {
+    cout << "bbox " << originX << "," << originY << " with " << regionWidth << " x " << regionHeight << endl;
+  }
+  
+  if (isExpand) {
+    originX -= numPixels;
+    if (originX < 0) {
+      originX = 0;
+    }
+    originY -= numPixels;
+    if (originY < 0) {
+      originY = 0;
+    }
+    regionWidth += (numPixels * 2);
+    if (regionWidth > inputImg.cols) {
+      regionWidth = inputImg.cols;
+    }
+    regionHeight += (numPixels * 2);
+    if (regionHeight > inputImg.rows) {
+      regionHeight = inputImg.rows;
+    }
+    
+    if (debug) {
+      cout << "expanded bbox " << originX << "," << originY << " with " << regionWidth << " x " << regionHeight << endl;
+    }
+  }
+  
+  Rect expandedRoi(originX, originY, regionWidth, regionHeight);
+  
+  Mat inBoolMat(expandedRoi.size(), CV_8UC1);
+  inBoolMat = Scalar(0);
+  
+  Mat outBoolMat;
+  
+  Coord origin(originX, originY);
+  
+  for ( Coord c : coords ) {
+    Coord bC = c - origin;
+    inBoolMat.at<uint8_t>(bC.y, bC.x) = 0xFF;
+  }
+  
+  if (isExpand) {
+    outBoolMat = expandWhiteInRegion(inBoolMat, numPixels, tag);
+  } else {
+    outBoolMat = decreaseWhiteInRegion(inBoolMat, numPixels, tag);
+  }
+  
+  if (debugDumpInputStateImages) {
+    string expandStr = isExpand ? "expand" : "contract";
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_srm_region_" << expandStr << "_input" << numPixels << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, inBoolMat);
+    cout << "wrote " << fname << endl;
+    cout << "";
+  }
+  
+  vector<Point> locations;
+  findNonZero(outBoolMat, locations);
+  
+  for ( Point p : locations ) {
+    Coord c(p.x, p.y);
+    c = origin + c;
+    outCoords.push_back(c);
+  }
+  
+  int numNonZero = (int) outCoords.size();
+  
+  if (isExpand) {
+    // Stop when expanded out to the entire region filled
+    
+    if (numNonZero == (inputImg.rows * inputImg.cols)) {
+      return false;
+    }
+  } else {
+    // Stop when contracting down to zero pixels
+    
+    if (numNonZero == 0) {
+      return false;
+    }
+  }
+  
+  if (debugDumpImages)
+  {
+    string expandStr = isExpand ? "expand" : "contract";
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_srm_region_" << expandStr << "_mask" << numPixels << ".png";
+    string fname = fnameStream.str();
+    
+    Mat tmpMat(inputImg.size(), CV_8UC1);
+    tmpMat = Scalar(0);
+    
+    for ( Coord c : outCoords ) {
+      tmpMat.at<uint8_t>(c.y, c.x) = 0xFF;
+    }
+    
+    imwrite(fname, tmpMat);
+    cout << "wrote " << fname << endl;
+    cout << "";
+  }
+  
+  // Dump alpha masked version of the original input.
+  
+  if (debugDumpImages)
+  {
+    string expandStr = isExpand ? "expand" : "contract";
+    
+    Mat alphaMaskResultImg(inputImg.size(), CV_8UC4);
+    alphaMaskResultImg = Scalar(0, 0, 0, 0);
+    
+    for ( Coord c : outCoords ) {
+      Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+      Vec4b vec4;
+      vec4[0] = vec[0];
+      vec4[1] = vec[1];
+      vec4[2] = vec[2];
+      vec4[3] = 0xFF;
+      alphaMaskResultImg.at<Vec4b>(c.y, c.x) = vec4;
+    }
+    
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_srm_region_" << expandStr << "_alpha_mask" << numPixels << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, alphaMaskResultImg);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+  }
+  
+  if (debug) {
+    cout << "return contractOrExpandRegion" << endl;
+  }
+  
+  return true;
 }
 
 // Invoked for each child of a container, returns the tags that are direct children of tag
