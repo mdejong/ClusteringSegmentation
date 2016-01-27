@@ -194,7 +194,7 @@ Superpixel::bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &he
 }
 
 void
-Superpixel::bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &height, vector<Coord> &coords)
+Superpixel::bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &height, const vector<Coord> &coords)
 {
   const bool debug = false;
   
@@ -265,10 +265,10 @@ Superpixel::bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &he
     cout << "exit coords: count " << numCoords << endl;
     
     for (int i = 0; i < numCoords; i++) {
-      coord = coords[i];
+      const Coord c = coords[i];
       
       if (debug) {
-        cout << "coord " << coord.x << "," << coord.y << endl;
+        cout << "coord " << c.x << "," << c.y << endl;
       }
     }
   }

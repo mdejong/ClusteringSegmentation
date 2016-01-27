@@ -121,7 +121,7 @@ class Superpixel {
   void bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &height);
   
   static void
-  bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &height, vector<Coord> &coords);
+  bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &height, const vector<Coord> &coords);
   
   static void splitSplayPixels(Mat &inOutTagImg);
   
