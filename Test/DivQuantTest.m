@@ -141,6 +141,42 @@
   return;
 }
 
+// Quant 2 color pixels with num clusters = 3, this should reduce the
+// number of output clusters to 2 since not all table values used.
+
+- (void)testQuantN3N2 {
+  uint32_t pixels[2];
+  
+  pixels[0]  = 0x008DC63F; // Green
+  pixels[1]  = 0x00F26522; // Orange
+  
+  if ((1)) {
+    for ( int i = 0; i < 2; i++ ) {
+      printf("pixels[%d] = 0x%08X\n", i, pixels[i]);
+    }
+  }
+  
+  const int numPixels = 2;
+  uint32_t *inPixels = pixels;
+  uint32_t outPixels[numPixels];
+  
+  const int numClusters = 3;
+  uint32_t colortable[numClusters];
+  
+  int allPixelsUnique = 1;
+  
+  uint32_t numActualClusters = numClusters;
+  
+  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
+  
+  XCTAssert(numActualClusters == 2, @"colortable");
+  
+  XCTAssert(colortable[0] == 0x00F26522, @"colortable");
+  XCTAssert(colortable[1] == 0x008DC63F, @"colortable");
+  
+  return;
+}
+
 // 2 gray pixels on either side of the middle between 0x0 and 0x00FFFFFF
 
 - (void)testQuantGray2 {
