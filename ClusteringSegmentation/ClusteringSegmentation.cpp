@@ -10,12 +10,12 @@
 
 #include <opencv2/opencv.hpp>
 
+#include "Util.h"
+#include "OpenCVUtil.h"
+
 #include "Superpixel.h"
 #include "SuperpixelEdge.h"
 #include "SuperpixelImage.h"
-
-#include "OpenCVUtil.h"
-#include "Util.h"
 
 #include "quant_util.h"
 #include "DivQuantHeader.h"
@@ -25,8 +25,6 @@
 #include "srm.h"
 
 #include "peakdetect.h"
-
-#include "Util.h"
 
 using namespace cv;
 using namespace std;
@@ -1524,7 +1522,16 @@ captureRegion(SuperpixelImage &spImage,
   unordered_map<uint32_t, vector<Coord>> notMostCommonCoords;
   
   for ( TagsAroundShape &tas : tagsAround ) {
-    if (tas.start == tas.end) {
+    if (tas.coords.size() == 0) {
+      // Skip region that contains no coords
+      
+      if (debug) {
+        cout << "skip TAS range " << tas.start << " to " << tas.end << " since it contains zero coords" << endl;
+      }
+      
+      continue;
+      
+    } else if (tas.start == tas.end) {
       // Skip region that is only a single step.
       
       if (debug) {
@@ -1683,7 +1690,7 @@ captureRegion(SuperpixelImage &spImage,
     
     // With 2 colors, detect spread between the input pixels N = 4
     
-    int N = 2;
+    int N = 4;
     
     const int numClusters = N;
     
@@ -1971,8 +1978,39 @@ captureRegion(SuperpixelImage &spImage,
     uint32_t insideColortableOffset = sortedInsideOffsetKeys[0];
     uint32_t outsideColortableOffset = sortedOutsideOffsetKeys[0];
     
-    fprintf(stdout, "inside  %5d -> 0x%08X\n", insideColortableOffset, sortedColortable[insideColortableOffset]);
-    fprintf(stdout, "outside %5d -> 0x%08X\n", outsideColortableOffset, sortedColortable[outsideColortableOffset]);
+    uint32_t insideQuantPixel = sortedColortable[insideColortableOffset];
+    uint32_t outsideQuantPixel = sortedColortable[outsideColortableOffset];
+    
+    if (debug) {
+      fprintf(stdout, "inside  %5d -> 0x%08X\n", insideColortableOffset, insideQuantPixel);
+      fprintf(stdout, "outside %5d -> 0x%08X\n", outsideColortableOffset, outsideQuantPixel);
+    }
+    
+    // From the vector in quant pixels (in, out) generate the best original colors vector. The quant
+    // step could have moved the endpoints in 3D space so grab the input pixels that correspond
+    // to the output quant pixels.
+    
+    // FIXME: what is the best way to calculate "inside" vs "outside" best pixels?
+    
+    vector<uint32_t> insideInputPixels;
+    vector<uint32_t> outsideInputPixels;
+    
+    for ( Coord c : insideCoords ) {
+      uint32_t pixel = coordToQuantPixelMap[c];
+      insideInputPixels.push_back(pixel);
+    }
+    for ( Coord c : outsideCoords ) {
+      uint32_t pixel = coordToQuantPixelMap[c];
+      outsideInputPixels.push_back(pixel);
+    }
+    
+    uint32_t insideCenterOfMassPixel  = centerOfMassPixels(insideInputPixels);
+    uint32_t outsideCenterOfMassPixel = centerOfMassPixels(outsideInputPixels);
+
+    if (debug) {
+      fprintf(stdout, "insideCenterOfMassPixel  0x%08X\n", insideCenterOfMassPixel);
+      fprintf(stdout, "outsideCenterOfMassPixel 0x%08X\n", outsideCenterOfMassPixel);
+    }
     
     // Set inside/outside flagsfor the whole region based on the gradient vector for
     // this specific pair of regions.
@@ -1995,7 +2033,6 @@ captureRegion(SuperpixelImage &spImage,
     }
     
 //    insideOutsideTest(inputImg.rows, inputImg.cols, srmRegionCoords, tag, regionCoords, outPixels, sortedColortable, pixelToInside);
-    
     
     if (debugDumpImages)
     {
@@ -4268,6 +4305,9 @@ clockwiseScanForTagsAroundShape(
       // If the sets are identical then merge the regions.
       
       if (currentSet == nextSet) {
+        if (debug && true) {
+          cout << "same set for step " << nextStepi << endl;
+        }
         if (debug && false) {
           cout << "set 1" << endl;
           for ( int32_t tag : currentSet ) {
@@ -4313,15 +4353,28 @@ clockwiseScanForTagsAroundShape(
     }
 #endif // DEBUG
     
-    int maxStepi = (nextStepi + 1);
+    int maxStepi = mini((nextStepi + 1), stepMax);
+    
+#if defined(DEBUG)
+    assert(allTagSetsForVectors.size() == allCoordForVectors.size());
+    assert(maxStepi <= allCoordForVectors.size());
+#endif // DEBUG
+    
     for ( int i = stepi ; i < maxStepi; i++ ) {
+#if defined(DEBUG)
+      assert(i < allCoordForVectors.size());
+#endif // DEBUG
+      
+      if (debug) {
+        cout << "allCoordForVectors[" << i << "] num coords " << allCoordForVectors[i].size() << endl;
+      }
+      
       for ( Coord c : allCoordForVectors[i] ) {
         if (uniqueCoords.count(c) == 0) {
           uniqueCoords[c] = true;
         }
       }
     }
-    assert(uniqueCoords.size() > 0);
     
     vector<Coord> &uniqueCoordsVec = tas.coords;
     for ( auto &pair : uniqueCoords ) {
@@ -4332,9 +4385,6 @@ clockwiseScanForTagsAroundShape(
         uniqueCoordsVec.push_back(c);
       }
     }
-    // FIXME: is is possible to a coord to have been consumed
-    // by a previous step? Just skip in that case?
-    assert(uniqueCoordsVec.size() > 0);
     
 #if defined(DEBUG)
     assert((nextStepi + 1) > stepi);

@@ -1004,4 +1004,34 @@ Vec3b centerOfMass3d(const vector<Vec3b> &points)
   return Vec3b(cX,cY,cZ);
 }
 
+// Given a series of 3D pixels, generate a center of mass in (B,G,R) for the points.
+
+uint32_t centerOfMassPixels(const vector<uint32_t> & pixels)
+{
+  uint32_t sumX = 0;
+  uint32_t sumY = 0;
+  uint32_t sumZ = 0;
+  uint32_t N = 0;
+  
+  for ( uint32_t pixel : pixels ) {
+    uint32_t x = pixel & 0xFF;
+    uint32_t y = (pixel >> 8) & 0xFF;
+    uint32_t z = (pixel >> 16) & 0xFF;
+    
+    sumX += x;
+    sumY += y;
+    sumZ += z;
+    N += 1;
+  }
+  
+  uint32_t cX = sumX / N;
+  uint32_t cY = sumY / N;
+  uint32_t cZ = sumZ / N;
+  
+  assert(cX < 256);
+  assert(cY < 256);
+  assert(cZ < 256);
+  
+  return (cZ << 16) | (cY << 8) | (cX);
+}
 
