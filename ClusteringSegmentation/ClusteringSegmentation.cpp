@@ -3911,7 +3911,7 @@ clockwiseScanForTagsAroundShape(
 {
   const bool debug = true;
   const bool debugDumpImages = true;
-  const bool debugDumpStepImages = true;
+  const bool debugDumpStepImages = false;
   
   if (debug) {
     cout << "clockwiseScanForTagsAroundShape " << tag << endl;
@@ -4346,90 +4346,95 @@ clockwiseScanForTagsAroundShape(
   // and the range extends to 12 oclock and the sets match, then combine
   // the last range with the first one.
   
-  if (allTagSetsForVectors.size() > 2) {
-    // Check for the special case of the first and second sets being exactly equal,
-    // in this case iterate backwards from 12 oclock so that and initial same range
-    // at the front of the vector is moved to the start of the vector.
+  if (tagsAroundVec.size() > 1) {
     
-    set<int32_t> &firstSet = allTagSetsForVectors[0];
-    
-    set<int32_t> &lastSet = allTagSetsForVectors[stepMax - 1];
-    
-    if (firstSet == lastSet) {
-      if (debug) {
-        cout << "first and last range sets are the same" << endl;
+    if (allTagSetsForVectors.size() > 2) {
+      // Check for the special case of the first and second sets being exactly equal,
+      // in this case iterate backwards from 12 oclock so that and initial same range
+      // at the front of the vector is moved to the start of the vector.
+      
+      set<int32_t> &firstSet = allTagSetsForVectors[0];
+      
+      set<int32_t> &lastSet = allTagSetsForVectors[stepMax - 1];
+      
+      if (firstSet == lastSet) {
+        if (debug) {
+          cout << "first and last range sets are the same" << endl;
+        }
+        
+        assert(tagsAroundVec.size() > 0);
+        TagsAroundShape &firstTas = tagsAroundVec[0];
+        TagsAroundShape &lastTas = tagsAroundVec[tagsAroundVec.size() - 1];
+        
+        firstTas.start = lastTas.start;
+        //firstTas.end = nextStepi;
+        
+        for ( Coord c : lastTas.coords ) {
+          firstTas.coords.push_back(c);
+        }
+        
+        int numBefore = (int) tagsAroundVec.size();
+        tagsAroundVec.erase(end(tagsAroundVec) - 1);
+        int numAfter = (int) tagsAroundVec.size();
+        assert(numBefore == (numAfter + 1));
       }
-      
-      TagsAroundShape &firstTas = tagsAroundVec[0];
-      TagsAroundShape &lastTas = tagsAroundVec[tagsAroundVec.size() - 1];
-      
-      firstTas.start = lastTas.start;
-      //firstTas.end = nextStepi;
-      
-      for ( Coord c : lastTas.coords ) {
-        firstTas.coords.push_back(c);
-      }
-      
-      int numBefore = (int) tagsAroundVec.size();
-      tagsAroundVec.erase(end(tagsAroundVec) - 1);
-      int numAfter = (int) tagsAroundVec.size();
-      assert(numBefore == (numAfter + 1));
     }
-  }
-  
-  // Mark entries that are simple clusters of N tags
-  
-  for ( TagsAroundShape &tas : tagsAroundVec ) {
-    if (tas.start == tas.end) {
-      tas.flag = true;
-    } else {
-      tas.flag = false;
-    }
-  }
-  
-  // Do a second scan of the resulting TagsAroundShape elements and combine ranges that consist of just
-  // one single step
-  
-  stepMax = (int) tagsAroundVec.size() - 1;
-  
-  bool mergeNext = false;
-  
-  for ( stepi = 0; stepi < stepMax; stepi += 1) {
-    TagsAroundShape &oneTas = tagsAroundVec[stepi];
-    TagsAroundShape &nextTas = tagsAroundVec[stepi+1];
     
-    if (oneTas.flag && nextTas.flag) {
-      // Merge 2 in a row that differ in set contents
-      
-      oneTas.end = nextTas.end;
-      
-      set<int32_t> uniqueTags;
-      
-      for ( int32_t tag : oneTas.tags ) {
-        uniqueTags.insert(tag);
+    // Mark entries that are simple clusters of N tags
+    
+    for ( TagsAroundShape &tas : tagsAroundVec ) {
+      if (tas.start == tas.end) {
+        tas.flag = true;
+      } else {
+        tas.flag = false;
       }
-      
-      for ( int32_t tag : nextTas.tags ) {
-        uniqueTags.insert(tag);
-      }
-      
-      oneTas.tags.clear();
-      
-      for ( int32_t tag : uniqueTags ) {
-        oneTas.tags.push_back(tag);
-      }
-      
-      for ( Coord c : nextTas.coords ) {
-        oneTas.coords.push_back(c);
-      }
-      
-      tagsAroundVec.erase(begin(tagsAroundVec) + stepi+1);
-      stepMax = (int) tagsAroundVec.size() - 1;
-      mergeNext = true;
-    } else {
-      mergeNext = false;
     }
-  }
+    
+    // Do a second scan of the resulting TagsAroundShape elements and combine ranges that consist of just
+    // one single step
+    
+    stepMax = (int) tagsAroundVec.size() - 1;
+    
+    bool mergeNext = false;
+    
+    for ( stepi = 0; stepi < stepMax; stepi += 1) {
+      TagsAroundShape &oneTas = tagsAroundVec[stepi];
+      TagsAroundShape &nextTas = tagsAroundVec[stepi+1];
+      
+      if (oneTas.flag && nextTas.flag) {
+        // Merge 2 in a row that differ in set contents
+        
+        oneTas.end = nextTas.end;
+        
+        set<int32_t> uniqueTags;
+        
+        for ( int32_t tag : oneTas.tags ) {
+          uniqueTags.insert(tag);
+        }
+        
+        for ( int32_t tag : nextTas.tags ) {
+          uniqueTags.insert(tag);
+        }
+        
+        oneTas.tags.clear();
+        
+        for ( int32_t tag : uniqueTags ) {
+          oneTas.tags.push_back(tag);
+        }
+        
+        for ( Coord c : nextTas.coords ) {
+          oneTas.coords.push_back(c);
+        }
+        
+        tagsAroundVec.erase(begin(tagsAroundVec) + stepi+1);
+        stepMax = (int) tagsAroundVec.size() - 1;
+        mergeNext = true;
+      } else {
+        mergeNext = false;
+      }
+    }
+    
+  } // end if more than 1 segment block
   
   if (debug) {
     cout << "return clockwiseScanForTagsAroundShape " << tag << " with N = " << tagsAroundVec.size() << " ranges" << endl;
@@ -4982,7 +4987,8 @@ recurseSuperpixelContainment(SuperpixelImage &spImage,
   return rootTags;
 }
 
-// Segment an input image with multiple passes of SRM approach
+// Segment an input image with multiple passes of SRM approach and place the
+// result tags in tagsMat.
 
 bool srmMultiSegment(const Mat & inputImg, Mat & tagsMat) {
   // Run SRM logic to generate initial segmentation based on statistical "alikeness".
@@ -5014,6 +5020,14 @@ bool srmMultiSegment(const Mat & inputImg, Mat & tagsMat) {
   
   if (!worked) {
     return false;
+  }
+  
+  if ((1)) {
+    // Bypass second stage SRM
+    
+    tagsMat = srmTags1;
+    
+    return true;
   }
   
   // Scan each grouping to determine when pixels identified as being in
