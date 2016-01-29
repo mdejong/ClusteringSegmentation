@@ -142,4 +142,8 @@ Vec3b centerOfMass3d(const vector<Vec3b> &points);
 
 uint32_t centerOfMassPixels(const vector<uint32_t> & pixels);
 
+// Generate a vector of pixels from one point to another
+
+vector<uint32_t> generateVector(uint32_t fromPixel, uint32_t toPixel);
+
 #endif // OPENCV_UTIL_H

@@ -1986,6 +1986,8 @@ captureRegion(SuperpixelImage &spImage,
       fprintf(stdout, "outside %5d -> 0x%08X\n", outsideColortableOffset, outsideQuantPixel);
     }
     
+    /*
+    
     // From the vector in quant pixels (in, out) generate the best original colors vector. The quant
     // step could have moved the endpoints in 3D space so grab the input pixels that correspond
     // to the output quant pixels.
@@ -2011,6 +2013,40 @@ captureRegion(SuperpixelImage &spImage,
       fprintf(stdout, "insideCenterOfMassPixel  0x%08X\n", insideCenterOfMassPixel);
       fprintf(stdout, "outsideCenterOfMassPixel 0x%08X\n", outsideCenterOfMassPixel);
     }
+     
+    */
+    
+    // Generate a vector of pixels from one point to another
+    
+    vector<uint32_t> insideToOutsideVec = generateVector(insideQuantPixel, outsideQuantPixel);
+    
+    if (debugDumpImages) {
+      // Dump points generated on the line that make up the vector
+      
+      int numPoints = (int) insideToOutsideVec.size();
+      
+      Mat qtableOutputMat = Mat(numPoints, 1, CV_8UC3);
+      qtableOutputMat = (Scalar) 0;
+      
+      for (int i = 0; i < numPoints; i++) {
+        uint32_t pixel = insideToOutsideVec[i];
+        Vec3b vec = PixelToVec3b(pixel);
+        qtableOutputMat.at<Vec3b>(i, 0) = vec;
+      }
+      
+      std::stringstream fnameStream;
+      
+      fnameStream << "srm" << "_tag_" << tag << "_to_" << mostCommonOtherTag << "_quant3_inside_outside_vec" << ".png";
+
+      string fname = fnameStream.str();
+      
+      imwrite(fname, qtableOutputMat);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    // What is the most common interior pixel? Make the the source ?
+    // What is the most common exterior pixel. Make that the dst.
     
     // Set inside/outside flagsfor the whole region based on the gradient vector for
     // this specific pair of regions.

@@ -1035,3 +1035,93 @@ uint32_t centerOfMassPixels(const vector<uint32_t> & pixels)
   return (cZ << 16) | (cY << 8) | (cX);
 }
 
+// Generate a vector of pixels from one point to another
+
+vector<uint32_t> generateVector(uint32_t fromPixel, uint32_t toPixel)
+{
+  const bool debug = true;
+  
+  int32_t sR, sG, sB;
+  
+  xyzDelta(fromPixel, toPixel, sR, sG, sB);
+  
+  if (debug) {
+    printf("generateVector 0x%08X -> 0x%08X = (B G R) (%d %d %d)\n", fromPixel, toPixel, sB, sG, sR);
+  }
+  
+  float scale = sqrt(float(sR*sR + sG*sG + sB*sB));
+  
+  Vec3f unitVec = xyzDeltaToUnitVec3f(sR, sG, sB);
+  
+  if (debug) {
+    cout << "unit vector " << unitVec << endl;
+  }
+
+  Vec3b fromVec = PixelToVec3b(fromPixel);
+  Vec3b toVec = PixelToVec3b(toPixel);
+  
+  Vec3f fromVecf(fromVec[0], fromVec[1], fromVec[2]);
+  Vec3f toVecf(toVec[0], toVec[1], toVec[2]);
+  
+  vector<uint32_t> pixelsVec;
+  
+  bool done = false;
+  
+  int numSteps = round(scale) + 2;
+  
+  for ( int i = 0; !done && i < numSteps; i++ ) {
+    // Skip offsets 0 and 1 and N-2, N-1
+    
+    Vec3f pointVec = fromVecf + (unitVec * i);
+    
+    if (debug && 1) {
+      cout << "at step " << i << " scaled vec " << (unitVec * i) << endl;
+      cout << "at step " << i << " point vec " << pointVec << endl;
+    }
+    
+    Vec3b roundedPointVec(round(pointVec[0]), round(pointVec[1]), round(pointVec[2]));
+    uint32_t pixel = Vec3BToUID(roundedPointVec);
+    
+    if (debug) {
+      printf("at step %5d point is (B G R) (%5d %5d %5d) aka 0x%08X\n", i, roundedPointVec[0], roundedPointVec[1], roundedPointVec[2], pixel);
+    }
+    
+    if (roundedPointVec == toVec) {
+      // Reached the end point, stop processing now
+      done = true;
+    } else if (pixelsVec.size() > 0) {
+      uint32_t lastPixel = pixelsVec[pixelsVec.size() - 1];
+      if (pixel == lastPixel) {
+        // In this case, the delta is so small that the int value did not change, skip
+        continue;
+      }
+    }
+    
+    pixelsVec.push_back(pixel);
+  }
+  
+  // Verify that first point matches insidePixel and that last point matches outsidePixel
+  
+#if defined(DEBUG)
+  {
+    uint32_t p0 = pixelsVec[0];
+    uint32_t pLast = pixelsVec[pixelsVec.size() - 1];
+    
+    assert(p0 == fromPixel);
+    assert(pLast == toPixel);
+  }
+#endif // DEBUG
+
+  if (debug) {
+    printf("generateVector returning %d coords\n", (int)pixelsVec.size());
+    
+    int i = 0;
+    for ( uint32_t pixel : pixelsVec ) {
+      printf("points[%d] = 0x%08X\n", i, pixel);
+      i += 1;
+    }
+  }
+  
+  return pixelsVec;
+}
+
