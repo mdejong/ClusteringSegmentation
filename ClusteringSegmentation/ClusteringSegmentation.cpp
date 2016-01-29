@@ -1192,7 +1192,7 @@ captureRegion(SuperpixelImage &spImage,
   
   vector<SuperpixelEdge> extendedRegionEdges;
   
-  if (1) {
+  {
     vector<SuperpixelEdge> edges = getEdgesInRegion(spImage, srmTags, tag, regionCoords);
     
     cout << "getEdgesInRegion returned " << edges.size() << " edges" << endl;
@@ -1204,6 +1204,21 @@ captureRegion(SuperpixelImage &spImage,
     cout << "";
     
     extendedRegionEdges = edges;
+  }
+  
+  if (extendedRegionEdges.size() == 0) {
+    // No edges between regions, this would typically happen when a parent that contains
+    // interior regions has already consumed all the interior region pixels.
+    
+    if (debug) {
+      cout << "captureRegion returned region as mask since zero edges detected for tag " << tag << endl;
+    }
+    
+    for ( Coord c : regionCoords ) {
+      mask.at<uint8_t>(c.y, c.x) = 0xFF;
+    }
+
+    return;
   }
   
   vector<Coord> outCoords;
@@ -1322,7 +1337,7 @@ captureRegion(SuperpixelImage &spImage,
       vecOfPixels.push_back(vec);
     }
     
-    Vec3b centerOfMass = centerOfMass3d(vecOfPixels);
+//    Vec3b centerOfMass = centerOfMass3d(vecOfPixels);
     
 //    if (debug) {
 //      uint32_t p1 = Vec3BToUID(expandingCenterOfMass);
@@ -1388,13 +1403,13 @@ captureRegion(SuperpixelImage &spImage,
   uint32_t *inPixels = new uint32_t[numPixels];
   uint32_t *outPixels = new uint32_t[numPixels];
   
-  for ( int i = 0; i < numPixels; i++ ) {
-    Coord c = bestRegionCoords[i];
-    
-    Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
-    uint32_t pixel = Vec3BToUID(vec);
-    inPixels[i] = pixel;
-  }
+//  for ( int i = 0; i < numPixels; i++ ) {
+//    Coord c = bestRegionCoords[i];
+//    
+//    Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+//    uint32_t pixel = Vec3BToUID(vec);
+//    inPixels[i] = pixel;
+//  }
   
   // Generate mask Mat that is the same dimensions as blockMat but contains just one
   // byte for each pixel and acts as a mask. The white pixels indicate the blocks
@@ -1497,227 +1512,268 @@ captureRegion(SuperpixelImage &spImage,
   // (likely this is a parent tag). In that case, do 1 merge from the interior
   // region all the way out to the containing region.
   
-  // Scan the vectors between major colors in large blocks in the expanded regions.
-  // This scan must be able to extract a certain region, like in N, S, E, W as
-  // a vector from one to another.
+  typedef struct {
+    uint32_t count;
+    TagsAroundShape *tasPtr;
+  } WeightedEdgeValue;
   
-  unordered_map<uint32_t, uint32_t> pixelToNumVotesMap;
+  unordered_map<uint32_t, WeightedEdgeValue> weightedEdges;
+
+  // If any coords are not used as "most common" then append them here
   
-  vote_for_identical_neighbors(pixelToNumVotesMap, blockBasedQuantMat, blockMaskMat);
+  unordered_map<uint32_t, vector<Coord>> notMostCommonCoords;
   
-  vector<uint32_t> sortedPixelKeys = sort_keys_by_count(pixelToNumVotesMap, true);
-  
-  if (debug) {
-    fprintf(stdout, "nearby vector start/end points\n");
-    
-    for ( uint32_t pixel : sortedPixelKeys ) {
-      uint32_t count = pixelToNumVotesMap[pixel];
-      fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixel, pixel, count);
-    }
-    fprintf(stdout, "done\n");
-  }
-  
-  for ( int32_t otherTag : allRegionTags ) {
-    if (tag == otherTag) {
+  for ( TagsAroundShape &tas : tagsAround ) {
+    if (tas.start == tas.end) {
+      // Skip region that is only a single step.
+      
+      if (debug) {
+          cout << "skip TAS range " << tas.start << " to " << tas.end << " since it is a single step" << endl;
+      }
+      
+      for ( Coord c : tas.coords ) {
+        Vec3b tagVec = srmTags.at<Vec3b>(c.y, c.x);
+        int32_t tag = Vec3BToUID(tagVec);
+        notMostCommonCoords[tag].push_back(c);
+      }
+      
+      // FIXME: in this tas loop, if a small region is the only ref to a neighbor then
+      // that neighbor has to be found in one of the searches. Save tas to another vec
+      // and then do another loop looking for elements that were not found.
+      
       continue;
     }
     
-    Superpixel *spPtr = spImage.getSuperpixelPtr(otherTag);
-    int N = (int) spPtr->coords.size();
+    cout << "for TAS range " << tas.start << " to " << tas.end << endl;
     
-    cout << "otherTag " << otherTag << " N = " << N << endl;
+    // Find path from the interior region to a tag identified in the region.
+    
+    unordered_map<uint32_t, uint32_t> tagHistogram;
+    
+    for ( Coord c : tas.coords ) {
+      Vec3b tagVec = srmTags.at<Vec3b>(c.y, c.x);
+      int32_t tag = Vec3BToUID(tagVec);
+      tagHistogram[tag] += 1;
+    }
+    
+    vector<uint32_t> sortedKeys = sort_keys_by_count(tagHistogram, true);
+    
+    cout << "tags sorted by count:" << endl;
+    
+    for ( uint32_t key : sortedKeys ) {
+      uint32_t key_count = tagHistogram[key];
+      printf("%5d = %5d\n", key, key_count);
+    }
+    
+    assert(sortedKeys.size() > 0);
+    int32_t mostCommonOtherTag = sortedKeys[0];
+    int32_t mostCommonOtherTagCount = tagHistogram[mostCommonOtherTag];
+    
+    // Edge (tag, mostCommonTag)
+    
+    SuperpixelEdge edge(tag, mostCommonOtherTag);
+    
+    cout << "edge " << edge << endl;
+
+    int currentLargest = 0;
+    if (weightedEdges.count(mostCommonOtherTag) > 0) {
+      currentLargest = weightedEdges[mostCommonOtherTag].count;
+    }
+    
+    if (mostCommonOtherTagCount > currentLargest) {
+      WeightedEdgeValue wev;
+      wev.count = mostCommonOtherTagCount;
+      wev.tasPtr = &tas;
+      weightedEdges[mostCommonOtherTag] = wev;
+    }
+    
+    // FIXME: how to track coords not used in this logic ? aka notMostCommonCoords
   }
   
-  if (debugDumpImages) {
-    Mat tmpMat(inputImg.size(), CV_8UC4);
-    tmpMat = Scalar(0, 0, 0, 0);
+  for ( auto & pair : weightedEdges ) {
+    int32_t mostCommonOtherTag = pair.first;
+    int32_t mostCommonOtherTagCount = pair.second.count;
+    cout << "weightedEdges[" << mostCommonOtherTag << "] = " << mostCommonOtherTagCount << endl;
+  }
+  
+  // The edge table indicates how to get from one common region to the interior
+  // region. Each edge indicates a subset of points to be iterated.
+  
+  for ( auto & pair : weightedEdges ) {
+    int32_t mostCommonOtherTag = pair.first;
+
+    WeightedEdgeValue &wev = pair.second;
     
-    for ( Coord c : bestRegionCoords ) {
-      Vec4b vec4;
-      vec4 = tmpMat.at<Vec4b>(c.y, c.x);
-      if (vec4[3] == 0xFF) {
-        continue;
+    // If this other tag is largely a flat color region then it it easy to
+    // create a vector of one color to the other since anything that is
+    // not exactly the flat pixel is in the gradient part.
+    
+    vector<Coord> outsideCoords;
+    
+    for ( Coord c : wev.tasPtr->coords ) {
+      outsideCoords.push_back(c);
+    }
+    
+    if (notMostCommonCoords.count(mostCommonOtherTag) > 0) {
+      for ( Coord c : notMostCommonCoords[mostCommonOtherTag] ) {
+        outsideCoords.push_back(c);
       }
+    }
+    
+//    vector<int32_t> tags = wev.tasPtr->tags;
+//    for (int i = 0; i < tags.size(); i++) {
+//      int32_t currentTag = tags[i];
+//      if (currentTag == tag) {
+//        continue;
+//      }
+//      if (notMostCommonCoords.count(currentTag) > 0) {
+//        for ( Coord c : notMostCommonCoords[currentTag] ) {
+//          combinedCoords.push_back(c);
+//        }
+//      }
+//    }
+    
+//    Superpixel *otherSpPtr = spImage.getSuperpixelPtr(mostCommonOtherTag);
+//    
+//    for ( Coord c : otherSpPtr->coords ) {
+//      combinedCoords.push_back(c);
+//    }
+    
+    // FIXME: might want to only select the pixels near the edge coords.
+    
+    Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
+    
+    vector<Coord> &insideCoords = spPtr->coords;
+    
+    vector<Coord> combinedCoords;
+    combinedCoords.reserve(outsideCoords.size() + insideCoords.size());
+    
+    append_to_vector(combinedCoords, outsideCoords);
+    append_to_vector(combinedCoords, insideCoords);
+    
+    if (debugDumpImages) {
+      Mat tmpMat(inputImg.size(), CV_8UC4);
+      tmpMat = Scalar(0, 0, 0, 0);
+      
+      for ( Coord c : combinedCoords ) {
+        Vec4b vec4;
+        
+        Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+        
+        vec4[0] = vec[0];
+        vec4[1] = vec[1];
+        vec4[2] = vec[2];
+        vec4[3] = 0xFF;
+        tmpMat.at<Vec4b>(c.y, c.x) = vec4;
+      }
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_to_" << mostCommonOtherTag << "_combined" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, tmpMat);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    // --------------------- QUANT ---------------------------
+    
+    // Run quant logic on this subset of pixels to determine if there is a gradient
+    // between the pixels identified in this region.
+    
+    // With 2 colors, detect spread between the input pixels N = 4
+    
+    int N = 2;
+    
+    const int numClusters = N;
+    
+    uint32_t *colortable = new uint32_t[numClusters];
+    
+    uint32_t numActualClusters = numClusters;
+    
+    int allPixelsUnique = 0;
+    
+    // FIXME: only want to include the inPixels that are defined for this region!
+    
+    assert(combinedCoords.size() <= bestRegionCoords.size());
+    
+    int numPixels = (int)combinedCoords.size();
+    
+    for ( int i = 0; i < numPixels; i++ ) {
+      Coord c = combinedCoords[i];
       
       Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
       uint32_t pixel = Vec3BToUID(vec);
+      inPixels[i] = pixel;
+    }
+    
+    quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
+    
+    // Write quant output where each original pixel is replaced with the closest
+    // colortable entry.
+    
+    if (debugDumpImages) {
+      Mat tmpResultImg(inputImg.size(), CV_8UC4);
       
-      int blockX = c.x / superpixelDim;
-      int blockY = c.y / superpixelDim;
+      tmpResultImg = Scalar(0,0,0,0);
       
-      Vec3b quantPixelVec = blockBasedQuantMat.at<Vec3b>(blockY, blockX);
+      for ( int i = 0; i < numPixels; i++ ) {
+        Coord c = combinedCoords[i];
+        uint32_t pixel = inPixels[i];
+        Vec3b vec = PixelToVec3b(pixel);
+        Vec4b vec4;
+        vec4[0] = vec[0];
+        vec4[1] = vec[1];
+        vec4[2] = vec[2];
+        vec4[3] = 0xFF;
+        tmpResultImg.at<Vec4b>(c.y, c.x) = vec4;
+      }
       
-      vec4[0] = quantPixelVec[0];
-      vec4[1] = quantPixelVec[1];
-      vec4[2] = quantPixelVec[2];
-      vec4[3] = 0xFF;
-      tmpMat.at<Vec4b>(c.y, c.x) = vec4;
-    }
-    
-    std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_best_other_votes" << ".png";
-    string fname = fnameStream.str();
-    
-    imwrite(fname, tmpMat);
-    cout << "wrote " << fname << endl;
-    cout << "";
-  }
-  
-  //  MOMO
-  //
-  //  foreach tag in vote_for_identical_neighbors(pixelToNumVotesMap, blockBasedQuantMat, blockMaskMat) {
-  //
-  //  }
-  
-  // Gather the most likely region center color values based on voting
-  // for known neighbor values. This logic gathers vector centers
-  // in the nearby region.
-  
-  // Count neighbors that share a quant pixel value after conversion to blocks
-  
-  //  unordered_map<uint32_t, uint32_t> pixelToNumVotesMap;
-  //
-  //  vote_for_identical_neighbors(pixelToNumVotesMap, blockBasedQuantMat, blockMaskMat);
-  //
-  //  vector<uint32_t> sortedPixelKeys = sort_keys_by_count(pixelToNumVotesMap, true);
-  //
-  //  if (debug) {
-  //    fprintf(stdout, "nearby vector start/end points\n");
-  //
-  //    for ( uint32_t pixel : sortedPixelKeys ) {
-  //      uint32_t count = pixelToNumVotesMap[pixel];
-  //      fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixel, pixel, count);
-  //    }
-  //    fprintf(stdout, "done\n");
-  //  }
-  
-  vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(sortedPixelKeys);
-  
-  int numPoints = (int) sortedOffsets.size();
-  
-  vector<uint32_t> sortedColortable;
-  
-  for (int i = 0; i < numPoints; i++) {
-    int si = (int) sortedOffsets[i];
-    uint32_t pixel = sortedPixelKeys[si];
-    sortedColortable.push_back(pixel);
-  }
-  
-  if (debug) {
-    for ( uint32_t pixel : sortedColortable ) {
-      uint32_t count = pixelToNumVotesMap[pixel];
-      fprintf(stdout, "0x%08X (%8d) -> %5d\n", pixel, pixel, count);
-    }
-    fprintf(stdout, "done\n");
-  }
-  
-  if (debugDumpImages) {
-    Mat sortedQtableOutputMat = Mat(numPoints, 1, CV_8UC3);
-    sortedQtableOutputMat = (Scalar) 0;
-    
-    for (int i = 0; i < numPoints; i++) {
-      int si = (int) sortedOffsets[i];
-      uint32_t pixel = sortedPixelKeys[si];
-      Vec3b vec = PixelToVec3b(pixel);
-      sortedQtableOutputMat.at<Vec3b>(i, 0) = vec;
-    }
-    
-    std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_quant_peaks_sorted" << ".png";
-    string filename = fnameStream.str();
-    
-    char *outQuantTableFilename = (char*) filename.c_str();
-    imwrite(outQuantTableFilename, sortedQtableOutputMat);
-    cout << "wrote " << outQuantTableFilename << endl;
-  }
-  
-  // Dump sorted pixel data as a CSV file, with int value and hex rep of int value for readability
-  
-  if (debugDumpImages) {
-    std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_quant_peaks_sorted" << ".csv";
-    string fname = fnameStream.str();
-    
-    FILE *fout = fopen(fname.c_str(), "w+");
-    
-    for ( uint32_t pixel : sortedColortable ) {
-      uint32_t count = pixelToNumVotesMap[pixel];
-      uint32_t pixelNoAlpha = pixel & 0x00FFFFFF;
-      fprintf(fout, "%d,0x%08X,%d\n", pixelNoAlpha, pixelNoAlpha, count);
-    }
-    
-    fclose(fout);
-    cout << "wrote " << fname << endl;
-  }
-  
-  // Use peak detection logic to examine the 1D histogram in sorted order so as to find the
-  // peaks in the distribution.
-  
-  vector<uint32_t> peakPixels = gatherPeakPixels(sortedColortable, pixelToNumVotesMap);
-  
-  int N = (int) peakPixels.size();
-  
-  // Min N must be at least 1 at this point
-  
-  if (N < 2) {
-    N = 2;
-  }
-  
-  N = N * 4;
-  
-  // Generate quant based on the input
-  
-  const int numClusters = N;
-  
-  if (debug) {
-    cout << "numClusters detected as " << numClusters << endl;
-  }
-  
-  uint32_t *colortable = new uint32_t[numClusters];
-  
-  uint32_t numActualClusters = numClusters;
-  
-  int allPixelsUnique = 0;
-  
-  quant_recurse(numPixels, inPixels, outPixels, &numActualClusters, colortable, allPixelsUnique );
-  
-  // Write quant output where each original pixel is replaced with the closest
-  // colortable entry.
-  
-  if (debugDumpImages) {
-    Mat tmpResultImg = inputImg.clone();
-    tmpResultImg = Scalar(0,0,0xFF);
-    
-    for ( int i = 0; i < numPixels; i++ ) {
-      Coord c = bestRegionCoords[i];
-      uint32_t pixel = outPixels[i];
-      Vec3b vec = PixelToVec3b(pixel);
-      tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
-    }
-    
-    {
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_quant_output" << ".png";
-      string fname = fnameStream.str();
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_to_" << mostCommonOtherTag << "_quant3_input" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, tmpResultImg);
+        cout << "wrote " << fname << endl;
+      }
       
-      imwrite(fname, tmpResultImg);
-      cout << "wrote " << fname << endl;
-    }
-    
-    // table
-    
-    {
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_quant_table" << ".png";
-      string fname = fnameStream.str();
+      tmpResultImg = Scalar(0,0,0,0);
       
-      dumpQuantTableImage(fname, inputImg, colortable, numActualClusters);
+      for ( int i = 0; i < numPixels; i++ ) {
+        Coord c = combinedCoords[i];
+        uint32_t pixel = outPixels[i];
+        Vec3b vec = PixelToVec3b(pixel);
+        Vec4b vec4;
+        vec4[0] = vec[0];
+        vec4[1] = vec[1];
+        vec4[2] = vec[2];
+        vec4[3] = 0xFF;
+        tmpResultImg.at<Vec4b>(c.y, c.x) = vec4;
+      }
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_to_" << mostCommonOtherTag << "_quant3_output" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, tmpResultImg);
+        cout << "wrote " << fname << endl;
+      }
+      
+      // table
+      
+      {
+        std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_to_" << mostCommonOtherTag << "_quant3_table" << ".png";
+        string fname = fnameStream.str();
+        
+        dumpQuantTableImage(fname, inputImg, colortable, numActualClusters);
+      }
     }
-  }
-  
-  // Generate color sorted clusters
-  
-  {
+    
+    // Generate color sorted clusters
+    
     vector<uint32_t> clusterCenterPixels;
     
     for ( int i = 0; i < numActualClusters; i++) {
@@ -1796,7 +1852,9 @@ captureRegion(SuperpixelImage &spImage,
     if (debugDumpImages)
     {
       std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_quant_table_sorted" << ".png";
+      
+      fnameStream << "srm" << "_tag_" << tag << "_to_" << mostCommonOtherTag << "_quant3_table_sorted" << ".png";
+      
       string filename = fnameStream.str();
       
       char *outQuantTableFilename = (char*) filename.c_str();
@@ -1816,1058 +1874,194 @@ captureRegion(SuperpixelImage &spImage,
       pixel_to_sorted_offset[pixel] = si;
     }
     
-    Mat sortedQuantOutputMat = inputImg.clone();
-    sortedQuantOutputMat = Scalar(0,0,0xFF);
-    
-    for ( int i = 0; i < numPixels; i++ ) {
-      Coord c = bestRegionCoords[i];
-      uint32_t pixel = outPixels[i];
+    if (debugDumpImages) {
+      Mat sortedQuantOutputMat = inputImg.clone();
+      sortedQuantOutputMat = Scalar(0,0,0xFF);
       
-      assert(pixel_to_sorted_offset.count(pixel) > 0);
-      uint32_t offset = pixel_to_sorted_offset[pixel];
-      
-      if ((debug) && false) {
-        char buffer[1024];
-        snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is %d -> offset %d\n", c.x, c.y, pixel, offset);
-        cout << buffer;
+      for ( int i = 0; i < numPixels; i++ ) {
+        Coord c = combinedCoords[i];
+        uint32_t pixel = outPixels[i];
+        
+        assert(pixel_to_sorted_offset.count(pixel) > 0);
+        uint32_t offset = pixel_to_sorted_offset[pixel];
+        
+        if ((debug) && false) {
+          char buffer[1024];
+          snprintf(buffer, sizeof(buffer), "for (%4d,%4d) pixel is %d -> offset %d\n", c.x, c.y, pixel, offset);
+          cout << buffer;
+        }
+        
+        assert(offset <= 256);
+        uint32_t grayscalePixel = (offset << 16) | (offset << 8) | offset;
+        
+        Vec3b vec = PixelToVec3b(grayscalePixel);
+        sortedQuantOutputMat.at<Vec3b>(c.y, c.x) = vec;
       }
       
-      assert(offset <= 256);
-      uint32_t grayscalePixel = (offset << 16) | (offset << 8) | offset;
-      
-      Vec3b vec = PixelToVec3b(grayscalePixel);
-      sortedQuantOutputMat.at<Vec3b>(c.y, c.x) = vec;
+      {
+        std::stringstream fnameStream;
+        
+        fnameStream << "srm" << "_tag_" << tag << "_to_" << mostCommonOtherTag << "_quant3_table_offsets" << ".png";
+        
+        string filename = fnameStream.str();
+        
+        char *outQuantFilename = (char*)filename.c_str();
+        imwrite(outQuantFilename, sortedQuantOutputMat);
+        cout << "wrote " << outQuantFilename << endl;
+      }
     }
+    
+    delete [] colortable;
+    
+    // For the coords that define the inside region, gather all the out quant pixels
+    // and record the colortable offsets.
+    
+    unordered_map<Coord, uint32_t> coordToQuantPixelMap;
+    
+    for ( int i = 0; i < numPixels; i++ ) {
+      Coord c = combinedCoords[i];
+      uint32_t pixel = outPixels[i];
+      coordToQuantPixelMap[c] = pixel;
+      
+#if defined(DEBUG)
+      assert(pixel_to_sorted_offset.count(pixel) > 0);
+#endif // DEBUG
+    }
+    
+    // Map colortable offset to count "inside"
+    unordered_map<uint32_t, uint32_t> insideOffsetHistogram;
+    // Map colortable offset to count "outside"
+    unordered_map<uint32_t, uint32_t> outsideOffsetHistogram;
+    
+    for ( Coord c : insideCoords ) {
+      uint32_t pixel = coordToQuantPixelMap[c];
+      uint32_t offset = pixel_to_sorted_offset[pixel];
+      insideOffsetHistogram[offset] += 1;
+    }
+    for ( Coord c : outsideCoords ) {
+      uint32_t pixel = coordToQuantPixelMap[c];
+      uint32_t offset = pixel_to_sorted_offset[pixel];
+      outsideOffsetHistogram[offset] += 1;
+    }
+    
+    vector<uint32_t> sortedInsideOffsetKeys = sort_keys_by_count(insideOffsetHistogram, true);
+    
+    if (debug) {
+      fprintf(stdout, "sortedInsideOffsetKeys\n");
+      for ( uint32_t offset : sortedInsideOffsetKeys ) {
+        uint32_t count = insideOffsetHistogram[offset];
+        fprintf(stdout, "%8d -> %5d\n", offset, count);
+      }
+      fprintf(stdout, "done\n");
+    }
+
+    vector<uint32_t> sortedOutsideOffsetKeys = sort_keys_by_count(outsideOffsetHistogram, true);
+    
+    if (debug) {
+      fprintf(stdout, "sortedOutsideOffsetKeys\n");
+      for ( uint32_t offset : sortedOutsideOffsetKeys ) {
+        uint32_t count = outsideOffsetHistogram[offset];
+        fprintf(stdout, "%8d -> %5d\n", offset, count);
+      }
+      fprintf(stdout, "done\n");
+    }
+    
+    // Choose most likely offset for vector end point based on histogram counts
+    
+    uint32_t insideColortableOffset = sortedInsideOffsetKeys[0];
+    uint32_t outsideColortableOffset = sortedOutsideOffsetKeys[0];
+    
+    fprintf(stdout, "inside  %5d -> 0x%08X\n", insideColortableOffset, sortedColortable[insideColortableOffset]);
+    fprintf(stdout, "outside %5d -> 0x%08X\n", outsideColortableOffset, sortedColortable[outsideColortableOffset]);
+    
+    // Set inside/outside flagsfor the whole region based on the gradient vector for
+    // this specific pair of regions.
+    
+    unordered_map<uint32_t, InsideOutsideRecord> pixelToInside;
+    
+    for ( uint32_t pixel : sortedColortable ) {
+      InsideOutsideRecord &inOutRef = pixelToInside[pixel];
+      
+#if defined(DEBUG)
+      assert(pixel_to_sorted_offset.count(pixel) > 0);
+#endif // DEBUG
+      uint32_t offset = pixel_to_sorted_offset[pixel];
+      
+      if (offset == insideColortableOffset) {
+        inOutRef.isInside = true;
+      } else {
+        inOutRef.isInside = false;
+      }
+    }
+    
+//    insideOutsideTest(inputImg.rows, inputImg.cols, srmRegionCoords, tag, regionCoords, outPixels, sortedColortable, pixelToInside);
+    
     
     if (debugDumpImages)
     {
       std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_quant_table_offsets" << ".png";
-      string filename = fnameStream.str();
       
-      char *outQuantFilename = (char*)filename.c_str();
-      imwrite(outQuantFilename, sortedQuantOutputMat);
-      cout << "wrote " << outQuantFilename << endl;
-    }
-  }
-  
-  // All the input region pixels have not been passed through a local quant operation
-  // and a most common color for a given srm tag can noe be calculated. This generates
-  // vector end points from region to region in terms of the output quant colors.
-  
-  unordered_map<int32_t, unordered_map<uint32_t, uint32_t> > regionToQuantPixelsMap;
-  
-  for ( int i = 0; i < numPixels; i++ ) {
-    Coord c = bestRegionCoords[i];
-    uint32_t quantPixel = outPixels[i];
-    
-    Vec3b srmVec = srmTags.at<Vec3b>(c.y, c.x);
-    int32_t srmTag = Vec3BToUID(srmVec);
-    
-    unordered_map<uint32_t, uint32_t> &pixelHistogram = regionToQuantPixelsMap[srmTag];
-    pixelHistogram[quantPixel] += 1;
-  }
-  
-  // Calculate the largest count pixel for each histogram
-  
-  unordered_map<uint32_t, uint32_t> maxQuantPixelFromRegionMap;
-  
-  for ( auto &pair : regionToQuantPixelsMap ) {
-    int32_t tag = pair.first;
-    unordered_map<uint32_t, uint32_t> &pixelHistogram = pair.second;
-    
-    int maxCount = 0;
-    uint32_t maxPixel = 0;
-    
-    for ( auto &pair : pixelHistogram ) {
-      uint32_t pixel = pair.first;
-      uint32_t count = pair.second;
-      
-      if (count > maxCount) {
-        maxCount = count;
-        maxPixel = pixel;
-      }
-    }
-    
-    assert(maxCount > 0);
-    maxQuantPixelFromRegionMap[tag] = maxPixel;
-  }
-  
-  if (debug) {
-    for ( auto &pair : regionToQuantPixelsMap ) {
-      int32_t tag = pair.first;
-      unordered_map<uint32_t, uint32_t> &pixelHistogram = pair.second;
-      
-      printf("srm region %d\n", tag);
-      for ( auto &pair : pixelHistogram ) {
-        uint32_t pixel = pair.first;
-        uint32_t count = pair.second;
-        printf("pixel 0x%08X -> count %5d\n", pixel, count);
-      }
-      
-      printf("max pixel for region 0x%08X\n", maxQuantPixelFromRegionMap[tag]);
-    }
-    
-    printf("done\n");
-  }
-  
-  // With a cluster center pixel determined in terms of the most common pixel
-  // in a given region, generate a vote table that determines where specific
-  // colors fall between vectors.
-  
-  if (debugDumpImages) {
-    int numPoints = (int) maxQuantPixelFromRegionMap.size();
-    
-    Mat outputMat = Mat(numPoints, 1, CV_8UC3);
-    outputMat = (Scalar) 0;
-    
-    int i = 0;
-    
-    vector<uint32_t> clusterCenterPixels;
-    
-    for ( auto &pair : regionToQuantPixelsMap ) {
-      int32_t tag = pair.first;
-      uint32_t pixel = maxQuantPixelFromRegionMap[tag];
-      clusterCenterPixels.push_back(pixel);
-    }
-    
-    for ( uint32_t pixel : clusterCenterPixels ) {
-      Vec3b vec = PixelToVec3b(pixel);
-      outputMat.at<Vec3b>(i, 0) = vec;
-      i += 1;
-    }
-    
-    std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_nearby_cluster_endpoints" << ".png";
-    string fname = fnameStream.str();
-    
-    imwrite(fname, outputMat);
-    cout << "wrote " << fname << endl;
-  }
-  
-  // Generate vectors that determine how different colors that are nearby each other
-  // in 2D space map to other nearby colors. It is only possible to determine that
-  // regions are "neighbors" and that those regions then have gradient vectors from
-  // one to the other. Colors that are near each other in 3D space may not be near
-  // each other in 2D space, so only a pair of dominate colors at a time can be
-  // considered.
-  
-  vector<pair<int32_t,int32_t> > neighborsVecOfPairs;
-  
-  //  auto &neighborsSet = spImage.edgeTable.getNeighborsSet(tag);
-  
-  // Gather all tags in the extended region (masked as blocks)
-  
-  set<int32_t> neighborsSet;
-  
-  set<pair<int32_t,int32_t> > allNeighborsPairsSet;
-  
-  for ( int32_t tag : allRegionTags ) {
-    neighborsSet.insert(tag);
-  }
-  
-  // Save all pairs where both sides appear in neighborsSet.
-  
-  for ( int32_t neighborTag : neighborsSet ) {
-    auto &neighborsOfNeighborSet = spImage.edgeTable.getNeighborsSet(neighborTag);
-    
-    for ( int32_t neighborOfNeighborTag : neighborsOfNeighborSet ) {
-      if (neighborsSet.count(neighborOfNeighborTag) > 0) {
-        // Both neighborTag and neighborOfNeighborTag are in neighborsSet
-        int32_t t1 = neighborTag;
-        int32_t t2 = neighborOfNeighborTag;
-        if (t1 > t2) {
-          int32_t tmp = t1;
-          t1 = t2;
-          t2 = tmp;
-        }
-        pair<int32_t,int32_t> pair = make_pair(t1, t2);
-        allNeighborsPairsSet.insert(pair);
-      }
-    }
-  }
-  
-  if (debug) {
-    cout << "all neighbor pairs: " << endl;
-    
-    for ( auto & pair : allNeighborsPairsSet ) {
-      cout << pair.first << " -> " << pair.second << endl;
-    }
-  }
-  
-  //  for ( int32_t neighborTag : neighborsSet ) {
-  //    pair<int32_t,int32_t> pair = make_pair(tag, neighborTag);
-  //    neighborsVecOfPairs.push_back(pair);
-  //  }
-  
-  for ( auto & pair : allNeighborsPairsSet ) {
-    neighborsVecOfPairs.push_back(pair);
-  }
-  
-  if (debug) {
-    cout << "neighborsVecOfPairs: " << endl;
-    
-    for ( auto &pair : neighborsVecOfPairs ) {
-      int32_t tag1 = pair.first;
-      int32_t tag2 = pair.second;
-      cout << tag1 << " -> " << tag2 << endl;
-    }
-    
-    cout << "done" << endl;
-  }
-  
-  // Examine points in 3D space by gathering center of mass coordinates
-  // for (B,G,R) values and emit as an image that contains the peak
-  // points and the center of mass point.
-  
-  if ((1)) {
-    vector<Vec3b> clusterCenterPoints;
-    
-    for (int i = 0; i < numActualClusters; i++) {
-      uint32_t pixel = colortable[i];
-      Vec3b vec = PixelToVec3b(pixel);
-      clusterCenterPoints.push_back(vec);
-    }
-    
-    Vec3b centerOfMass = centerOfMass3d(clusterCenterPoints);
-    
-    if (debugDumpImages) {
-      
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_peak_center_of_mass" << ".png";
+      fnameStream << "srm" << "_tag_" << tag << "_to_" << mostCommonOtherTag << "_quant3_table_votes" << ".png";
       string fname = fnameStream.str();
       
       // Write image that contains one color in each row in a N x 2 image
       
-      int numPoints = (int) peakPixels.size() + 1;
+      int numColortableEntries = (int) sortedColortable.size();
       
-      Mat outputMat = Mat(numPoints, 1, CV_8UC3);
-      outputMat = (Scalar) 0;
-      
-      int i = 0;
-      
-      for ( uint32_t pixel : peakPixels ) {
-        pixel = pixel & 0x00FFFFFF;
-        if (debug) {
-          printf("peak[%5d] = 0x%08X\n", i, pixel);
-        }
-        Vec3b vec = PixelToVec3b(pixel);
-        outputMat.at<Vec3b>(i, 0) = vec;
-        i += 1;
-      }
-      
-      // Add center of mass pixel
-      
-      outputMat.at<Vec3b>(i, 0) = centerOfMass;
-      
-      if (debug) {
-        printf("peak com = 0x%02X%02X%02X\n", centerOfMass[0], centerOfMass[1], centerOfMass[2]);
-      }
-      
-      imwrite(fname, outputMat);
-      cout << "wrote " << fname << endl;
-    }
-  }
-  
-  // Pass all input points to the fitLine() method in attempt to get a best
-  // fit line.
-  
-  if ((1)) {
-    vector<Vec3b> allRegionPoints;
-    
-    for (int i = 0; i < numPixels; i++) {
-      uint32_t pixel = inPixels[i];
-      Vec3b vec = PixelToVec3b(pixel);
-      allRegionPoints.push_back(vec);
-    }
-    
-    vector<float> lineVec;
-    vector<Vec3b> linePoints;
-    
-    int distType = CV_DIST_L12;
-    //int distType = CV_DIST_FAIR;
-    
-    fitLine(allRegionPoints, lineVec, distType, 0, 0.1, 0.1);
-    
-    // In case of 3D fitting (vx, vy, vz, x0, y0, z0)
-    // where (vx, vy, vz) is a normalized vector collinear to the line
-    // and (x0, y0, z0) is a point on the line.
-    
-    Vec3b centerOfMass(round(lineVec[3]), round(lineVec[4]), round(lineVec[5]));
-    
-    for (int i = 0; i < 300; i++) {
-      linePoints.push_back(centerOfMass);
-      linePoints.push_back(centerOfMass); // Dup COM
-    }
-    
-    Vec3f colinearF(lineVec[0], lineVec[1], lineVec[2]);
-    Vec3f centerOfMassF(centerOfMass[0], centerOfMass[1], centerOfMass[2]);
-    
-    // Add another point away from the com
-    
-    int scalar = 30; // num points in (x,y,z) space
-    
-    Vec3f comPlusUnitF = centerOfMassF + (colinearF * scalar);
-    Vec3b comPlusUnit(round(comPlusUnitF[0]), round(comPlusUnitF[1]), round(comPlusUnitF[2]));
-    
-    Vec3f comMinusUnitF = centerOfMassF - (colinearF * scalar);
-    Vec3b comMinusUnit(round(comMinusUnitF[0]), round(comMinusUnitF[1]), round(comMinusUnitF[2]));
-    
-    if (debug) {
-      cout << "centerOfMassF " << centerOfMassF << endl;
-      cout << "colinearF " << colinearF << endl;
-      cout << "comPlusUnitF " << comPlusUnitF << endl;
-      cout << "comMinusUnitF " << comMinusUnitF << endl;
-      cout << "comPlusUnit " << comPlusUnit << endl;
-      cout << "comMinusUnit " << comMinusUnit << endl;
-    }
-    
-    for (int i = 0; i < 300; i++) {
-      linePoints.push_back(comPlusUnit);
-      linePoints.push_back(comMinusUnit);
-    }
-    
-    if (debugDumpImages) {
-      
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_all_center_of_mass" << ".png";
-      string fname = fnameStream.str();
-      
-      // Write image that contains one color in each row in a N x 2 image
-      
-      int numPoints = (int) allRegionPoints.size() + (int) linePoints.size();
-      
-      Mat outputMat = Mat(numPoints, 1, CV_8UC3);
-      outputMat = (Scalar) 0;
-      
-      int i = 0;
-      
-      for ( Vec3b vec : allRegionPoints ) {
-        uint32_t pixel = Vec3BToUID(vec);
-        pixel = pixel & 0x00FFFFFF;
-        if (debug) {
-          printf("peak[%5d] = 0x%08X\n", i, pixel);
-        }
-        //Vec3b vec = PixelToVec3b(pixel);
-        outputMat.at<Vec3b>(i, 0) = vec;
-        i += 1;
-      }
-      
-      // Add each line point
-      
-      for ( Vec3b vec : linePoints ) {
-        outputMat.at<Vec3b>(i, 0) = vec;
-        
-        if (debug) {
-          printf("line point %5d = 0x%02X%02X%02X\n", i, vec[0], vec[1], vec[2]);
-        }
-        
-        i += 1;
-      }
-      
-      imwrite(fname, outputMat);
-      cout << "wrote " << fname << endl;
-    }
-  }
-  
-  // Generate a best fit vector from the region colors that have been passed
-  // through and initial even region quant. This should get rid of outliers
-  // and generate a clean best fit line.
-  
-  if ((1)) {
-    vector<Vec3b> quantPoints;
-    
-    const bool onlyLineOutput = true;
-    
-    for (int i = 0; i < numPixels; i++) {
-      uint32_t pixel = outPixels[i];
-      Vec3b vec = PixelToVec3b(pixel);
-      quantPoints.push_back(vec);
-    }
-    
-    vector<float> lineVec;
-    vector<Vec3b> linePoints;
-    
-    int distType = CV_DIST_L12;
-    //int distType = CV_DIST_FAIR;
-    
-    fitLine(quantPoints, lineVec, distType, 0, 0.1, 0.1);
-    
-    // In case of 3D fitting (vx, vy, vz, x0, y0, z0)
-    // where (vx, vy, vz) is a normalized vector collinear to the line
-    // and (x0, y0, z0) is a point on the line.
-    
-    Vec3b centerOfMass(round(lineVec[3]), round(lineVec[4]), round(lineVec[5]));
-    
-    if (onlyLineOutput == false) {
-      for (int i = 0; i < 300; i++) {
-        linePoints.push_back(centerOfMass);
-        linePoints.push_back(centerOfMass); // Dup COM
-      }
-    } else {
-      linePoints.push_back(centerOfMass);
-    }
-    
-    Vec3f colinearF(lineVec[0], lineVec[1], lineVec[2]);
-    Vec3f centerOfMassF(centerOfMass[0], centerOfMass[1], centerOfMass[2]);
-    
-    // Add another point away from the com
-    
-    int scalar = 30; // num points in (x,y,z) space
-    
-    Vec3f comPlusUnitF = centerOfMassF + (colinearF * scalar);
-    Vec3b comPlusUnit(round(comPlusUnitF[0]), round(comPlusUnitF[1]), round(comPlusUnitF[2]));
-    
-    Vec3f comMinusUnitF = centerOfMassF - (colinearF * scalar);
-    Vec3b comMinusUnit(round(comMinusUnitF[0]), round(comMinusUnitF[1]), round(comMinusUnitF[2]));
-    
-    if (debug) {
-      cout << "centerOfMassF " << centerOfMassF << endl;
-      cout << "colinearF " << colinearF << endl;
-      cout << "comPlusUnitF " << comPlusUnitF << endl;
-      cout << "comMinusUnitF " << comMinusUnitF << endl;
-      cout << "comPlusUnit " << comPlusUnit << endl;
-      cout << "comMinusUnit " << comMinusUnit << endl;
-    }
-    
-    if (onlyLineOutput == false) {
-      for (int i = 0; i < 300; i++) {
-        linePoints.push_back(comPlusUnit);
-        linePoints.push_back(comMinusUnit);
-      }
-    } else {
-      // Generate line points from -1 -> 0 -> +1 assuming that the
-      // scale is the total colorspace size.
-      
-      for (int scalar = 1; scalar < 255; scalar++ ) {
-        Vec3f comPlusUnitF = centerOfMassF + (colinearF * scalar);
-        Vec3b comPlusUnit(round(comPlusUnitF[0]), round(comPlusUnitF[1]), round(comPlusUnitF[2]));
-        
-        Vec3f comMinusUnitF = centerOfMassF - (colinearF * scalar);
-        Vec3b comMinusUnit(round(comMinusUnitF[0]), round(comMinusUnitF[1]), round(comMinusUnitF[2]));
-        
-        if (comPlusUnitF[0] <= 255 && comPlusUnitF[1] <= 255 && comPlusUnitF[0] <= 255) {
-          linePoints.push_back(comPlusUnit);
-          
-          if (debug) {
-            cout << "comPlusUnit " << comPlusUnit << endl;
-          }
-        }
-        
-        if (comMinusUnitF[0] >= 0 && comMinusUnitF[1] >= 0 && comMinusUnitF[0] >= 0) {
-          linePoints.push_back(comMinusUnit);
-          
-          if (debug) {
-            cout << "comMinusUnit " << comMinusUnit << endl;
-          }
-        }
-      }
-      
-    }
-    
-    if (debugDumpImages) {
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_quant_center_of_mass" << ".png";
-      string fname = fnameStream.str();
-      
-      // Write image that contains one color in each row in a N x 2 image
-      
-      int numPoints;
-      
-      if (onlyLineOutput == false) {
-        numPoints = (int) quantPoints.size() + (int) linePoints.size();
-      } else {
-        numPoints = (int) linePoints.size();
-      }
-      
-      Mat outputMat = Mat(numPoints, 1, CV_8UC3);
-      outputMat = (Scalar) 0;
-      
-      int i = 0;
-      
-      if (onlyLineOutput == false) {
-        
-        for ( Vec3b vec : quantPoints ) {
-          uint32_t pixel = Vec3BToUID(vec);
-          pixel = pixel & 0x00FFFFFF;
-          if (debug) {
-            printf("quant[%5d] = 0x%08X\n", i, pixel);
-          }
-          //Vec3b vec = PixelToVec3b(pixel);
-          outputMat.at<Vec3b>(i, 0) = vec;
-          i += 1;
-        }
-        
-      }
-      
-      // Add each line point
-      
-      for ( Vec3b vec : linePoints ) {
-        outputMat.at<Vec3b>(i, 0) = vec;
-        
-        if (debug) {
-          printf("line point %5d = 0x%02X%02X%02X\n", i, vec[0], vec[1], vec[2]);
-        }
-        
-        i += 1;
-      }
-      
-      imwrite(fname, outputMat);
-      cout << "wrote " << fname << endl;
-    }
-  }
-  
-  // Recalculate a colortable by looking at vectors to neighbors.
-  // Each point indicated as the most common point inside a neighbor
-  // is explicitly added to the colortable (unless it is exactly there
-  // already. This logic also adds a bookend pixel very near to the
-  // target color (assuming the target region/color is smooth) so that
-  // values very near the target color will quant to a value that is
-  // not exactly the target color.
-  
-  unordered_map<uint32_t, uint32_t> pixelToQuantCountTable;
-  
-  vector<vector<Vec3b> > vectorOfPointsForNeighborsVecOfPairs;
-  
-  //  for (int i = 0; i < numActualClusters; i++) {
-  //    uint32_t pixel = colortable[i];
-  //    pixelToQuantCountTable[pixel] = i;
-  //  }
-  
-  for ( auto &pair : neighborsVecOfPairs ) {
-    int32_t tag1 = pair.first;
-    int32_t tag2 = pair.second;
-    cout << tag1 << " -> " << tag2 << endl;
-    
-    uint32_t insidePixel = maxQuantPixelFromRegionMap[tag1];
-    
-    printf("region inside  (%6d) best pixel 0x%08X\n", tag1, insidePixel);
-    
-    uint32_t outsidePixel = maxQuantPixelFromRegionMap[tag2];
-    
-    printf("region outside (%6d) best pixel 0x%08X\n", tag2, outsidePixel);
-    
-    // src
-    
-    if (pixelToQuantCountTable.count(insidePixel) == 0) {
-      pixelToQuantCountTable[insidePixel] = 0;
-      
-      if (debug) {
-        printf("added vector origin pixel 0x%08X\n", insidePixel);
-      }
-    } else {
-      if (debug) {
-        printf("colortable already contains vector origin pixel 0x%08X\n", insidePixel);
-      }
-    }
-    
-    // dst
-    
-    if (pixelToQuantCountTable.count(outsidePixel) == 0) {
-      pixelToQuantCountTable[outsidePixel] = 0;
-      
-      if (debug) {
-        printf("added vector dst pixel 0x%08X\n", outsidePixel);
-      }
-    } else {
-      if (debug) {
-        printf("colortable already contains vector dst pixel 0x%08X\n", outsidePixel);
-      }
-    }
-    
-    // FIXME: iterate from insidePixel to outsidePixel and generate any pixel values
-    // that differ by a pixel. This is basically just generating a line from one
-    // point to the other but the value is that these values can then be passed through
-    // the generated quant table to get a list of output colortable values that are "inside"
-    
-    int32_t sR, sG, sB;
-    
-    xyzDelta(insidePixel, outsidePixel, sR, sG, sB);
-    
-    if (debug) {
-      printf("inside -> outside delta 0x%08X -> 0x%08X = (B G R) (%d %d %d)\n", insidePixel, outsidePixel, sB, sG, sR);
-    }
-    
-    float scale = sqrt(float(sR*sR + sG*sG + sB*sB));
-    
-    Vec3f unitVec = xyzDeltaToUnitVec3f(sR, sG, sB);
-    
-    if (debug) {
-      cout << "unit vector " << unitVec << endl;
-    }
-    
-    Vec3f insideVec(insidePixel & 0xFF, (insidePixel >> 8) & 0xFF, (insidePixel >> 16) & 0xFF);
-    Vec3b outsideVec(outsidePixel & 0xFF, (outsidePixel >> 8) & 0xFF, (outsidePixel >> 16) & 0xFF);
-    
-    vector<Vec3b> linePoints;
-    
-    int numSteps = round(scale) + 2;
-    
-    bool done = false;
-    
-    for ( int i = 0; !done && i < numSteps; i++ ) {
-      // Skip offsets 0 and 1 and N-2, N-1
-      
-      Vec3f pointVec = insideVec + (unitVec * i);
-      
-      if (debug && 1) {
-        cout << "at step " << i << " scaled vec " << (unitVec * i) << endl;
-        cout << "at step " << i << " point vec " << pointVec << endl;
-      }
-      
-      Vec3b roundedPointVec(round(pointVec[0]), round(pointVec[1]), round(pointVec[2]));
-      
-      if (debug) {
-        uint32_t pixel = Vec3BToUID(roundedPointVec);
-        printf("at step %5d point is (B G R) (%5d %5d %5d) aka 0x%08X\n", i, roundedPointVec[0], roundedPointVec[1], roundedPointVec[2], pixel);
-      }
-      
-      if (roundedPointVec == outsideVec) {
-        // Reached the end point, stop processing now
-        done = true;
-      } else if (linePoints.size() > 0) {
-        Vec3b lastPoint = linePoints[linePoints.size() - 1];
-        if (roundedPointVec == lastPoint) {
-          // In this case, the delta is so small that the int value did not change, skip
-          continue;
-        }
-      }
-      
-      linePoints.push_back(roundedPointVec);
-    }
-    
-    // Verify that first point matches insidePixel and that last point matches outsidePixel
-    
-    {
-      uint32_t p0 = Vec3BToUID(linePoints[0]);
-      uint32_t pLast = Vec3BToUID(linePoints[linePoints.size() - 1]);
-      
-      assert(p0 == insidePixel);
-      assert(pLast == outsidePixel);
-    }
-    
-    if (debugDumpImages) {
-      // Dump points generated on the line that make up the vector
-      
-      int numPoints = (int) linePoints.size();
-      
-      Mat qtableOutputMat = Mat(numPoints, 1, CV_8UC3);
+      Mat qtableOutputMat = Mat(numColortableEntries, 2, CV_8UC3);
       qtableOutputMat = (Scalar) 0;
       
-      for (int i = 0; i < numPoints; i++) {
-        Vec3b vec = linePoints[i];
+      for (int i = 0; i < numColortableEntries; i++) {
+        uint32_t pixel = sortedColortable[i];
+        Vec3b vec = PixelToVec3b(pixel);
         qtableOutputMat.at<Vec3b>(i, 0) = vec;
+        
+        bool isInside = pixelToInside[pixel].isInside;
+        
+        if (isInside) {
+          vec = Vec3b(0xFF, 0xFF, 0xFF);
+        } else {
+          vec = Vec3b(0, 0, 0);
+        }
+        
+        qtableOutputMat.at<Vec3b>(i, 1) = vec;
       }
-      
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_vec_" << tag1 << "_to_" << tag2 << ".png";
-      string fname = fnameStream.str();
       
       imwrite(fname, qtableOutputMat);
       cout << "wrote " << fname << endl;
       cout << "";
     }
     
-    vectorOfPointsForNeighborsVecOfPairs.push_back(linePoints);
-    
-    /*
-     
-     // Add bookend (second to last point in linePoints) to colortable
-     
-     Vec3b beVec = linePoints[linePoints.size() - 1 - 1];
-     
-     uint32_t bePixel = Vec3BToUID(beVec);
-     
-     if (pixelToQuantCountTable.count(bePixel) == 0) {
-     pixelToQuantCountTable[bePixel] = 0;
-     
-     if (debug) {
-     printf("added bookend pixel 0x%08X\n", bePixel);
-     }
-     } else {
-     if (debug) {
-     printf("colortable already contains bookend pixel 0x%08X\n", bePixel);
-     }
-     }
-     
-     */
-    
-    for ( Vec3b vec : linePoints ) {
-      uint32_t pixel = Vec3BToUID(vec);
-      pixelToQuantCountTable[pixel] = 0;
-    }
-    
-    // Add all points to colortable
-  }
-  
-  
-  int numColors = (int)pixelToQuantCountTable.size();
-  delete [] colortable;
-  colortable = new uint32_t[numColors];
-  
-  {
-    int i = 0;
-    for ( auto &pair : pixelToQuantCountTable ) {
-      uint32_t key = pair.first;
-      assert(key == (key & 0x00FFFFFF)); // verify alpha is zero
-      colortable[i] = key;
-      i++;
-    }
-  }
-  
-  if (debug) {
-    cout << "numActualClusters was " << numActualClusters << " while output numColors is " << numColors << endl;
-  }
-  
-  // Resort cluster centers
-  
-  vector<uint32_t> resortedColortable;
-  
-  {
-    for (int i = 0; i < numColors; i++) {
-      resortedColortable.push_back(colortable[i]);
-    }
-    
-    vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(resortedColortable);
-    
-    resortedColortable.clear();
-    
-    for (int i = 0; i < numColors; i++) {
-      int si = (int) sortedOffsets[i];
-      uint32_t pixel = colortable[si];
-      resortedColortable.push_back(pixel);
-    }
-    
-    // Copy pixel values in sorted order back into colortable
-    
-    for (int i = 0; i < numColors; i++) {
-      uint32_t pixel = resortedColortable[i];
-      colortable[i] = pixel;
-    }
-  }
-  
-  if (debugDumpImages)
-  {
-    std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_quant_table2" << ".png";
-    string fname = fnameStream.str();
-    
-    dumpQuantTableImage(fname, inputImg, colortable, numColors);
-  }
-  
-  if (debug) {
-    for ( int i = 0; i < numColors; i++) {
-      uint32_t pixel = colortable[i];
-      fprintf(stdout, "colortable[%5d] = 0x%08X\n", i, pixel);
-    }
-  }
-  
-  // Regenerate "inPixels" and keep only pixels that quant to one of
-  // the outPixels known to be in the vector. Can ignore pixels that
-  // are so far outside that they quant to something else.
-  
-  // If the current "outPixels" quant pixel is
-  
-  // the colors known to be between the
-  
-  // Run input pixels through closest color quant logic using the
-  // generated colortable. Note that the colortable should be
-  // split such that one range of the colortable should be seen
-  // as "inside" while the other range is "outside".
-  
-  map_colors_mps(inPixels, numPixels, outPixels, colortable, numColors);
-  
-  // Dump output, which is the input colors run through the color table
-  
-  if (debugDumpImages) {
-    Mat tmpResultImg = inputImg.clone();
-    tmpResultImg = Scalar(0,0,0xFF);
+    const bool debugOnOff = false;
     
     for ( int i = 0; i < numPixels; i++ ) {
-      Coord c = bestRegionCoords[i];
-      uint32_t pixel = outPixels[i];
-      Vec3b vec = PixelToVec3b(pixel);
-      tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
-    }
-    
-    {
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_quant_output2" << ".png";
-      string fname = fnameStream.str();
+      Coord c = combinedCoords[i];
+      uint32_t quantPixel = outPixels[i];
       
-      imwrite(fname, tmpResultImg);
-      cout << "wrote " << fname << endl;
-    }
-  }
-  
-  // Vote inside/outside
-  
-  unordered_map<uint32_t, InsideOutsideRecord> pixelToInside;
-  
-  insideOutsideTest(inputImg.rows, inputImg.cols, srmRegionCoords, tag, bestRegionCoords, outPixels, resortedColortable, pixelToInside);
-  
-  // Emit vote result table which basically shows the sorted pixel and the vote boolean as black or white
-  
-  if (debugDumpImages)
-  {
-    std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_quant_table3_votes" << ".png";
-    string fname = fnameStream.str();
-    
-    // Write image that contains one color in each row in a N x 2 image
-    
-    int numColortableEntries = (int) resortedColortable.size();
-    
-    Mat qtableOutputMat = Mat(numColortableEntries, 2, CV_8UC3);
-    qtableOutputMat = (Scalar) 0;
-    
-    for (int i = 0; i < numColortableEntries; i++) {
-      uint32_t pixel = resortedColortable[i];
-      Vec3b vec = PixelToVec3b(pixel);
-      qtableOutputMat.at<Vec3b>(i, 0) = vec;
-      
-      bool isInside = pixelToInside[pixel].isInside;
+#if defined(DEBUG)
+      assert(pixelToInside.count(quantPixel));
+#endif // DEBUG
+      bool isInside = pixelToInside[quantPixel].isInside;
       
       if (isInside) {
-        vec = Vec3b(0xFF, 0xFF, 0xFF);
+        mask.at<uint8_t>(c.y, c.x) = 0xFF;
+        
+        if (debug && debugOnOff) {
+          printf("pixel 0x%08X at (%5d,%5d) is marked on (inside)\n", quantPixel, c.x, c.y);
+        }
       } else {
-        vec = Vec3b(0, 0, 0);
-      }
-      
-      qtableOutputMat.at<Vec3b>(i, 1) = vec;
-    }
-    
-    imwrite(fname, qtableOutputMat);
-    cout << "wrote " << fname << endl;
-  }
-  
-  // Determine the dominate vector(s) as we iterate through the colortable
-  // so that vectors add as long as they are actually in the same vector
-  // line.
-  
-  vector<vector<uint32_t> > vecOfPixels;
-  vector<vector<Vec3f> > vecOfVectors;
-  
-  vecOfPixels.push_back(vector<uint32_t>());
-  vector<uint32_t> *currentVecPtr = &vecOfPixels[0];
-  
-  vecOfVectors.push_back(vector<Vec3f>());
-  vector<Vec3f> *currentVecOfVec3bPtr = &vecOfVectors[0];
-  
-  uint32_t prevPixel = 0x0;
-  
-  for ( int i = 0; i < numColors; i++) {
-    uint32_t pixel = resortedColortable[i];
-    fprintf(stdout, "resorted colortable[%5d] = 0x%08X\n", i, pixel);
-    
-    int prevSize = (int) currentVecPtr->size();
-    currentVecPtr->push_back(pixel);
-    
-    if (prevSize == 0) {
-      // currentVecPtr is currently empty, so append the first pixel
-      // and continue on with the next pixel.
-    } else {
-      // At least 2 pixels, initial vector between pixels can now
-      // be determined for the first time.
-      
-      int32_t sR, sG, sB;
-      
-      xyzDelta(prevPixel, pixel, sR, sG, sB);
-      
-      if (debug) {
-        printf("peakToPeakDelta 0x%08X -> 0x%08X = (%d %d %d)\n", prevPixel, pixel, sR, sG, sB);
-      }
-      
-      Vec3f unitVec = xyzDeltaToUnitVec3f(sR, sG, sB);
-      
-      if (debug) {
-        cout << "unit vector " << unitVec << endl;
-      }
-      
-      currentVecOfVec3bPtr->push_back(unitVec);
-    }
-    
-    prevPixel = pixel;
-  }
-  
-  for ( uint32_t pixel : *currentVecPtr ) {
-    printf("0x%08X\n", pixel);
-  }
-  
-  for ( Vec3f vec : *currentVecOfVec3bPtr ) {
-    cout << "vec " << vec << endl;
-  }
-  
-  //  Should see this set of vectors as shifting from one
-  //  general slope to a new slope at offset 5
-  //  the fact that earlier slopes are not exactly
-  //  the same is not critical. Last 5 are basically
-  //  the same
-  
-  //  vec [0.0794929, 0.0794929, 0.993661]
-  //  vec [0.111784, 0.111784, 0.987425]
-  //  vec [-0.131796, -0.131796, 0.982476]
-  //  vec [0.535899, 0.535899, 0.652399]
-  //  vec [0.730889, 0.426352, -0.53294]
-  //  vec [0.732098, 0.413795, -0.541116]
-  //  vec [0.732728, 0.429867, -0.527564]
-  //  vec [0.733142, 0.4339, -0.523673]
-  
-  
-  // FIXME: the better approach would be to decrease until the region seems to stabilize around
-  // on single color or one quant color and then expand until there is a jump up in the number
-  // of colors or quant num. This has the effect of trimming off any "splay" pixels that are
-  // improperly identified in the region and then expanding the region to account for any "under".
-  // Expanding only according to the original SRM shape is not going to be correct in the case
-  // of splay pixels.
-  
-  // An upper bound on the region bounds could be the containing region bounds.
-  
-  if (1) {
-    // Clear pixelToInside votes and recalculate in terms of quant pixels
-    // such that the vectors clearly identified from one region to another
-    // are known to be "inside" and any pixels from any other possible
-    // vectors are known to be "outside".
-    
-    //    pixelToInside.clear();
-    
-    for ( auto & pair : pixelToInside ) {
-      InsideOutsideRecord &rec = pair.second;
-      
-      rec.isInside = false;
-    }
-    
-    cout << "neighborsVecOfPairs: " << endl;
-    
-    int offset = 0;
-    
-    for ( auto &pair : neighborsVecOfPairs ) {
-      int32_t tag1 = pair.first;
-      int32_t tag2 = pair.second;
-      cout << tag1 << " -> " << tag2 << endl;
-      
-      uint32_t insidePixel = maxQuantPixelFromRegionMap[tag1];
-      
-      printf("region inside  (%6d) best pixel 0x%08X\n", tag1, insidePixel);
-      
-      uint32_t outsidePixel = maxQuantPixelFromRegionMap[tag2];
-      
-      printf("region outside (%6d) best pixel 0x%08X\n", tag1, outsidePixel);
-      
-      vector<Vec3b> linePoints = vectorOfPointsForNeighborsVecOfPairs[offset];
-      
-      // For each of the quant pixels identified in linePoints, check to see
-      // if one of these line points is defined in the colortable. A point
-      // that is on this vector is "inside" except for the last point.
-      
-      int lastIndex = (int)linePoints.size() - 1;
-      
-      for ( int i = 0; i < lastIndex; i++ ) {
-        Vec3b vec = linePoints[i];
-        uint32_t pixel = Vec3BToUID(vec);
-        
-        printf("check inside outside rec for pixel 0x%08X\n", pixel);
-        
-        if (pixelToInside.count(pixel) > 0) {
-          InsideOutsideRecord &rec = pixelToInside[pixel];
-          rec.isInside = true;
-          
-          printf("switch on inside outside rec for pixel 0x%08X\n", pixel);
+        if (debug && debugOnOff) {
+          printf("pixel 0x%08X at (%5d,%5d) is marked off (outside)\n", quantPixel, c.x, c.y);
         }
       }
-      
-      // Map coordinates along the line from the src to the dst and
-      // determine the coordinates that would quant to "inside".
-      
-      // Determine the pixel that quant to
-      
-      offset += 1;
     }
-    
-    printf("done\n");
-  }
-  
-  
-  if (debugDumpImages)
-  {
-    std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_quant_table4_votes" << ".png";
-    string fname = fnameStream.str();
-    
-    // Write image that contains one color in each row in a N x 2 image
-    
-    int numColortableEntries = (int) resortedColortable.size();
-    
-    Mat qtableOutputMat = Mat(numColortableEntries, 2, CV_8UC3);
-    qtableOutputMat = (Scalar) 0;
-    
-    for (int i = 0; i < numColortableEntries; i++) {
-      uint32_t pixel = resortedColortable[i];
-      Vec3b vec = PixelToVec3b(pixel);
-      qtableOutputMat.at<Vec3b>(i, 0) = vec;
-      
-      bool isInside = pixelToInside[pixel].isInside;
-      
-      if (isInside) {
-        vec = Vec3b(0xFF, 0xFF, 0xFF);
-      } else {
-        vec = Vec3b(0, 0, 0);
-      }
-      
-      qtableOutputMat.at<Vec3b>(i, 1) = vec;
-    }
-    
-    imwrite(fname, qtableOutputMat);
-    cout << "wrote " << fname << endl;
-  }
-  
-  // If after the voting, it becomes clear that one of the regions
-  // is always outside the in/out region defined by the tags, then
-  // pixels in that range can be left out of the vector calculation.
-  // For example, the black outside the red in OneCircleInsideAnother.png.
-  // In this case, the pixels that quant to the black to red vector
-  // can all be ignored and the blue to red vector can be extracted
-  // cleanly. This is useful to turn off the in/out vote of certain
-  // pixels if on with zero votes and to "capture" all the possible
-  // pixels along the vector line up to the bookend and identify those
-  // as in/out. The extends of the inner region should fully capture
-  // gradient pixels at the bound, so that if the outer region is
-  // otherwise uniform then it will not need to know about the inner
-  // region color use at all and can be free to predict as if the
-  // inner region shift does not happen.
-  
-  // Each pixel in the input is now mapped to a boolean condition that
-  // indicates if that pixel is inside or outside the shape.
-  
-  const bool debugOnOff = false;
-  
-  for ( int i = 0; i < numPixels; i++ ) {
-    Coord c = bestRegionCoords[i];
-    uint32_t quantPixel = outPixels[i];
-    
-#if defined(DEBUG)
-    assert(pixelToInside.count(quantPixel));
-#endif // DEBUG
-    bool isInside = pixelToInside[quantPixel].isInside;
-    
-    if (isInside) {
-      mask.at<uint8_t>(c.y, c.x) = 0xFF;
-      
-      if (debug && debugOnOff) {
-        printf("pixel 0x%08X at (%5d,%5d) is marked on (inside)\n", quantPixel, c.x, c.y);
-      }
-    } else {
-      if (debug && debugOnOff) {
-        printf("pixel 0x%08X at (%5d,%5d) is marked off (outside)\n", quantPixel, c.x, c.y);
-      }
-    }
+
+    // continue to next region to region pair
   }
   
   if (debug) {
     cout << "return captureRegion" << endl;
   }
-  
-  delete [] colortable;
   
   return;
 }
