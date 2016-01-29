@@ -1986,58 +1986,149 @@ captureRegion(SuperpixelImage &spImage,
       fprintf(stdout, "outside %5d -> 0x%08X\n", outsideColortableOffset, outsideQuantPixel);
     }
     
-    /*
+    // Iterate over the pixels in the outside region trimming away the least likely pixels
     
-    // From the vector in quant pixels (in, out) generate the best original colors vector. The quant
-    // step could have moved the endpoints in 3D space so grab the input pixels that correspond
-    // to the output quant pixels.
+    unordered_map<uint32_t, uint32_t> outsideInputHistogram;
     
-    // FIXME: what is the best way to calculate "inside" vs "outside" best pixels?
-    
-    vector<uint32_t> insideInputPixels;
-    vector<uint32_t> outsideInputPixels;
-    
-    for ( Coord c : insideCoords ) {
-      uint32_t pixel = coordToQuantPixelMap[c];
-      insideInputPixels.push_back(pixel);
-    }
     for ( Coord c : outsideCoords ) {
-      uint32_t pixel = coordToQuantPixelMap[c];
-      outsideInputPixels.push_back(pixel);
+      Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+      uint32_t pixel = Vec3BToUID(vec);
+      outsideInputHistogram[pixel] += 1;
     }
     
-    uint32_t insideCenterOfMassPixel  = centerOfMassPixels(insideInputPixels);
-    uint32_t outsideCenterOfMassPixel = centerOfMassPixels(outsideInputPixels);
-
+    vector<uint32_t> sortedOutsideInputKeys = sort_keys_by_count(outsideInputHistogram, true);
+    
+    uint32_t outsideExactPixel = sortedOutsideInputKeys[0];
+    
     if (debug) {
-      fprintf(stdout, "insideCenterOfMassPixel  0x%08X\n", insideCenterOfMassPixel);
-      fprintf(stdout, "outsideCenterOfMassPixel 0x%08X\n", outsideCenterOfMassPixel);
+      fprintf(stdout, "sortedOutsideInputKeys\n");
+      for ( uint32_t pixel : sortedOutsideInputKeys ) {
+        uint32_t count = outsideInputHistogram[pixel];
+        fprintf(stdout, "0x%08X -> %5d\n", pixel, count);
+      }
+      fprintf(stdout, "done\n");
     }
-     
-    */
     
-    // Generate a vector of pixels from one point to another
+    if (debug) {
+      fprintf(stdout, "outside exact 0x%08X\n", outsideExactPixel);
+    }
     
-    vector<uint32_t> insideToOutsideVec = generateVector(insideQuantPixel, outsideQuantPixel);
+    // Generate vector from quant centers of mass
+    
+    if ((1)) {
+      vector<uint32_t> insideToOutsideVec = generateVector(insideQuantPixel, outsideQuantPixel);
+      
+      if (debugDumpImages) {
+        // Dump points generated on the line that make up the vector
+        
+        int numPoints = (int) insideToOutsideVec.size();
+        
+        Mat qtableOutputMat = Mat(numPoints, 1, CV_8UC3);
+        qtableOutputMat = (Scalar) 0;
+        
+        for (int i = 0; i < numPoints; i++) {
+          uint32_t pixel = insideToOutsideVec[i];
+          Vec3b vec = PixelToVec3b(pixel);
+          qtableOutputMat.at<Vec3b>(i, 0) = vec;
+        }
+        
+        std::stringstream fnameStream;
+        
+        fnameStream << "srm" << "_tag_" << tag << "_to_" << mostCommonOtherTag << "_quant3_inside_outside_quant_vec" << ".png";
+        
+        string fname = fnameStream.str();
+        
+        imwrite(fname, qtableOutputMat);
+        cout << "wrote " << fname << endl;
+        cout << "";
+      }
+    }
+
+    uint32_t bookEndPixel;
+    
+    if ((1)) {
+      vector<uint32_t> insideToOutsideVec = generateVector(insideQuantPixel, outsideExactPixel);
+      
+      if (debugDumpImages) {
+        // Dump points generated on the line that make up the vector
+        
+        int numPoints = (int) insideToOutsideVec.size();
+        
+        Mat qtableOutputMat = Mat(numPoints, 1, CV_8UC3);
+        qtableOutputMat = (Scalar) 0;
+        
+        for (int i = 0; i < numPoints; i++) {
+          uint32_t pixel = insideToOutsideVec[i];
+          Vec3b vec = PixelToVec3b(pixel);
+          qtableOutputMat.at<Vec3b>(i, 0) = vec;
+        }
+        
+        std::stringstream fnameStream;
+        
+        fnameStream << "srm" << "_tag_" << tag << "_to_" << mostCommonOtherTag << "_quant3_inside_outside_exact_vec" << ".png";
+        
+        string fname = fnameStream.str();
+        
+        imwrite(fname, qtableOutputMat);
+        cout << "wrote " << fname << endl;
+        cout << "";
+      }
+      
+      int secondToLastOffset = 0;
+      if (insideToOutsideVec.size() > 1) {
+        secondToLastOffset = (int)insideToOutsideVec.size() - 2;
+      }
+      
+      bookEndPixel = insideToOutsideVec[secondToLastOffset];
+      assert(outsideExactPixel != bookEndPixel);
+    }
+    
+    // Generate a colortable that contains the exact pixel, the next pixel in the vector
+    // and then the 2 midpoints in the quant vector along with the quant center of mass.
+    
+    vector<uint32_t> generatedQuantVector;
+    
+    generatedQuantVector.push_back(outsideExactPixel);
+    generatedQuantVector.push_back(bookEndPixel);
+    
+    for ( uint32_t pixel : sortedColortable ) {
+      if (pixel == insideQuantPixel) {
+        continue;
+      }
+      if (pixel == outsideQuantPixel) {
+        continue;
+      }
+      generatedQuantVector.push_back(pixel);
+    }
+    
+    generatedQuantVector.push_back(insideQuantPixel);
+    
+    // Print the generated colortable
+    
+    if (debug) {
+      for ( uint32_t pixel : generatedQuantVector ) {
+        fprintf(stdout, "outside exact 0x%08X\n", pixel);
+      }
+    }
     
     if (debugDumpImages) {
       // Dump points generated on the line that make up the vector
       
-      int numPoints = (int) insideToOutsideVec.size();
+      int numPoints = (int) generatedQuantVector.size();
       
       Mat qtableOutputMat = Mat(numPoints, 1, CV_8UC3);
       qtableOutputMat = (Scalar) 0;
       
       for (int i = 0; i < numPoints; i++) {
-        uint32_t pixel = insideToOutsideVec[i];
+        uint32_t pixel = generatedQuantVector[i];
         Vec3b vec = PixelToVec3b(pixel);
         qtableOutputMat.at<Vec3b>(i, 0) = vec;
       }
       
       std::stringstream fnameStream;
       
-      fnameStream << "srm" << "_tag_" << tag << "_to_" << mostCommonOtherTag << "_quant3_inside_outside_vec" << ".png";
-
+      fnameStream << "srm" << "_tag_" << tag << "_to_" << mostCommonOtherTag << "_quant3_inside_outside_generated_vec" << ".png";
+      
       string fname = fnameStream.str();
       
       imwrite(fname, qtableOutputMat);
@@ -2045,30 +2136,58 @@ captureRegion(SuperpixelImage &spImage,
       cout << "";
     }
     
-    // What is the most common interior pixel? Make the the source ?
-    // What is the most common exterior pixel. Make that the dst.
+    // Rerun quant logic with the generated table
     
+    numActualClusters = (int) generatedQuantVector.size();
+    
+    colortable = new uint32_t[numActualClusters];
+    
+    for (int i = 0; i < numActualClusters; i++) {
+      uint32_t pixel = generatedQuantVector[i];
+      colortable[i] = pixel;
+    }
+    
+    map_colors_mps(inPixels, numPixels, outPixels, colortable, numActualClusters);
+    
+    delete [] colortable;
+    
+    // Dump output, which is the input colors run through the color table
+    
+    if (debugDumpImages) {
+      Mat tmpResultImg = inputImg.clone();
+      tmpResultImg = Scalar(0,0,0xFF);
+      
+      for ( int i = 0; i < numPixels; i++ ) {
+        Coord c = combinedCoords[i];
+        uint32_t pixel = outPixels[i];
+        Vec3b vec = PixelToVec3b(pixel);
+        tmpResultImg.at<Vec3b>(c.y, c.x) = vec;
+      }
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_to_" << mostCommonOtherTag << "_quant3_generated_output" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, tmpResultImg);
+        cout << "wrote " << fname << endl;
+      }
+    }
+
     // Set inside/outside flagsfor the whole region based on the gradient vector for
     // this specific pair of regions.
     
     unordered_map<uint32_t, InsideOutsideRecord> pixelToInside;
     
-    for ( uint32_t pixel : sortedColortable ) {
+    for ( uint32_t pixel : generatedQuantVector ) {
       InsideOutsideRecord &inOutRef = pixelToInside[pixel];
       
-#if defined(DEBUG)
-      assert(pixel_to_sorted_offset.count(pixel) > 0);
-#endif // DEBUG
-      uint32_t offset = pixel_to_sorted_offset[pixel];
-      
-      if (offset == insideColortableOffset) {
-        inOutRef.isInside = true;
-      } else {
+      if (pixel == outsideExactPixel) {
         inOutRef.isInside = false;
+      } else {
+        inOutRef.isInside = true;
       }
     }
-    
-//    insideOutsideTest(inputImg.rows, inputImg.cols, srmRegionCoords, tag, regionCoords, outPixels, sortedColortable, pixelToInside);
     
     if (debugDumpImages)
     {
@@ -2079,13 +2198,13 @@ captureRegion(SuperpixelImage &spImage,
       
       // Write image that contains one color in each row in a N x 2 image
       
-      int numColortableEntries = (int) sortedColortable.size();
+      int numColortableEntries = (int) generatedQuantVector.size();
       
       Mat qtableOutputMat = Mat(numColortableEntries, 2, CV_8UC3);
       qtableOutputMat = (Scalar) 0;
       
       for (int i = 0; i < numColortableEntries; i++) {
-        uint32_t pixel = sortedColortable[i];
+        uint32_t pixel = generatedQuantVector[i];
         Vec3b vec = PixelToVec3b(pixel);
         qtableOutputMat.at<Vec3b>(i, 0) = vec;
         

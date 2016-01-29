@@ -273,6 +273,9 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       }
     }
     
+    // Merge id to use next
+    int32_t mergedTag = 1;
+    
     // Quant the entire image into small 4x4 blocks and then generate histograms
     // for each block. The histogram data can be scanned significantly faster
     // that rereading all the original pixel info.
@@ -349,7 +352,12 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
             assert(srcSpPtr);
 #endif // DEBUG
             
-            mergeMat.at<Vec3b>(y, x) = vec;
+            if (debug ) {
+              printf("set merge mat (%5d, %5d) = 0x%08X aka %d\n", x, y, mergedTag, mergedTag);
+            }
+            
+            Vec3b mergedVec = Vec3BToUID(mergedTag); // FIXME: do outside loop
+            mergeMat.at<Vec3b>(y, x) = mergedVec;
           } else {
             // Attempting to merge already merged (x,y) location
             uint32_t mergedTag = Vec3BToUID(vec);
@@ -371,6 +379,9 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           }
         } // foreach locations
         
+        // Update merge tag after setting all pixel values
+        mergedTag += 1;
+        
         if (debugWriteIntermediateFiles) {
           std::stringstream fnameStream;
           fnameStream << "srm" << "_tag_" << tag << "_merge_region" << ".png";
@@ -388,9 +399,11 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     // Copy any pixel from srmTags unless mergeMat is set
     // to a non-zero value already.
     
-    for ( int y = 0; y < srmTags.rows; y++ ) {
-      for ( int x = 0; x < srmTags.cols; x++ ) {
+    for ( int y = 0; y < mergeMat.rows; y++ ) {
+      for ( int x = 0; x < mergeMat.cols; x++ ) {
         Vec3b vec = mergeMat.at<Vec3b>(y, x);
+        
+        // FIXME: need to use generated mergeTag
         
         if (vec[0] == 0x0 && vec[1] == 0x0 && vec[2] == 0x0) {
           vec = srmTags.at<Vec3b>(y, x);
@@ -420,9 +433,9 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     
     uint32_t tagsAdlerAfterMerge = 0;
     
-    for ( int y = 0; y < srmTags.rows; y++ ) {
-      for ( int x = 0; x < srmTags.cols; x++ ) {
-        Vec3b vec = srmTags.at<Vec3b>(y, x);
+    for ( int y = 0; y < mergeMat.rows; y++ ) {
+      for ( int x = 0; x < mergeMat.cols; x++ ) {
+        Vec3b vec = mergeMat.at<Vec3b>(y, x);
         uint32_t pixel = Vec3BToUID(vec);
         tagsAdlerAfterMerge = my_adler32(tagsAdlerAfterMerge, (unsigned char const *)&pixel, sizeof(uint32_t), 0);
       }
