@@ -2091,6 +2091,11 @@ captureRegion(SuperpixelImage &spImage,
     generatedQuantVector.push_back(outsideExactPixel);
     generatedQuantVector.push_back(bookEndPixel);
     
+    if (debug) {
+      fprintf(stdout, "outsideExactPixel = 0x%08X\n", outsideExactPixel);
+      fprintf(stdout, "bookEndPixel = 0x%08X\n", bookEndPixel);
+    }
+    
     for ( uint32_t pixel : sortedColortable ) {
       if (pixel == insideQuantPixel) {
         continue;
@@ -2098,16 +2103,54 @@ captureRegion(SuperpixelImage &spImage,
       if (pixel == outsideQuantPixel) {
         continue;
       }
+      if (pixel == bookEndPixel) {
+        continue;
+      }
       generatedQuantVector.push_back(pixel);
+      
+      if (debug) {
+        fprintf(stdout, "colortable pixel = 0x%08X\n", pixel);
+      }
     }
     
     generatedQuantVector.push_back(insideQuantPixel);
+    
+    if (debug) {
+      fprintf(stdout, "insideQuantPixel = 0x%08X\n", insideQuantPixel);
+    }
+    
+    // Print the generated colortable
+    
+    if (debug) {
+      int i = 0;
+      for ( uint32_t pixel : generatedQuantVector ) {
+        fprintf(stdout, "generated[%5d] = 0x%08X\n", i, pixel);
+        i += 1;
+      }
+    }
+    
+    // Sort the generated colortable in terms of the outsideExactPixel
+    // as the starting point of the sort iteration.
+    
+    {
+      vector<uint32_t> sortedOffsets = generate_cluster_walk_on_center_dist(generatedQuantVector, outsideExactPixel);
+
+      vector<uint32_t> sortedColortable;
+      
+      for (int i = 0; i < numActualClusters; i++) {
+        int si = (int) sortedOffsets[i];
+        uint32_t pixel = generatedQuantVector[si];
+        sortedColortable.push_back(pixel);
+      }
+      
+      generatedQuantVector = sortedColortable;
+    }
     
     // Print the generated colortable
     
     if (debug) {
       for ( uint32_t pixel : generatedQuantVector ) {
-        fprintf(stdout, "outside exact 0x%08X\n", pixel);
+        fprintf(stdout, "sorted generated 0x%08X\n", pixel);
       }
     }
     

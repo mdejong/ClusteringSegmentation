@@ -274,7 +274,32 @@ uint32_t closestToPixel(const vector<uint32_t> &pixels, const uint32_t closeToPi
 
 vector<uint32_t> generate_cluster_walk_on_center_dist(const vector<uint32_t> &clusterCenterPixels)
 {
+  return generate_cluster_walk_on_center_dist(clusterCenterPixels, 0x0);
+}
+
+vector<uint32_t> generate_cluster_walk_on_center_dist(const vector<uint32_t> &clusterCenterPixels, uint32_t startPixel)
+{
   const bool debugDumpClusterWalk = false;
+  
+#if defined(DEBUG)
+  {
+    unordered_map<uint32_t, bool> seen;
+    
+    int clusteri = 0;
+    for ( uint32_t pixel : clusterCenterPixels ) {
+      if (debugDumpClusterWalk) {
+        fprintf(stderr, "clusterCenterPixels[%5d] = 0x%08X\n", clusteri, clusterCenterPixels[clusteri]);
+      }
+      
+      if (seen.count(pixel) > 0) {
+        assert(0);
+      }
+      seen[pixel] = true;
+
+      clusteri += 1;
+    }
+  }
+#endif // DEBUG
   
   int numClusters = (int) clusterCenterPixels.size();
   
@@ -298,9 +323,9 @@ vector<uint32_t> generate_cluster_walk_on_center_dist(const vector<uint32_t> &cl
   closestSortedClusterOrder.reserve(numClusters);
   
   if ((1)) {
-    // Choose cluster that is closest to (0,0,0)
+    // Choose cluster that is closest to startPixel
     
-    uint32_t closestToZeroCenter = closestToPixel(clusterCenterPixels, 0x0);
+    uint32_t closestToZeroCenter = closestToPixel(clusterCenterPixels, startPixel);
     
     int closestToZeroClusteri = -1;
     
@@ -342,6 +367,10 @@ vector<uint32_t> generate_cluster_walk_on_center_dist(const vector<uint32_t> &cl
     // the next closest cluster in terms of distance in 3D space.
     
     uint32_t closestCenterPixel = clusterCenterPixels[closestToZeroClusteri];
+    
+    if (debugDumpClusterWalk) {
+      fprintf(stdout, "closestCenterPixel is 0x%08X from index %d\n", closestCenterPixel, closestToZeroClusteri);
+    }
     
     for ( ; 1 ; ) {
       if (clusterCenterToClusterOffsetMap.size() == 0) {
