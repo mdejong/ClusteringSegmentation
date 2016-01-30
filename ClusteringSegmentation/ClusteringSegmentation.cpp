@@ -4715,8 +4715,15 @@ getEdgesInRegion(SuperpixelImage &spImage,
   unordered_map<int32_t, int32_t> allRegionTagsMap;
   
   for ( Coord c : coords ) {
+#if defined(DEBUG)
+    int maxX = tagsImg.cols - 1;
+    int maxY = tagsImg.rows - 1;
+    assert(c.x <= maxX);
+    assert(c.y <= maxY);
+#endif // DEBUG
     Vec3b vec = tagsImg.at<Vec3b>(c.y, c.x);
     int32_t tag = Vec3BToUID(vec);
+    assert(tag != 0);
     allRegionTagsMap[tag] = tag;
   }
   
@@ -4953,6 +4960,15 @@ contractOrExpandRegion(const Mat & inputImg,
       cout << "";
     }
   }
+  
+#if defined(DEBUG)
+  int maxX = inputImg.cols;
+  int maxY = inputImg.rows;
+  for ( Coord c : outCoords ) {
+    assert(c.x < maxX);
+    assert(c.y < maxY);
+  }
+#endif // DEBUG
   
   if (debug) {
     cout << "return contractOrExpandRegion" << endl;
@@ -5421,7 +5437,17 @@ bool srmMultiSegment(const Mat & inputImg, Mat & tagsMat) {
     mergeUID += 1;
   }
   
-  // Scan each pixel and record "votes" for the same neighbor
+#if defined(DEBUG)
+  // Verify that each tags value is larger than zero
+  
+  for ( int y = 0; y < tagsMat.rows; y++ ) {
+    for ( int x = 0; x < tagsMat.cols; x++ ) {
+      Vec3b vec = tagsMat.at<Vec3b>(y, x);
+      uint32_t pixel = Vec3BToUID(vec);
+      assert(pixel > 0);
+    }
+  }
+#endif // DEBUG
 
   return true;
 }

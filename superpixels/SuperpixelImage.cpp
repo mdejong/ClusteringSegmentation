@@ -173,6 +173,13 @@ bool SuperpixelImage::parse(Mat &tags, SuperpixelImage &spImage) {
     return false;
   }
   
+#if defined(DEBUG)
+  for ( int32_t tag : superpixels ) {
+    set<int32_t> &neighborsOfNeighborSet = spImage.edgeTable.getNeighborsSet(tag);
+    assert(neighborsOfNeighborSet.size() > 0);
+  }
+#endif // DEBUG
+  
   // Deallocate original input tags image since it could be quite large
   
   //tags.release();
