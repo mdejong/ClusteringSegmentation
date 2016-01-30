@@ -12,7 +12,49 @@ using namespace std;
 
 void sample_mean(vector<float> &values, float *meanPtr);
 void sample_mean_delta_squared_div(vector<float> &values, float mean, float *stddevPtr);
-vector<float> float_diffs(vector<float> &values);
+
+// Given a vector of N type specific values, return a vector of N deltas from one
+// value to the next. The first value is always values[0] and then the rest of the
+// values are calculated as (values[N] - values[N-1]).
+
+template <typename T>
+static inline
+vector<T>
+deltas(const vector<T> &values)
+{
+  vector<T> deltas;
+  T prev = 0;
+  
+  for ( T value : values ) {
+    T delta = value - prev;
+    deltas.push_back(delta);
+    prev = value;
+  }
+  
+  return deltas;
+}
+
+// Specific version that accepts unsigned values, does a delta
+// in terms of an unsigned 32 bit int and then returns the delta
+// as a 32 bit signed int. The caller assumes that this logic
+// does not overflow the range of the signed int.
+
+static inline
+vector<int32_t>
+deltas(const vector<uint32_t> &values)
+{
+  vector<int32_t> deltas;
+  uint32_t prev = 0;
+  
+  for ( uint32_t value : values ) {
+    uint32_t delta = value - prev;
+    int32_t deltaS = (int32_t) delta;
+    deltas.push_back(deltaS);
+    prev = value;
+  }
+  
+  return deltas;
+}
 
 static inline
 int32_t mini(int32_t v1, int32_t v2) {

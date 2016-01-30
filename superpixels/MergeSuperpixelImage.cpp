@@ -3444,7 +3444,7 @@ bool pos_sample_within_bound(vector<float> &weights, float currentWeight) {
     return true;
   }
 
-  vector<float> deltaWeights = float_diffs(weights);
+  vector<float> deltaWeights = deltas(weights);
   // Always ignore first element
   deltaWeights.erase(deltaWeights.begin());
   
@@ -3520,7 +3520,7 @@ bool pos_sample_within_bound(vector<float> &weights, float currentWeight) {
       }
     }
     
-    vector<float> increasingDeltas = float_diffs(increasingWeights);
+    vector<float> increasingDeltas = deltas(increasingWeights);
     // Always ignore first element since it is a delta from zero
     increasingDeltas.erase(increasingDeltas.begin());
     

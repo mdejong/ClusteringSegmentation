@@ -61,44 +61,6 @@ void sample_mean_delta_squared_div(vector<float> &values, float mean, float *std
   }
 }
 
-// Calculate diffs between float values and return as a vector.
-// Return list of (N - (N-1)) elements in the list where the first element
-// is always (values[0] - 0.0)
-
-vector<float>
-float_diffs(vector<float> &values) {
-  const bool debug = false;
-  
-  if (debug) {
-    cout << "float_diffs() for values" << endl;
-    for (auto it = values.begin(); it != values.end(); ++it) {
-      float value = *it;
-      cout << value << endl;
-    }
-  }
-  
-  float last = 0.0;
-  
-  vector<float> deltas;
-  
-  for (auto it = values.begin(); it != values.end(); ++it) {
-    float value = *it;
-    float delta = value - last;
-    deltas.push_back(delta);
-    last = value;
-  }
-  
-  if (debug) {
-    cout << "returning deltas" << endl;
-    for (auto it = deltas.begin(); it != deltas.end(); ++it) {
-      float delta = *it;
-      cout << delta << endl;
-    }
-  }
-  
-  return deltas;
-}
-
 // Util method to return the 8 neighbors of a center point in the order
 // R, U, L, D, UR, UL, DL, DR while taking the image bounds into
 // account. For example, the point (0, 1) will not return UL, L, or DL.

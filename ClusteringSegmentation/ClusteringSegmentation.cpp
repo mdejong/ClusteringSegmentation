@@ -2029,6 +2029,108 @@ captureRegion(SuperpixelImage &spImage,
       fprintf(stdout, "done\n");
     }
     
+    // run stddev logic on the histogram counts to determine
+    // if the slope of the counts is basically flat, meaning
+    // that the region outside is a texture with pixel values
+    // that are not clustered to one single value of a small
+    // number of N values.
+    
+    if (1) {
+      float mean, stddev;
+      
+      vector<float> floatSizes;
+      
+      for ( uint32_t pixel : sortedOutsideInputKeys ) {
+        uint32_t count = outsideInputHistogram[pixel];
+        floatSizes.push_back(count);
+      }
+      
+      sample_mean(floatSizes, &mean);
+      sample_mean_delta_squared_div(floatSizes, mean, &stddev);
+      
+      if (1) {
+        char buffer[1024];
+        
+        snprintf(buffer, sizeof(buffer), "mean %0.4f stddev %0.4f", mean, stddev);
+        cout << (char*)buffer << endl;
+        
+        snprintf(buffer, sizeof(buffer), "1 stddev %0.4f", (mean + (stddev * 0.5f * 1.0f)));
+        cout << (char*)buffer << endl;
+        
+        snprintf(buffer, sizeof(buffer), "2 stddev %0.4f", (mean + (stddev * 0.5f * 2.0f)));
+        cout << (char*)buffer << endl;
+        
+        snprintf(buffer, sizeof(buffer), "3 stddev %0.4f", (mean + (stddev * 0.5f * 3.0f)));
+        cout << (char*)buffer << endl;
+        
+        snprintf(buffer, sizeof(buffer), "-1 stddev %0.4f", (mean - (stddev * 0.5f * 1.0f)));
+        cout << (char*)buffer << endl;
+        
+        snprintf(buffer, sizeof(buffer), "-2 stddev %0.4f", (mean - (stddev * 0.5f * 2.0f)));
+        cout << (char*)buffer << endl;
+      }
+      
+      // Filter out all the values that are within 2 stddev of the mean
+      
+      vector<float> largerSizes;
+      
+      const float twoStddev = mean + (stddev * 0.5f * 2.0f);
+      
+      for ( float f : floatSizes ) {
+        if (f > twoStddev) {
+          largerSizes.push_back(f);
+        }
+      }
+      
+      // Dedup repeated counts
+      
+      unordered_map<uint32_t, uint32_t> countMap;
+      
+      for ( float f : floatSizes ) {
+        uint32_t countInt = (uint32_t) round(f);
+        countMap[countInt] += 1;
+      }
+      
+      vector<uint32_t> sortedCountKeys = sort_keys_by_count(countMap, false);
+      
+      if (debug) {
+        fprintf(stdout, "sortedCountKeys\n");
+        for ( uint32_t pixel : sortedCountKeys ) {
+          uint32_t count = countMap[pixel];
+          fprintf(stdout, "0x%08X -> %5d\n", pixel, count);
+        }
+        fprintf(stdout, "done\n");
+      }
+      
+      // Determine the slope of the count values, if the slope drops off drastically
+      // after 1 or just a couple of values then the outside pixels are one flat region
+      // or just a couple of table values. If the slow is very near to zero then the
+      // outside is likely a texture region with no clear dominate pixel value.
+
+      vector<int32_t> slopes = deltas(sortedCountKeys);
+      
+      slopes.erase(begin(slopes)); // delete first slope
+      
+      if (debug) {
+        cout << "slopes" << endl;
+        for ( int32_t slope : slopes ) {
+          cout << " slope " << slope << endl;
+        }
+        cout << "done" << endl;
+      }
+      
+      // Check for the case where there is a big negative slope value
+      // initially and then the slope smooths out to -1. If a big
+      // initial negative slope is not found then this must be a
+      // texture (non-smooth) region with evenly distrubuted pixels.
+      
+//      vector<uint32_t> peakPixels = gatherPeakPixels(sortedColortable, pixelToNumVotesMap);
+      
+//      int N = (int) peakPixels.size();
+      
+      //MOMO
+    }
+    
     if (debug) {
       fprintf(stdout, "outside exact 0x%08X\n", outsideExactPixel);
     }

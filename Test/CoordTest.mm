@@ -8,6 +8,9 @@
 
 #import <Foundation/Foundation.h>
 
+#include "Util.h"
+#include "OpenCVUtil.h"
+
 #include "Coord.h"
 #include "Superpixel.h"
 #include "SuperpixelEdge.h"
@@ -15,8 +18,6 @@
 
 #include "SuperpixelEdgeFuncs.h"
 #include "MergeSuperpixelImage.h"
-
-#include "OpenCVUtil.h"
 
 //#include "ClusteringSegmentation.hpp"
 
@@ -2332,6 +2333,46 @@
   XCTAssert(sB == 1.0f, @"votes");
   XCTAssert(sG == 4.0f, @"votes");
   XCTAssert(sR == 1.0f, @"votes");
+}
+
+- (void)testSimpleIntDeltas
+{
+  vector<int32_t> values;
+  
+  values.push_back(10);
+  values.push_back(11);
+  values.push_back(15);
+  values.push_back(20);
+  values.push_back(10);
+  
+  vector<int32_t> deltaValues = deltas(values);
+  
+  XCTAssert(deltaValues.size() == 5, @"deltas");
+  XCTAssert(deltaValues[0] == 10, @"deltas");
+  XCTAssert(deltaValues[1] == 1, @"deltas");
+  XCTAssert(deltaValues[2] == 4, @"deltas");
+  XCTAssert(deltaValues[3] == 5, @"deltas");
+  XCTAssert(deltaValues[4] == -10, @"deltas");
+}
+
+- (void)testSimpleFloatDeltas
+{
+  vector<float> values;
+  
+  values.push_back(10);
+  values.push_back(11);
+  values.push_back(15);
+  values.push_back(20);
+  values.push_back(10);
+  
+  vector<float> deltaValues = deltas(values);
+  
+  XCTAssert(deltaValues.size() == 5, @"deltas");
+  XCTAssert(deltaValues[0] == 10, @"deltas");
+  XCTAssert(deltaValues[1] == 1, @"deltas");
+  XCTAssert(deltaValues[2] == 4, @"deltas");
+  XCTAssert(deltaValues[3] == 5, @"deltas");
+  XCTAssert(deltaValues[4] == -10, @"deltas");
 }
 
 @end
