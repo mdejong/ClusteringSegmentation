@@ -1957,7 +1957,7 @@ captureRegion(SuperpixelImage &spImage,
       fprintf(stdout, "sortedInsideOffsetKeys\n");
       for ( uint32_t offset : sortedInsideOffsetKeys ) {
         uint32_t count = insideOffsetHistogram[offset];
-        fprintf(stdout, "%8d -> %5d\n", offset, count);
+        fprintf(stdout, "%8d -> %5d = 0x%08X\n", offset, count, sortedColortable[offset]);
       }
       fprintf(stdout, "done\n");
     }
@@ -1968,7 +1968,7 @@ captureRegion(SuperpixelImage &spImage,
       fprintf(stdout, "sortedOutsideOffsetKeys\n");
       for ( uint32_t offset : sortedOutsideOffsetKeys ) {
         uint32_t count = outsideOffsetHistogram[offset];
-        fprintf(stdout, "%8d -> %5d\n", offset, count);
+        fprintf(stdout, "%8d -> %5d = 0x%08X\n", offset, count, sortedColortable[offset]);
       }
       fprintf(stdout, "done\n");
     }
@@ -1984,6 +1984,26 @@ captureRegion(SuperpixelImage &spImage,
     if (debug) {
       fprintf(stdout, "inside  %5d -> 0x%08X\n", insideColortableOffset, insideQuantPixel);
       fprintf(stdout, "outside %5d -> 0x%08X\n", outsideColortableOffset, outsideQuantPixel);
+    }
+    
+    // Filter out insideQuantPixel and outsideQuantPixel
+    
+    vector<uint32_t> filteredColortable;
+    
+    for ( uint32_t pixel : sortedColortable ) {
+      if (pixel == insideQuantPixel) {
+        continue;
+      }
+      if (pixel == outsideQuantPixel) {
+        continue;
+      }
+      filteredColortable.push_back(pixel);
+    }
+    
+    if (debug) {
+      for ( uint32_t pixel : filteredColortable ) {
+        fprintf(stdout, "filtered  0x%08X\n", pixel);
+      }
     }
     
     // Iterate over the pixels in the outside region trimming away the least likely pixels
@@ -2096,11 +2116,8 @@ captureRegion(SuperpixelImage &spImage,
       fprintf(stdout, "bookEndPixel = 0x%08X\n", bookEndPixel);
     }
     
-    for ( uint32_t pixel : sortedColortable ) {
-      if (pixel == insideQuantPixel) {
-        continue;
-      }
-      if (pixel == outsideQuantPixel) {
+    for ( uint32_t pixel : filteredColortable ) {
+      if (pixel == outsideExactPixel) {
         continue;
       }
       if (pixel == bookEndPixel) {
