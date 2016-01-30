@@ -4888,11 +4888,26 @@ contractOrExpandRegion(const Mat & inputImg,
   
   vector<Point> locations;
   findNonZero(outBoolMat, locations);
+
+  int maxX = inputImg.cols;
+  int maxY = inputImg.rows;
   
   for ( Point p : locations ) {
     Coord c(p.x, p.y);
     c = origin + c;
-    outCoords.push_back(c);
+    
+    if ((c.x < maxX) && (c.y < maxY)) {
+      // Inside the original image bounds
+      outCoords.push_back(c);
+      
+      if (debug) {
+        cout << "keep coord " << c << endl;
+      }
+    } else {
+      if (debug) {
+        cout << "skip coord " << c << endl;
+      }
+    }
   }
   
   int numNonZero = (int) outCoords.size();
@@ -4962,11 +4977,13 @@ contractOrExpandRegion(const Mat & inputImg,
   }
   
 #if defined(DEBUG)
-  int maxX = inputImg.cols;
-  int maxY = inputImg.rows;
-  for ( Coord c : outCoords ) {
-    assert(c.x < maxX);
-    assert(c.y < maxY);
+  {
+    int maxX = inputImg.cols;
+    int maxY = inputImg.rows;
+    for ( Coord c : outCoords ) {
+      assert(c.x < maxX);
+      assert(c.y < maxY);
+    }
   }
 #endif // DEBUG
   
