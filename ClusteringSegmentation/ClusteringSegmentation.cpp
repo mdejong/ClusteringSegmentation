@@ -1132,6 +1132,39 @@ captureRegionMask(SuperpixelImage &spImage,
   
   captureRegion(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, mask, regionCoords, coords, blockBasedQuantMat);
   
+  // Capture mask output as alpha pixels
+  
+  if (debugDumpImages) {
+    Mat tmpResultImg(inputImg.rows, inputImg.cols, CV_8UC4);
+    tmpResultImg = Scalar(0,0,0,0);
+    
+    for ( int y = 0; y < tmpResultImg.rows; y++ ) {
+      for ( int x = 0; x < tmpResultImg.cols; x++ ) {
+        uint8_t isOn = mask.at<uint8_t>(y, x);
+        
+        if (isOn) {
+          Vec3b vec = inputImg.at<Vec3b>(y, x);
+          Vec4b vec4;
+          vec4[0] = vec[0];
+          vec4[1] = vec[1];
+          vec4[2] = vec[2];
+          vec4[3] = 0xFF;
+          tmpResultImg.at<Vec4b>(y, x) = vec4;
+        }
+      }
+    }
+    
+    {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_morph_minus_mask_alpha_output" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, tmpResultImg);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+  }
+  
   if (debug) {
     cout << "return captureRegionMask" << endl;
   }
@@ -1988,7 +2021,7 @@ captureRegion(SuperpixelImage &spImage,
     
     // Filter out insideQuantPixel and outsideQuantPixel
     
-    vector<uint32_t> filteredColortable;
+    vector<uint32_t> filteredQuantVector;
     
     for ( uint32_t pixel : sortedColortable ) {
       if (pixel == insideQuantPixel) {
@@ -1997,12 +2030,12 @@ captureRegion(SuperpixelImage &spImage,
       if (pixel == outsideQuantPixel) {
         continue;
       }
-      filteredColortable.push_back(pixel);
+      filteredQuantVector.push_back(pixel);
     }
     
     if (debug) {
-      for ( uint32_t pixel : filteredColortable ) {
-        fprintf(stdout, "filtered  0x%08X\n", pixel);
+      for ( uint32_t pixel : filteredQuantVector ) {
+        fprintf(stdout, "filtered quant vector  0x%08X\n", pixel);
       }
     }
     
@@ -2029,20 +2062,65 @@ captureRegion(SuperpixelImage &spImage,
       fprintf(stdout, "done\n");
     }
     
-    // run stddev logic on the histogram counts to determine
-    // if the slope of the counts is basically flat, meaning
-    // that the region outside is a texture with pixel values
-    // that are not clustered to one single value of a small
-    // number of N values.
+    if (debug) {
+      fprintf(stdout, "outside exact 0x%08X\n", outsideExactPixel);
+    }
+    
+    // Generate histogram for each pixel in the outside the region
+    // area and then calculate slope for histogram counts.
+    
+    bool isOutsideSmoothRegion = false;
     
     if (1) {
       float mean, stddev;
       
       vector<float> floatSizes;
       
+      unordered_map<uint32_t, uint32_t> countMap;
+      
       for ( uint32_t pixel : sortedOutsideInputKeys ) {
         uint32_t count = outsideInputHistogram[pixel];
-        floatSizes.push_back(count);
+        countMap[count] += 1;
+        
+        if (debug) {
+          char buffer[1000];
+          snprintf(buffer, sizeof(buffer), "outside pixel 0x%08X = count %5d", pixel, count);
+          cout << (char*)buffer << endl;
+        }
+      }
+      
+      // Sort countMap keys by descending int value
+      
+      vector<int32_t> countKeys;
+      for ( auto &pair : countMap ) {
+        int32_t count = pair.first;
+        countKeys.push_back(count);
+      }
+      
+      sort(begin(countKeys), end(countKeys), greater<int32_t>());
+      
+      vector<int32_t> countDeltas = deltas(countKeys);
+      
+      if (debug) {
+        fprintf(stdout, "countDeltas\n");
+        int max = (int) countKeys.size();
+        assert(max == countDeltas.size());
+        for ( int i = 0; i < max; i++) {
+          int32_t count = countKeys[i];
+          int32_t delta = countDeltas[i];
+          fprintf(stdout, "%5d -> %5d\n", count, delta);
+        }
+        fprintf(stdout, "done countDeltas\n");
+      }
+
+      if (countDeltas.size() > 0) {
+        countDeltas.erase(begin(countDeltas)); // delete first slope
+      }
+      
+      for ( int32_t count : countDeltas ) {
+        // Treat each negative slope value as a positive number
+        assert(count <= 0);
+        floatSizes.push_back((float)(count * -1));
       }
       
       sample_mean(floatSizes, &mean);
@@ -2070,69 +2148,49 @@ captureRegion(SuperpixelImage &spImage,
         cout << (char*)buffer << endl;
       }
       
-      // Filter out all the values that are within 2 stddev of the mean
-      
       vector<float> largerSizes;
       
-      const float twoStddev = mean + (stddev * 0.5f * 2.0f);
+      const float minusOneStddev = (mean - (stddev * 0.5f * 1.0f));
       
       for ( float f : floatSizes ) {
-        if (f > twoStddev) {
+        if (f > minusOneStddev) {
           largerSizes.push_back(f);
         }
       }
-      
-      // Dedup repeated counts
-      
-      unordered_map<uint32_t, uint32_t> countMap;
-      
-      for ( float f : floatSizes ) {
-        uint32_t countInt = (uint32_t) round(f);
-        countMap[countInt] += 1;
+      if (largerSizes.size() == 0) {
+        // Include just the first delta when all are the same
+        largerSizes.push_back(floatSizes[0]);
       }
-      
-      vector<uint32_t> sortedCountKeys = sort_keys_by_count(countMap, false);
       
       if (debug) {
-        fprintf(stdout, "sortedCountKeys\n");
-        for ( uint32_t pixel : sortedCountKeys ) {
-          uint32_t count = countMap[pixel];
-          fprintf(stdout, "0x%08X -> %5d\n", pixel, count);
+        cout << "num larger " << largerSizes.size() << endl;
+        for ( float f : largerSizes ) {
+          cout << "larger " << f << endl;
         }
-        fprintf(stdout, "done\n");
       }
       
-      // Determine the slope of the count values, if the slope drops off drastically
-      // after 1 or just a couple of values then the outside pixels are one flat region
-      // or just a couple of table values. If the slow is very near to zero then the
-      // outside is likely a texture region with no clear dominate pixel value.
-
-      vector<int32_t> slopes = deltas(sortedCountKeys);
+      // Generate an average slope that considers the first N
+      // counts in the histogram.
       
-      slopes.erase(begin(slopes)); // delete first slope
+      sample_mean(largerSizes, &mean);
+      mean *= -1.0f;
       
       if (debug) {
-        cout << "slopes" << endl;
-        for ( int32_t slope : slopes ) {
-          cout << " slope " << slope << endl;
-        }
-        cout << "done" << endl;
+        char buffer[1024];
+        snprintf(buffer, sizeof(buffer), "resulting ave slope %0.4f for N = %d elements", mean, (int)largerSizes.size());
+        cout << (char*)buffer << endl;
       }
       
-      // Check for the case where there is a big negative slope value
-      // initially and then the slope smooths out to -1. If a big
-      // initial negative slope is not found then this must be a
-      // texture (non-smooth) region with evenly distrubuted pixels.
+      // Detect if this histogram indicates a significant negative slope or if it looks like
+      // a gradient into a flat region.
       
-//      vector<uint32_t> peakPixels = gatherPeakPixels(sortedColortable, pixelToNumVotesMap);
-      
-//      int N = (int) peakPixels.size();
-      
-      //MOMO
-    }
-    
-    if (debug) {
-      fprintf(stdout, "outside exact 0x%08X\n", outsideExactPixel);
+      if (mean < -30.0f) {
+        isOutsideSmoothRegion = true;
+        
+        if (debug) {
+          cout << "isOutsideSmoothRegion = true" << endl;
+        }
+      }
     }
     
     // Generate vector from quant centers of mass
@@ -2165,10 +2223,14 @@ captureRegion(SuperpixelImage &spImage,
         cout << "";
       }
     }
+    
+    // Determine where to place the book end pixel. In the smooth outside region case, place
+    // the book end at close to the flat region as possible. In the case of a outside that
+    // is not smooth, choose a distance 1/2 the way from the 3rd vector coordinate.
 
     uint32_t bookEndPixel;
     
-    if ((1)) {
+    if (isOutsideSmoothRegion) {
       vector<uint32_t> insideToOutsideVec = generateVector(insideQuantPixel, outsideExactPixel);
       
       if (debugDumpImages) {
@@ -2203,6 +2265,12 @@ captureRegion(SuperpixelImage &spImage,
       
       bookEndPixel = insideToOutsideVec[secondToLastOffset];
       assert(outsideExactPixel != bookEndPixel);
+    } else {
+      // Choose the 3rd quant pixel point as the bookend
+      
+      outsideExactPixel = outsideQuantPixel;
+      
+      bookEndPixel = filteredQuantVector[filteredQuantVector.size() - 1]; // last pixel in quant vector
     }
     
     // Generate a colortable that contains the exact pixel, the next pixel in the vector
@@ -2218,7 +2286,7 @@ captureRegion(SuperpixelImage &spImage,
       fprintf(stdout, "bookEndPixel = 0x%08X\n", bookEndPixel);
     }
     
-    for ( uint32_t pixel : filteredColortable ) {
+    for ( uint32_t pixel : filteredQuantVector ) {
       if (pixel == outsideExactPixel) {
         continue;
       }
