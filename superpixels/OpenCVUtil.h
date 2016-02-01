@@ -119,7 +119,6 @@ void mat_byte_const_foreach (const Mat & mat, std::function<void(uint8_t)> f) no
 // where the byte value returned is not the same as the
 // original then that byte is written back to the Mat.
 
-template <class T>
 static inline
 void mat_byte_foreach (Mat & mat, std::function<uint8_t(uint8_t)> f) noexcept
 {
@@ -137,11 +136,11 @@ void mat_byte_foreach (Mat & mat, std::function<uint8_t(uint8_t)> f) noexcept
 
 // Double iterator that loops over a pair of Mat objects. The function is invoked
 // with the current value from mat1 and mat2 and if the result returned by the
-// function is changed then that change is written back to mat1.
+// function is changed then that change is written back to mat1. Note that mat2
+// is considered constant during the loop and will not be changed.
 
-//template <class T>
 static inline
-void mat_byte_foreach (Mat & mat1, Mat & mat2, std::function<uint8_t(uint8_t, uint8_t)> f) noexcept
+void mat_byte_foreach (Mat & mat1, const Mat & mat2, std::function<uint8_t(uint8_t, uint8_t)> f) noexcept
 {
 #if defined(DEBUG)
   assert(mat1.size() == mat2.size());

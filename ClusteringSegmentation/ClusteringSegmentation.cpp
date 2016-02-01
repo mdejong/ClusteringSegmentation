@@ -2542,46 +2542,26 @@ captureRegion(SuperpixelImage &spImage,
     
     if (debugDumpImages && false) {
       Mat tmpResultImg = mask.clone();
-      tmpResultImg = Scalar(0);
       
-      for ( int y = 0; y < tmpResultImg.rows; y++ ) {
-        for ( int x = 0; x < tmpResultImg.cols; x++ ) {
-          uint8_t bVal = mask.at<uint8_t>(y, x);
-          tmpResultImg.at<uint8_t>(y, x) = bVal;
-        }
-      }
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_post_flood_region_mask" << ".png";
+      string fname = fnameStream.str();
       
-      {
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_post_flood_region_mask" << ".png";
-        string fname = fnameStream.str();
-        
-        imwrite(fname, tmpResultImg);
-        cout << "wrote " << fname << endl;
-        cout << "";
-      }
+      imwrite(fname, tmpResultImg);
+      cout << "wrote " << fname << endl;
+      cout << "";
     }
     
     if (debugDumpImages) {
       Mat tmpResultImg = outFloodMat.clone();
-      tmpResultImg = Scalar(0);
       
-      for ( int y = 0; y < tmpResultImg.rows; y++ ) {
-        for ( int x = 0; x < tmpResultImg.cols; x++ ) {
-          uint8_t bVal = outFloodMat.at<uint8_t>(y, x);
-          tmpResultImg.at<uint8_t>(y, x) = bVal;
-        }
-      }
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_post_flood_out_mask" << ".png";
+      string fname = fnameStream.str();
       
-      {
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_post_flood_out_mask" << ".png";
-        string fname = fnameStream.str();
-        
-        imwrite(fname, tmpResultImg);
-        cout << "wrote " << fname << endl;
-        cout << "";
-      }
+      imwrite(fname, tmpResultImg);
+      cout << "wrote " << fname << endl;
+      cout << "";
     }
     
     // Any pixel that is on in mask but off in outFloodMat should be turned
@@ -2594,37 +2574,22 @@ captureRegion(SuperpixelImage &spImage,
     
     if (debugDumpImages) {
       Mat tmpResultImg = outFloodMat.clone();
-      
-      /*
-      
-      mat_byte_foreach(tmpResultImg,
-        [](uint8_t bVal)->uint8_t {
-        fprintf(stdout, "byte %3d\n", bVal);
-      });
-       
-      */
-      
       int numRemoved = 0;
       
-      for ( int y = 0; y < tmpResultImg.rows; y++ ) {
-        for ( int x = 0; x < tmpResultImg.cols; x++ ) {
-          uint8_t maskBval = mask.at<uint8_t>(y, x);
-          uint8_t floodBval = outFloodMat.at<uint8_t>(y, x);
-          
-          if (maskBval) {
-            if (floodBval == 0) {
-              maskBval = 0xFF; // mark as removed by flood process
-              numRemoved += 1;
-            } else {
-              maskBval = 0;
-            }
-          } else {
-            maskBval = 0;
-          }
-          
-          tmpResultImg.at<uint8_t>(y, x) = maskBval;
-        }
-      }
+      // Loop over each value in outFloodMat and set the output
+      // to 0xFF only in the case where the mask is on and the
+      // flood mask is off.
+      
+      mat_byte_foreach(tmpResultImg, mask,
+                       [&](uint8_t floodB, uint8_t maskB)->uint8_t {
+                         uint8_t ret = 0;
+                         if (maskB && !floodB) {
+                           ret = 0xFF;
+                           numRemoved++;
+                         }
+//                         fprintf(stdout, "maskB %3d, floodB %3d -> %3d\n", maskB, floodB, ret);
+                         return ret;
+                       });
       
       {
         std::stringstream fnameStream;
@@ -2645,8 +2610,8 @@ captureRegion(SuperpixelImage &spImage,
       for ( int x = 0; x < mask.cols; x++ ) {
         uint8_t maskVal = mask.at<uint8_t>(y, x);
         if (maskVal) {
-          uint8_t floodVal = outFloodMat.at<uint8_t>(y, x);
-          if (floodVal == 0) {
+          uint8_t floodB = outFloodMat.at<uint8_t>(y, x);
+          if (!floodB) {
             mask.at<uint8_t>(y, x) = 0;
           }
         }
