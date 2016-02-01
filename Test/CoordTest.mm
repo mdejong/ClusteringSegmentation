@@ -105,13 +105,6 @@
     [super tearDown];
 }
 
-//- (void)testPerformanceExample {
-//    // This is an example of a performance test case.
-//    [self measureBlock:^{
-//        // Put the code you want to measure the time of here.
-//    }];
-//}
-
 - (void)testParse1x1ZeroEdges {
   
   NSArray *pixelsArr = @[
@@ -2373,6 +2366,33 @@
   XCTAssert(deltaValues[2] == 4, @"deltas");
   XCTAssert(deltaValues[3] == 5, @"deltas");
   XCTAssert(deltaValues[4] == -10, @"deltas");
+}
+
+- (void)testPerformanceExampleBin1 {
+    // This is an example of a performance test case.
+  Mat binMat(1000, 1000, CV_8UC1);
+  binMat = Scalar(0);
+  
+  int index = 0;
+  mat_byte_foreach (binMat, [&index](uint8_t *bytePtr)->void {
+    uint8_t bVal;
+    if ((index%2) == 0) {
+      bVal = 0;
+    } else {
+      bVal = 1;
+    }
+    *bytePtr = bVal;
+    index++;
+  });
+  
+  Mat *ptrMat = &binMat;
+  
+  [self measureBlock:^{
+    for (int i = 0; i < 20; i++ ) {
+    binMatInvert(*ptrMat);
+    binMatInvert(*ptrMat);
+    }
+  }];
 }
 
 @end

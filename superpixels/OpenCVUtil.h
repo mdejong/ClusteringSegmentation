@@ -74,42 +74,38 @@ Vec3f xyzDeltaToUnitVec3f(int32_t &dR, int32_t &dG, int32_t &dB) {
   }
 }
 
-// Logical not operation for byte matrix. If the value is 0x0 then
-// write 0xFF otherwise write 0x0.
-
-static inline
-void binMatInvert(Mat &binMat) {
-#if defined(DEBUG)
-  assert(binMat.channels() == 1);
-#endif // DEBUG
-  
-  for (int y = 0; y < binMat.rows; y++) {
-    for (int x = 0; x < binMat.cols; x++) {
-      uint8_t bVal = binMat.at<uint8_t>(y, x);
-      if (bVal == 0) {
-        bVal = 0xFF;
-      } else {
-        bVal = 0;
-      }
-      binMat.at<uint8_t>(y, x) = bVal;
-    }
-  }
-}
-
 // This iterator loop over each byte in a constant Mat
 // and invokes the function foreach byte. The original
 // Mat is constant and cannot be changed.
 
-template <class T>
-static inline
-void mat_byte_const_foreach (const Mat & mat, std::function<void(uint8_t)> f) noexcept
+// F = std::function<void(const uint8_t*)>
+
+// FIXME: rename to for_each
+
+template <typename F>
+void mat_byte_const_foreach (const Mat & binMat, F f) noexcept
 {
-  auto it = mat.begin<uint8_t>();
-  auto end = mat.end<uint8_t>();
-  for ( ; it != end; ++it ) {
-    uint8_t bVal = *it;
-    f(bVal);
+#if defined(DEBUG)
+  assert(binMat.channels() == 1);
+  std::function<void(const uint8_t*)> funcPtr = f;
+#endif // DEBUG
+  
+  int numRows = binMat.rows;
+  int numCols = binMat.cols;
+  
+  if (binMat.isContinuous()) {
+    numCols *= numRows;
+    numRows = 1;
   }
+  
+  for (int y = 0; y < numRows; y++) {
+    const uint8_t *rowPtr = binMat.ptr<uint8_t>(y);
+    for (int x = 0; x < numCols; x++) {
+      const uint8_t *bytePtr = rowPtr + x;
+      f(bytePtr);
+    }
+  }
+  
   return;
 }
 
@@ -119,58 +115,87 @@ void mat_byte_const_foreach (const Mat & mat, std::function<void(uint8_t)> f) no
 // where the byte value returned is not the same as the
 // original then that byte is written back to the Mat.
 
-static inline
-void mat_byte_foreach (Mat & mat, std::function<uint8_t(uint8_t)> f) noexcept
+// F = std::function<void(uint8_t*)>
+
+template <typename F>
+void mat_byte_foreach (Mat & binMat, F f) noexcept
 {
-  auto it = mat.begin<uint8_t>();
-  auto end = mat.end<uint8_t>();
-  for ( ; it != end; ++it ) {
-    uint8_t bVal = *it;
-    uint8_t retBVal = f(bVal);
-    if (retBVal != bVal) {
-      *it = retBVal;
+#if defined(DEBUG)
+  assert(binMat.channels() == 1);
+  std::function<void(uint8_t*)> funcPtr = f;
+#endif // DEBUG
+  
+  int numRows = binMat.rows;
+  int numCols = binMat.cols;
+  
+  if (binMat.isContinuous()) {
+    numCols *= numRows;
+    numRows = 1;
+  }
+  
+  for (int y = 0; y < numRows; y++) {
+    uint8_t *rowPtr = binMat.ptr<uint8_t>(y);
+    for (int x = 0; x < numCols; x++) {
+      uint8_t *bytePtr = rowPtr + x;
+      f(bytePtr);
     }
   }
+  
   return;
 }
 
 // Double iterator that loops over a pair of Mat objects. The function is invoked
-// with the current value from mat1 and mat2 and if the result returned by the
-// function is changed then that change is written back to mat1. Note that mat2
-// is considered constant during the loop and will not be changed.
+// with a pointer to each value from binMat1 and binMat2. Note that binMat2
+// is const so the second parameter passed to the function is a const pointer.
 
-static inline
-void mat_byte_foreach (Mat & mat1, const Mat & mat2, std::function<uint8_t(uint8_t, uint8_t)> f) noexcept
+// F = std::function<void(uint8_t*, const uint8_t*)>
+
+template <typename F>
+void mat_byte_foreach (Mat & binMat1, const Mat & binMat2, F f) noexcept
 {
 #if defined(DEBUG)
-  assert(mat1.size() == mat2.size());
+  assert(binMat1.size() == binMat2.size());
+  assert(binMat1.channels() == 1);
+  assert(binMat2.channels() == 1);
+  assert(binMat1.isContinuous() == binMat2.isContinuous());
+  std::function<void(uint8_t*, const uint8_t*)> funcPtr = f;
 #endif // DEBUG
   
-  auto it1 = mat1.begin<uint8_t>();
-  auto end1 = mat1.end<uint8_t>();
+  int numRows = binMat1.rows;
+  int numCols = binMat1.cols;
   
-  auto it2 = mat2.begin<uint8_t>();
-  auto end2 = mat2.end<uint8_t>();
-  
-#if defined(DEBUG)
-  assert(it1 != end1);
-  assert(it2 != end2);
-#endif // DEBUG
-  
-  for ( ; it1 != end1; it1++, it2++ ) {
-#if defined(DEBUG)
-    assert(it2 != end2);
-#endif // DEBUG
-    
-    uint8_t bVal1 = *it1;
-    uint8_t bVal2 = *it2;
-    
-    uint8_t retBVal = f(bVal1, bVal2);
-    if (retBVal != bVal1) {
-      *it1 = retBVal;
+  if (binMat1.isContinuous()) {
+    numCols *= numRows;
+    numRows = 1;
+  }
+
+  for (int y = 0; y < numRows; y++) {
+    uint8_t *rowPtr1 = binMat1.ptr<uint8_t>(y);
+    const uint8_t *rowPtr2 = binMat2.ptr<uint8_t>(y);
+    for (int x = 0; x < numCols; x++) {
+      uint8_t *bytePtr1 = rowPtr1 + x;
+      const uint8_t *bytePtr2 = rowPtr2 + x;
+      f(bytePtr1, bytePtr2);
     }
   }
+
   return;
+}
+
+// Logical not operation for byte matrix. If the value is 0x0 then
+// write 0xFF otherwise write 0x0.
+
+static inline
+void binMatInvert(Mat &binMat) {
+  mat_byte_foreach (binMat, [](uint8_t *bytePtr) {
+    uint8_t bVal = *bytePtr;
+    if (bVal == 0) {
+      bVal = 0xFF;
+    } else {
+      bVal = 0;
+    }
+    *bytePtr = bVal;
+  });
 }
 
 // Print SSIM for two images to cout

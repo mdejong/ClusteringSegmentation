@@ -1497,6 +1497,8 @@ void writeTagsWithGraytable(SuperpixelImage &spImage, Mat &origImg, Mat &resultI
   return;
 }
 
+/*
+
 // This test case focuses on BFS merge logic and the order that multiple
 // merges are done in. When processing chunks of percentage values the
 // logic should merge until no more values of a specific percentage
@@ -1593,6 +1595,7 @@ void writeTagsWithGraytable(SuperpixelImage &spImage, Mat &origImg, Mat &resultI
   return;
 }
 
+ */
 
 
 // When adding unmerged edge weights and merged edge weights, should the logic "push"

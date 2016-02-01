@@ -2581,14 +2581,16 @@ captureRegion(SuperpixelImage &spImage,
       // flood mask is off.
       
       mat_byte_foreach(tmpResultImg, mask,
-                       [&](uint8_t floodB, uint8_t maskB)->uint8_t {
-                         uint8_t ret = 0;
+                       [&numRemoved](uint8_t *floodBPtr, const uint8_t *maskBPtr)->void {
+                         uint8_t floodB = *floodBPtr;
+                         const uint8_t maskB = *maskBPtr;
                          if (maskB && !floodB) {
-                           ret = 0xFF;
+                           *floodBPtr = 0xFF;
                            numRemoved++;
+                           //fprintf(stdout, "maskB %3d, floodB %3d -> %3d\n", maskB, floodB, *floodBPtr);
+                         } else {
+                           //fprintf(stdout, "maskB %3d, floodB %3d -> %3d\n", maskB, floodB, floodB);
                          }
-//                         fprintf(stdout, "maskB %3d, floodB %3d -> %3d\n", maskB, floodB, ret);
-                         return ret;
                        });
       
       {
@@ -2606,20 +2608,20 @@ captureRegion(SuperpixelImage &spImage,
       }
     }
     
-    // FIXME: slightly suboptimal in that lookup at (x,y) in each loop
-    // is not going to be as fast as an iterator that knows the pos already.
+    // Optimal impl that iterates over each Mat result and calls lambda with pointers
     
-    for ( int y = 0; y < mask.rows; y++ ) {
-      for ( int x = 0; x < mask.cols; x++ ) {
-        uint8_t maskVal = mask.at<uint8_t>(y, x);
-        if (maskVal) {
-          uint8_t floodB = outFloodMat.at<uint8_t>(y, x);
-          if (!floodB) {
-            mask.at<uint8_t>(y, x) = 0;
-          }
-        }
-      }
-    }
+    mat_byte_foreach(mask, outFloodMat,
+                     [](uint8_t *maskBPtr, const uint8_t *floodBPtr)->void {
+                       uint8_t maskB = *maskBPtr;
+                       uint8_t floodB = *floodBPtr;
+                       if (maskB && !floodB) {
+                         *maskBPtr = 0;
+                         //fprintf(stdout, "maskB %3d, floodB %3d -> %3d\n", maskB, floodB, *maskBPtr);
+                       } else {
+                         //fprintf(stdout, "maskB %3d, floodB %3d -> %3d\n", maskB, floodB, floodB);
+                       }
+                       return;
+                     });
   }
   
   if (debug) {
