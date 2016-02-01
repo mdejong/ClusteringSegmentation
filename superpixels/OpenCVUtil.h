@@ -74,6 +74,106 @@ Vec3f xyzDeltaToUnitVec3f(int32_t &dR, int32_t &dG, int32_t &dB) {
   }
 }
 
+// Logical not operation for byte matrix. If the value is 0x0 then
+// write 0xFF otherwise write 0x0.
+
+static inline
+void binMatInvert(Mat &binMat) {
+#if defined(DEBUG)
+  assert(binMat.channels() == 1);
+#endif // DEBUG
+  
+  for (int y = 0; y < binMat.rows; y++) {
+    for (int x = 0; x < binMat.cols; x++) {
+      uint8_t bVal = binMat.at<uint8_t>(y, x);
+      if (bVal == 0) {
+        bVal = 0xFF;
+      } else {
+        bVal = 0;
+      }
+      binMat.at<uint8_t>(y, x) = bVal;
+    }
+  }
+}
+
+// This iterator loop over each byte in a constant Mat
+// and invokes the function foreach byte. The original
+// Mat is constant and cannot be changed.
+
+template <class T>
+static inline
+void mat_byte_const_foreach (const Mat & mat, std::function<void(uint8_t)> f) noexcept
+{
+  auto it = mat.begin<uint8_t>();
+  auto end = mat.end<uint8_t>();
+  for ( ; it != end; ++it ) {
+    uint8_t bVal = *it;
+    f(bVal);
+  }
+  return;
+}
+
+// This iterator loop over each byte in a Mat and offers
+// the ability to write a byte value back to the Mat.
+// The function should return a byte value, in the case
+// where the byte value returned is not the same as the
+// original then that byte is written back to the Mat.
+
+template <class T>
+static inline
+void mat_byte_foreach (Mat & mat, std::function<uint8_t(uint8_t)> f) noexcept
+{
+  auto it = mat.begin<uint8_t>();
+  auto end = mat.end<uint8_t>();
+  for ( ; it != end; ++it ) {
+    uint8_t bVal = *it;
+    uint8_t retBVal = f(bVal);
+    if (retBVal != bVal) {
+      *it = retBVal;
+    }
+  }
+  return;
+}
+
+// Double iterator that loops over a pair of Mat objects. The function is invoked
+// with the current value from mat1 and mat2 and if the result returned by the
+// function is changed then that change is written back to mat1.
+
+//template <class T>
+static inline
+void mat_byte_foreach (Mat & mat1, Mat & mat2, std::function<uint8_t(uint8_t, uint8_t)> f) noexcept
+{
+#if defined(DEBUG)
+  assert(mat1.size() == mat2.size());
+#endif // DEBUG
+  
+  auto it1 = mat1.begin<uint8_t>();
+  auto end1 = mat1.end<uint8_t>();
+  
+  auto it2 = mat2.begin<uint8_t>();
+  auto end2 = mat2.end<uint8_t>();
+  
+#if defined(DEBUG)
+  assert(it1 != end1);
+  assert(it2 != end2);
+#endif // DEBUG
+  
+  for ( ; it1 != end1; it1++, it2++ ) {
+#if defined(DEBUG)
+    assert(it2 != end2);
+#endif // DEBUG
+    
+    uint8_t bVal1 = *it1;
+    uint8_t bVal2 = *it2;
+    
+    uint8_t retBVal = f(bVal1, bVal2);
+    if (retBVal != bVal1) {
+      *it1 = retBVal;
+    }
+  }
+  return;
+}
+
 // Print SSIM for two images to cout
 
 int printSSIM(Mat inImage1, Mat inImage2);
@@ -145,5 +245,10 @@ uint32_t centerOfMassPixels(const vector<uint32_t> & pixels);
 // Generate a vector of pixels from one point to another
 
 vector<uint32_t> generateVector(uint32_t fromPixel, uint32_t toPixel);
+
+// Flood fill based on region of zero values. Input comes from inBinMask and the results
+// are written to outBinMask. Black pixels are filled and white pixels are not filled.
+
+int floodFillMask(Mat &inBinMask, Mat &outBinMask, Point2i startPoint, int connectivity);
 
 #endif // OPENCV_UTIL_H

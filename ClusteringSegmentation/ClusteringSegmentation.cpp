@@ -2481,6 +2481,179 @@ captureRegion(SuperpixelImage &spImage,
     // continue to next region to region pair
   }
   
+  // After each region segment has been processed, it is possible that the quant processing logic
+  // would have selected certain pixels to active that are actually not 8 connected to the rest
+  // of the pixels.
+  
+  if ((1)) {
+    vector<Point> locations;
+    findNonZero(mask, locations);
+    
+    vector<Coord> coords;
+    
+    for ( Point p : locations ) {
+      Coord c(p.x, p.y);
+      coords.push_back(c);
+    }
+    
+    int32_t originX, originY, regionWidth, regionHeight;
+    Superpixel::bbox(originX, originY, regionWidth, regionHeight, coords);
+    Rect roiRect(originX, originY, regionWidth, regionHeight);
+
+    Mat outDistMat;
+    outDistMat = Scalar(0);
+    
+    Coord roiCenter = findRegionCenter(mask, roiRect, outDistMat, tag);
+
+    Coord regionCenter(originX + roiCenter.x, originY + roiCenter.y);
+    
+    Point2i center2i(regionCenter.x, regionCenter.y);
+    
+    if (debugDumpImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_pre_flood_region_mask" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, mask);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    Mat invMaskMat = mask.clone();
+    binMatInvert(invMaskMat);
+
+    if (debugDumpImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_pre_flood_inv_region_mask" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, invMaskMat);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    invMaskMat.at<uint8_t>(center2i.y, center2i.x) = 0xFF;
+    
+    Mat outFloodMat = mask.clone();
+    outFloodMat = Scalar(0);
+    
+    int numPixelsFilled = floodFillMask(invMaskMat, outFloodMat, center2i, 8);
+    assert(numPixelsFilled > 0);
+    
+    if (debugDumpImages && false) {
+      Mat tmpResultImg = mask.clone();
+      tmpResultImg = Scalar(0);
+      
+      for ( int y = 0; y < tmpResultImg.rows; y++ ) {
+        for ( int x = 0; x < tmpResultImg.cols; x++ ) {
+          uint8_t bVal = mask.at<uint8_t>(y, x);
+          tmpResultImg.at<uint8_t>(y, x) = bVal;
+        }
+      }
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_post_flood_region_mask" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, tmpResultImg);
+        cout << "wrote " << fname << endl;
+        cout << "";
+      }
+    }
+    
+    if (debugDumpImages) {
+      Mat tmpResultImg = outFloodMat.clone();
+      tmpResultImg = Scalar(0);
+      
+      for ( int y = 0; y < tmpResultImg.rows; y++ ) {
+        for ( int x = 0; x < tmpResultImg.cols; x++ ) {
+          uint8_t bVal = outFloodMat.at<uint8_t>(y, x);
+          tmpResultImg.at<uint8_t>(y, x) = bVal;
+        }
+      }
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_post_flood_out_mask" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, tmpResultImg);
+        cout << "wrote " << fname << endl;
+        cout << "";
+      }
+    }
+    
+    // Any pixel that is on in mask but off in outFloodMat should be turned
+    // off in mask since this pixel was not included in the flood fill.
+    
+    assert(mask.size() == outFloodMat.size());
+    
+    // Do dump that shows any pixels that should avtually be off because
+    // they were not included in the flood mask.
+    
+    if (debugDumpImages) {
+      Mat tmpResultImg = outFloodMat.clone();
+      
+      /*
+      
+      mat_byte_foreach(tmpResultImg,
+        [](uint8_t bVal)->uint8_t {
+        fprintf(stdout, "byte %3d\n", bVal);
+      });
+       
+      */
+      
+      int numRemoved = 0;
+      
+      for ( int y = 0; y < tmpResultImg.rows; y++ ) {
+        for ( int x = 0; x < tmpResultImg.cols; x++ ) {
+          uint8_t maskBval = mask.at<uint8_t>(y, x);
+          uint8_t floodBval = outFloodMat.at<uint8_t>(y, x);
+          
+          if (maskBval) {
+            if (floodBval == 0) {
+              maskBval = 0xFF; // mark as removed by flood process
+              numRemoved += 1;
+            } else {
+              maskBval = 0;
+            }
+          } else {
+            maskBval = 0;
+          }
+          
+          tmpResultImg.at<uint8_t>(y, x) = maskBval;
+        }
+      }
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_post_flood_out_mask_removed" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, tmpResultImg);
+        cout << "wrote " << fname << endl;
+        cout << "";
+      }
+      
+      if (debug) {
+        cout << "numRemoved " << numRemoved << endl;
+      }
+    }
+    
+    for ( int y = 0; y < mask.rows; y++ ) {
+      for ( int x = 0; x < mask.cols; x++ ) {
+        uint8_t maskVal = mask.at<uint8_t>(y, x);
+        if (maskVal) {
+          uint8_t floodVal = outFloodMat.at<uint8_t>(y, x);
+          if (floodVal == 0) {
+            mask.at<uint8_t>(y, x) = 0;
+          }
+        }
+      }
+    }
+  }
+  
   if (debug) {
     cout << "return captureRegion" << endl;
   }

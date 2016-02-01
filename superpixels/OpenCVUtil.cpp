@@ -1125,3 +1125,149 @@ vector<uint32_t> generateVector(uint32_t fromPixel, uint32_t toPixel)
   return pixelsVec;
 }
 
+// Flood fill based on region of zero values. Input comes from inBinMask and the results
+// are written to outBinMask. Black pixels are filled and white pixels are not filled.
+
+int floodFillMask(Mat &inBinMask, Mat &outBinMask, Point2i startPoint, int connectivity)
+{
+  const bool debug = true;
+  const bool debugDumpImages = true;
+  
+  assert(inBinMask.size() == outBinMask.size());
+  assert(connectivity == 4 || connectivity == 8);
+  
+  if (debug) {
+    cout << "input dimensions " << inBinMask.cols << " x " << inBinMask.rows << endl;
+  }
+  
+  if (debugDumpImages) {
+    imwrite("flood_bin_mask_input.png", inBinMask);
+  }
+  
+  Mat expandedMask(inBinMask.rows+2, inBinMask.cols+2, CV_8UC1);
+  
+  Rect filledRect;
+  
+  Rect borderRect(0, 0, inBinMask.cols+2, inBinMask.rows+2);
+  Rect maskROI(1, 1, inBinMask.cols, inBinMask.rows);
+  
+  Scalar scalarZero(0);
+  uint8_t maskFillByte = 0xFF;
+  Scalar maskFillColor(maskFillByte);
+  
+  int flags = connectivity + (maskFillByte << 8) | FLOODFILL_FIXED_RANGE | FLOODFILL_MASK_ONLY;
+  
+  Point seed(0, 0);
+  
+  // Flood fill into mask and determine which pixels are non-zero.
+  
+  expandedMask = Scalar::all(0);
+  rectangle(expandedMask, borderRect, maskFillColor);
+  
+  // Create a cropped mask that is the same size as the original input
+  
+  Mat croppedMask = expandedMask(maskROI);
+  
+  inBinMask.copyTo(croppedMask);
+  
+  if (debugDumpImages) {
+    imwrite("flood_bin_mask_input_with_border.png", expandedMask);
+  }
+  
+  Mat copyOfInBinMask = inBinMask.clone();
+  
+  // Input is set to all on and then the fill is with black pixels
+  
+  inBinMask = Scalar(0);
+  
+  // Define seed point as the center of the image region.
+  
+  seed.x = startPoint.x;
+  seed.y = startPoint.y;
+  
+  if (debug) {
+    cout << "seed (" << seed.x << "," << seed.y << ") " << endl;
+  }
+  
+  // Verify that the seed point is a non-zero value in mask taking
+  // into account the (+1, +1) ROI delta
+  
+  if (1) {
+    int maskX = maskROI.x + seed.x;
+    int maskY = maskROI.y + seed.y;
+    
+    if (debug) {
+      cout << "seed in mask (" << maskX << "," << maskY << ") " << endl;
+    }
+    
+    uint8_t bVal = expandedMask.at<uint8_t>(maskY, maskX);
+    assert(bVal != 0);
+    
+    // In order for the fill to work, the seed point must be explicitly set to zero
+    
+    expandedMask.at<uint8_t>(maskY, maskX) = 0;
+  }
+
+  if (debugDumpImages) {
+    imwrite("flood_fill_input.png", inBinMask);
+  }
+  
+  if (debugDumpImages) {
+    imwrite("flood_fill_mask_expanded_input.png", expandedMask);
+  }
+  
+  int numFilled = floodFill(inBinMask, expandedMask, seed, maskFillColor, &filledRect, scalarZero, scalarZero, flags);
+
+  if (debug) {
+    cout << "numFilled " << numFilled << endl;
+    cout << "flood fill bbox (" << filledRect.x << "," << filledRect.y << ") " << filledRect.width << " x " << filledRect.height << endl;
+  }
+  
+  if (debugDumpImages) {
+    imwrite("flood_fill_output.png", inBinMask);
+    
+    imwrite("flood_fill_mask_expanded_output.png", expandedMask);
+  }
+  
+  // Fill must have at least filled 1 pixel
+  
+  assert(numFilled > 0);
+  assert(filledRect.width > 0);
+  assert(filledRect.height > 0);
+  
+  // FIXME: optimization when filledRect defines bbox that fill operated on, good for large mats
+  
+  // Any non-zero pixel in inBinMask is set to zero now so that only the flood pixels remain
+  // as non-zero values.
+  
+  for(int y = 0; y < croppedMask.rows; y++) {
+    for(int x = 0; x < croppedMask.cols; x++) {
+      uint8_t bVal = copyOfInBinMask.at<uint8_t>(y, x);
+      if (bVal != 0) {
+        croppedMask.at<uint8_t>(y, x) = 0;
+      }
+    }
+  }
+  
+//  expandedMask *= 255.0;
+  
+  croppedMask.at<uint8_t>(seed.y, seed.x) = 0xFF;
+  
+  if (debugDumpImages) {
+    imwrite("flood_mask_output.png", expandedMask);
+  }
+  
+  // The filledRect identified pixels are now in terms of the cropped mask image
+  
+  if (debugDumpImages) {
+    imwrite("flood_mask_not_cropped.png", expandedMask);
+    imwrite("flood_mask_cropped.png", croppedMask);
+  }
+  
+  outBinMask = Scalar(0);
+  
+  croppedMask.copyTo(outBinMask);
+  
+  return numFilled;
+}
+
