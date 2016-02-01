@@ -337,7 +337,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
           vec = mergeMat.at<Vec3b>(y, x);
           
           if (vec[0] == 0x0 && vec[1] == 0x0 && vec[2] == 0x0) {
-            // This pixel has not been seen before, copy from srmTags to mergeMat
+            // This pixel has not been seen before, define new merge tag value
             
             vec = srmTags.at<Vec3b>(y, x);
             
@@ -352,13 +352,21 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
             assert(srcSpPtr);
 #endif // DEBUG
             
-            if (debug ) {
+            if (debug && false) {
               printf("set merge mat (%5d, %5d) = 0x%08X aka %d\n", x, y, mergedTag, mergedTag);
             }
             
             Vec3b mergedVec = Vec3BToUID(mergedTag); // FIXME: do outside loop
             mergeMat.at<Vec3b>(y, x) = mergedVec;
           } else {
+            // A region must not attempt to include pixels from a previously merged region ever!
+            
+            uint32_t alreadySetTag = Vec3BToUID(vec);
+            
+            printf("coord (%5d, %5d) = attempted remerge when tag already set to 0x%08X aka %d\n", x, y, alreadySetTag, alreadySetTag);
+            assert(0);
+            
+            /*
             // Attempting to merge already merged (x,y) location
             uint32_t mergedTag = Vec3BToUID(vec);
             printf("coord (%5d, %5d) = 0x%08X aka %d\n", x, y, mergedTag, mergedTag);
@@ -376,6 +384,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
               printf("coord (%5d, %5d) = attempted merge 0x%08X aka %d\n", x, y, toBeMergedTag, toBeMergedTag);
               assert(0);
             }
+            */
           }
         } // foreach locations
         
@@ -396,29 +405,38 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       
     } // foreach tag in sorted superpixels
     
-    // Copy any pixel from srmTags unless mergeMat is set
-    // to a non-zero value already.
+    // Gather any remaining tags that have not been merged
+    // and add these as new sets of pixels.
+    
+    unordered_map<uint32_t, vector<Coord>> mergeTagsToCoords;
     
     for ( int y = 0; y < mergeMat.rows; y++ ) {
       for ( int x = 0; x < mergeMat.cols; x++ ) {
         Vec3b vec = mergeMat.at<Vec3b>(y, x);
         
-        // FIXME: need to use generated mergeTag
-        
         if (vec[0] == 0x0 && vec[1] == 0x0 && vec[2] == 0x0) {
           vec = srmTags.at<Vec3b>(y, x);
-          mergeMat.at<Vec3b>(y, x) = vec;
+          uint32_t srmTag = Vec3BToUID(vec);
           
-          // FIXME: collect any existing tags into vectors of Coord and then
-          // append new UIDs for each such vector of coords to the merge mat
-          // to avoid problem with UID being reused.
-          
-          if ((debug) && true) {
-            uint32_t pixel = Vec3BToUID(vec);
-            fprintf(stdout, "copy existing tag at (%5d, %5d) = 0X%08X\n", x, y, pixel);
-          }
+          vector<Coord> &vecRef = mergeTagsToCoords[srmTag];
+          vecRef.push_back(Coord(x, y));
         }
       }
+    }
+    
+    for ( auto & pair : mergeTagsToCoords ) {
+      vector<Coord> &vecRef = pair.second;
+      
+      for ( Coord c : vecRef ) {
+        Vec3b mergedVec = Vec3BToUID(mergedTag); // FIXME: do outside loop
+        mergeMat.at<Vec3b>(c.y, c.x) = mergedVec;
+        
+        if ((debug) && true) {
+          fprintf(stdout, "merge unmerged srm tag at (%5d, %5d) = 0X%08X\n", c.x, c.y, mergedTag);
+        }
+      }
+      
+      mergedTag += 1;
     }
     
     if (debugWriteIntermediateFiles) {

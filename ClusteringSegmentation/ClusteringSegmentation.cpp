@@ -2606,6 +2606,9 @@ captureRegion(SuperpixelImage &spImage,
       }
     }
     
+    // FIXME: slightly suboptimal in that lookup at (x,y) in each loop
+    // is not going to be as fast as an iterator that knows the pos already.
+    
     for ( int y = 0; y < mask.rows; y++ ) {
       for ( int x = 0; x < mask.cols; x++ ) {
         uint8_t maskVal = mask.at<uint8_t>(y, x);
