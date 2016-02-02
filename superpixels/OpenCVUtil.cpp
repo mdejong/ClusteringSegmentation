@@ -6,6 +6,8 @@
 
 #include "vf_DistanceTransform.h"
 
+#include "OpenCVIter.hpp"
+
 // Print SSIM for two images to cout
 
 int printSSIM(Mat inImage1, Mat inImage2)
@@ -1269,5 +1271,20 @@ int floodFillMask(Mat &inBinMask, Mat &outBinMask, Point2i startPoint, int conne
   croppedMask.copyTo(outBinMask);
   
   return numFilled;
+}
+
+// Logical not operation for byte matrix. If the value is 0x0 then
+// write 0xFF otherwise write 0x0.
+
+void binMatInvert(Mat &binMat) {
+  for_each_byte (binMat, [](uint8_t *bytePtr) {
+    uint8_t bVal = *bytePtr;
+    if (bVal == 0) {
+      bVal = 0xFF;
+    } else {
+      bVal = 0;
+    }
+    *bytePtr = bVal;
+  });
 }
 

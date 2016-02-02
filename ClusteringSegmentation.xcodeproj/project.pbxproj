@@ -163,6 +163,7 @@
 		3CD527551C35F1B8005AF4A7 /* OpenCVModules-release.cmake in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526D41C35F1B6005AF4A7 /* OpenCVModules-release.cmake */; };
 		3CD527561C35F1B9005AF4A7 /* OpenCVModules.cmake in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526D51C35F1B6005AF4A7 /* OpenCVModules.cmake */; };
 		3CD8B7B41C4F54B700DB325F /* ContainmentTest.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3CD8B7B31C4F54B700DB325F /* ContainmentTest.mm */; };
+		3CDC334D1C600E52006A4242 /* IterTest.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3CDC334C1C600E52006A4242 /* IterTest.mm */; };
 		3CEB38EE1C3E19F90071358C /* ImageSearchTest.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38ED1C3E19F90071358C /* ImageSearchTest.mm */; };
 		3CEB38F01C3F32E00071358C /* SuperpixelEdgeFuncs.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38EF1C3F32DF0071358C /* SuperpixelEdgeFuncs.cpp */; };
 		3CEB38F11C3F32E00071358C /* SuperpixelEdgeFuncs.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38EF1C3F32DF0071358C /* SuperpixelEdgeFuncs.cpp */; };
@@ -626,6 +627,8 @@
 		3CD526D41C35F1B6005AF4A7 /* OpenCVModules-release.cmake */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "OpenCVModules-release.cmake"; sourceTree = "<group>"; };
 		3CD526D51C35F1B6005AF4A7 /* OpenCVModules.cmake */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = OpenCVModules.cmake; sourceTree = "<group>"; };
 		3CD8B7B31C4F54B700DB325F /* ContainmentTest.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = ContainmentTest.mm; sourceTree = "<group>"; };
+		3CDC334B1C600C1F006A4242 /* OpenCVIter.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = OpenCVIter.hpp; sourceTree = "<group>"; };
+		3CDC334C1C600E52006A4242 /* IterTest.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = IterTest.mm; sourceTree = "<group>"; };
 		3CEB38ED1C3E19F90071358C /* ImageSearchTest.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = ImageSearchTest.mm; sourceTree = "<group>"; };
 		3CEB38EF1C3F32DF0071358C /* SuperpixelEdgeFuncs.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SuperpixelEdgeFuncs.cpp; sourceTree = "<group>"; };
 		3CEB38F21C3F33280071358C /* SuperpixelEdgeFuncs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SuperpixelEdgeFuncs.h; sourceTree = "<group>"; };
@@ -817,6 +820,7 @@
 				3CD524DB1C3481E2005AF4A7 /* Util.cpp */,
 				3CD524D11C3481E2005AF4A7 /* OpenCVUtil.h */,
 				3CD524D01C3481E2005AF4A7 /* OpenCVUtil.cpp */,
+				3CDC334B1C600C1F006A4242 /* OpenCVIter.hpp */,
 				3CD524CF1C3481E2005AF4A7 /* Coord.h */,
 				3CD524CE1C3481E2005AF4A7 /* Coord.cpp */,
 				3CD524D41C3481E2005AF4A7 /* Superpixel.h */,
@@ -834,6 +838,7 @@
 		3CD524FF1C34CD6B005AF4A7 /* Test */ = {
 			isa = PBXGroup;
 			children = (
+				3CDC334C1C600E52006A4242 /* IterTest.mm */,
 				3CD525001C34CD6B005AF4A7 /* CoordTest.mm */,
 				3CEB38ED1C3E19F90071358C /* ImageSearchTest.mm */,
 				3CEB39051C3F494A0071358C /* DivQuantTest.m */,
@@ -1864,6 +1869,7 @@
 				3CEB38FE1C3F489E0071358C /* DivQuantMapColors.cpp in Sources */,
 				3CD8B7B41C4F54B700DB325F /* ContainmentTest.mm in Sources */,
 				3CEB39121C40FCCD0071358C /* unionfind.c in Sources */,
+				3CDC334D1C600E52006A4242 /* IterTest.mm in Sources */,
 				3CD525061C35EAC0005AF4A7 /* SuperpixelImage.cpp in Sources */,
 				3CD525071C35EAC1005AF4A7 /* MergeSuperpixelImage.cpp in Sources */,
 				3CCD1AE81C4B1FF600DBC550 /* peakdetect.c in Sources */,

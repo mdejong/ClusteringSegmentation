@@ -12,6 +12,7 @@
 
 #include "Util.h"
 #include "OpenCVUtil.h"
+#include "OpenCVIter.hpp"
 
 #include "Superpixel.h"
 #include "SuperpixelEdge.h"
@@ -2580,18 +2581,18 @@ captureRegion(SuperpixelImage &spImage,
       // to 0xFF only in the case where the mask is on and the
       // flood mask is off.
       
-      mat_byte_foreach(tmpResultImg, mask,
-                       [&numRemoved](uint8_t *floodBPtr, const uint8_t *maskBPtr)->void {
-                         uint8_t floodB = *floodBPtr;
-                         const uint8_t maskB = *maskBPtr;
-                         if (maskB && !floodB) {
-                           *floodBPtr = 0xFF;
-                           numRemoved++;
-                           //fprintf(stdout, "maskB %3d, floodB %3d -> %3d\n", maskB, floodB, *floodBPtr);
-                         } else {
-                           //fprintf(stdout, "maskB %3d, floodB %3d -> %3d\n", maskB, floodB, floodB);
-                         }
-                       });
+      for_each_byte(tmpResultImg, mask,
+                    [&numRemoved](uint8_t *floodBPtr, const uint8_t *maskBPtr)->void {
+                      uint8_t floodB = *floodBPtr;
+                      const uint8_t maskB = *maskBPtr;
+                      if (maskB && !floodB) {
+                        *floodBPtr = 0xFF;
+                        numRemoved++;
+                        //fprintf(stdout, "maskB %3d, floodB %3d -> %3d\n", maskB, floodB, *floodBPtr);
+                      } else {
+                        //fprintf(stdout, "maskB %3d, floodB %3d -> %3d\n", maskB, floodB, floodB);
+                      }
+                    });
       
       {
         std::stringstream fnameStream;
@@ -2610,7 +2611,7 @@ captureRegion(SuperpixelImage &spImage,
     
     // Optimal impl that iterates over each Mat result and calls lambda with pointers
     
-    mat_byte_foreach(mask, outFloodMat,
+    for_each_byte(mask, outFloodMat,
                      [](uint8_t *maskBPtr, const uint8_t *floodBPtr)->void {
                        uint8_t maskB = *maskBPtr;
                        uint8_t floodB = *floodBPtr;
