@@ -33,10 +33,6 @@
 		3CD5250C1C35EAC1005AF4A7 /* SuperpixelEdge.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CD524D51C3481E2005AF4A7 /* SuperpixelEdge.cpp */; };
 		3CD5250D1C35EAC1005AF4A7 /* SuperpixelEdgeTable.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CD524D71C3481E2005AF4A7 /* SuperpixelEdgeTable.cpp */; };
 		3CD5250E1C35EAC1005AF4A7 /* vf_DistanceTransform.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CD524DD1C3481E2005AF4A7 /* vf_DistanceTransform.cpp */; };
-		3CD526D61C35F1B6005AF4A7 /* opencv_annotation in Resources */ = {isa = PBXBuildFile; fileRef = 3CD525111C35F1B3005AF4A7 /* opencv_annotation */; };
-		3CD526D71C35F1B6005AF4A7 /* opencv_createsamples in Resources */ = {isa = PBXBuildFile; fileRef = 3CD525121C35F1B3005AF4A7 /* opencv_createsamples */; };
-		3CD526D81C35F1B6005AF4A7 /* opencv_traincascade in Resources */ = {isa = PBXBuildFile; fileRef = 3CD525131C35F1B3005AF4A7 /* opencv_traincascade */; };
-		3CD526D91C35F1B6005AF4A7 /* opencv_waldboost_detector in Resources */ = {isa = PBXBuildFile; fileRef = 3CD525141C35F1B3005AF4A7 /* opencv_waldboost_detector */; };
 		3CD526DA1C35F1B6005AF4A7 /* libopencv_aruco.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CD526811C35F1B5005AF4A7 /* libopencv_aruco.a */; };
 		3CD526DB1C35F1B6005AF4A7 /* libopencv_aruco.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CD526811C35F1B5005AF4A7 /* libopencv_aruco.a */; };
 		3CD526DC1C35F1B6005AF4A7 /* libopencv_bgsegm.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CD526821C35F1B5005AF4A7 /* libopencv_bgsegm.a */; };
@@ -119,8 +115,6 @@
 		3CD527291C35F1B8005AF4A7 /* libopencv_xobjdetect.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CD526A81C35F1B5005AF4A7 /* libopencv_xobjdetect.a */; };
 		3CD5272A1C35F1B8005AF4A7 /* libopencv_xphoto.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CD526A91C35F1B5005AF4A7 /* libopencv_xphoto.a */; };
 		3CD5272B1C35F1B8005AF4A7 /* libopencv_xphoto.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CD526A91C35F1B5005AF4A7 /* libopencv_xphoto.a */; };
-		3CD5272C1C35F1B8005AF4A7 /* opencv.pc in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526AB1C35F1B5005AF4A7 /* opencv.pc */; };
-		3CD5272D1C35F1B8005AF4A7 /* cv2.so in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526AE1C35F1B6005AF4A7 /* cv2.so */; };
 		3CD5272E1C35F1B8005AF4A7 /* libIlmImf.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CD526B31C35F1B6005AF4A7 /* libIlmImf.a */; };
 		3CD5272F1C35F1B8005AF4A7 /* libIlmImf.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CD526B31C35F1B6005AF4A7 /* libIlmImf.a */; };
 		3CD527301C35F1B8005AF4A7 /* liblibjasper.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CD526B41C35F1B6005AF4A7 /* liblibjasper.a */; };
@@ -137,31 +131,6 @@
 		3CD5273B1C35F1B8005AF4A7 /* liblibwebp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CD526B91C35F1B6005AF4A7 /* liblibwebp.a */; };
 		3CD5273C1C35F1B8005AF4A7 /* libzlib.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CD526BA1C35F1B6005AF4A7 /* libzlib.a */; };
 		3CD5273D1C35F1B8005AF4A7 /* libzlib.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CD526BA1C35F1B6005AF4A7 /* libzlib.a */; };
-		3CD5273E1C35F1B8005AF4A7 /* haarcascade_eye.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526BC1C35F1B6005AF4A7 /* haarcascade_eye.xml */; };
-		3CD5273F1C35F1B8005AF4A7 /* haarcascade_eye_tree_eyeglasses.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526BD1C35F1B6005AF4A7 /* haarcascade_eye_tree_eyeglasses.xml */; };
-		3CD527401C35F1B8005AF4A7 /* haarcascade_frontalcatface.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526BE1C35F1B6005AF4A7 /* haarcascade_frontalcatface.xml */; };
-		3CD527411C35F1B8005AF4A7 /* haarcascade_frontalcatface_extended.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526BF1C35F1B6005AF4A7 /* haarcascade_frontalcatface_extended.xml */; };
-		3CD527421C35F1B8005AF4A7 /* haarcascade_frontalface_alt.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526C01C35F1B6005AF4A7 /* haarcascade_frontalface_alt.xml */; };
-		3CD527431C35F1B8005AF4A7 /* haarcascade_frontalface_alt2.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526C11C35F1B6005AF4A7 /* haarcascade_frontalface_alt2.xml */; };
-		3CD527441C35F1B8005AF4A7 /* haarcascade_frontalface_alt_tree.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526C21C35F1B6005AF4A7 /* haarcascade_frontalface_alt_tree.xml */; };
-		3CD527451C35F1B8005AF4A7 /* haarcascade_frontalface_default.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526C31C35F1B6005AF4A7 /* haarcascade_frontalface_default.xml */; };
-		3CD527461C35F1B8005AF4A7 /* haarcascade_fullbody.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526C41C35F1B6005AF4A7 /* haarcascade_fullbody.xml */; };
-		3CD527471C35F1B8005AF4A7 /* haarcascade_lefteye_2splits.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526C51C35F1B6005AF4A7 /* haarcascade_lefteye_2splits.xml */; };
-		3CD527481C35F1B8005AF4A7 /* haarcascade_licence_plate_rus_16stages.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526C61C35F1B6005AF4A7 /* haarcascade_licence_plate_rus_16stages.xml */; };
-		3CD527491C35F1B8005AF4A7 /* haarcascade_lowerbody.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526C71C35F1B6005AF4A7 /* haarcascade_lowerbody.xml */; };
-		3CD5274A1C35F1B8005AF4A7 /* haarcascade_profileface.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526C81C35F1B6005AF4A7 /* haarcascade_profileface.xml */; };
-		3CD5274B1C35F1B8005AF4A7 /* haarcascade_righteye_2splits.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526C91C35F1B6005AF4A7 /* haarcascade_righteye_2splits.xml */; };
-		3CD5274C1C35F1B8005AF4A7 /* haarcascade_russian_plate_number.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526CA1C35F1B6005AF4A7 /* haarcascade_russian_plate_number.xml */; };
-		3CD5274D1C35F1B8005AF4A7 /* haarcascade_smile.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526CB1C35F1B6005AF4A7 /* haarcascade_smile.xml */; };
-		3CD5274E1C35F1B8005AF4A7 /* haarcascade_upperbody.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526CC1C35F1B6005AF4A7 /* haarcascade_upperbody.xml */; };
-		3CD5274F1C35F1B8005AF4A7 /* lbpcascade_frontalcatface.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526CE1C35F1B6005AF4A7 /* lbpcascade_frontalcatface.xml */; };
-		3CD527501C35F1B8005AF4A7 /* lbpcascade_frontalface.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526CF1C35F1B6005AF4A7 /* lbpcascade_frontalface.xml */; };
-		3CD527511C35F1B8005AF4A7 /* lbpcascade_profileface.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526D01C35F1B6005AF4A7 /* lbpcascade_profileface.xml */; };
-		3CD527521C35F1B8005AF4A7 /* lbpcascade_silverware.xml in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526D11C35F1B6005AF4A7 /* lbpcascade_silverware.xml */; };
-		3CD527531C35F1B8005AF4A7 /* OpenCVConfig-version.cmake in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526D21C35F1B6005AF4A7 /* OpenCVConfig-version.cmake */; };
-		3CD527541C35F1B8005AF4A7 /* OpenCVConfig.cmake in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526D31C35F1B6005AF4A7 /* OpenCVConfig.cmake */; };
-		3CD527551C35F1B8005AF4A7 /* OpenCVModules-release.cmake in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526D41C35F1B6005AF4A7 /* OpenCVModules-release.cmake */; };
-		3CD527561C35F1B9005AF4A7 /* OpenCVModules.cmake in Resources */ = {isa = PBXBuildFile; fileRef = 3CD526D51C35F1B6005AF4A7 /* OpenCVModules.cmake */; };
 		3CD8B7B41C4F54B700DB325F /* ContainmentTest.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3CD8B7B31C4F54B700DB325F /* ContainmentTest.mm */; };
 		3CDC334D1C600E52006A4242 /* IterTest.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3CDC334C1C600E52006A4242 /* IterTest.mm */; };
 		3CEB38EE1C3E19F90071358C /* ImageSearchTest.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3CEB38ED1C3E19F90071358C /* ImageSearchTest.mm */; };
@@ -1796,37 +1765,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3CD527401C35F1B8005AF4A7 /* haarcascade_frontalcatface.xml in Resources */,
-				3CD527441C35F1B8005AF4A7 /* haarcascade_frontalface_alt_tree.xml in Resources */,
-				3CD5274B1C35F1B8005AF4A7 /* haarcascade_righteye_2splits.xml in Resources */,
-				3CD5274E1C35F1B8005AF4A7 /* haarcascade_upperbody.xml in Resources */,
-				3CD527481C35F1B8005AF4A7 /* haarcascade_licence_plate_rus_16stages.xml in Resources */,
-				3CD527461C35F1B8005AF4A7 /* haarcascade_fullbody.xml in Resources */,
-				3CD527451C35F1B8005AF4A7 /* haarcascade_frontalface_default.xml in Resources */,
-				3CD5272C1C35F1B8005AF4A7 /* opencv.pc in Resources */,
-				3CD5272D1C35F1B8005AF4A7 /* cv2.so in Resources */,
-				3CD527421C35F1B8005AF4A7 /* haarcascade_frontalface_alt.xml in Resources */,
-				3CD5274D1C35F1B8005AF4A7 /* haarcascade_smile.xml in Resources */,
-				3CD526D61C35F1B6005AF4A7 /* opencv_annotation in Resources */,
-				3CD527561C35F1B9005AF4A7 /* OpenCVModules.cmake in Resources */,
-				3CD527541C35F1B8005AF4A7 /* OpenCVConfig.cmake in Resources */,
-				3CD526D81C35F1B6005AF4A7 /* opencv_traincascade in Resources */,
-				3CD527431C35F1B8005AF4A7 /* haarcascade_frontalface_alt2.xml in Resources */,
-				3CD5273E1C35F1B8005AF4A7 /* haarcascade_eye.xml in Resources */,
-				3CD527471C35F1B8005AF4A7 /* haarcascade_lefteye_2splits.xml in Resources */,
-				3CD527411C35F1B8005AF4A7 /* haarcascade_frontalcatface_extended.xml in Resources */,
-				3CD527531C35F1B8005AF4A7 /* OpenCVConfig-version.cmake in Resources */,
-				3CD526D71C35F1B6005AF4A7 /* opencv_createsamples in Resources */,
-				3CD527511C35F1B8005AF4A7 /* lbpcascade_profileface.xml in Resources */,
-				3CD5274F1C35F1B8005AF4A7 /* lbpcascade_frontalcatface.xml in Resources */,
-				3CD527501C35F1B8005AF4A7 /* lbpcascade_frontalface.xml in Resources */,
-				3CD5274A1C35F1B8005AF4A7 /* haarcascade_profileface.xml in Resources */,
-				3CD527521C35F1B8005AF4A7 /* lbpcascade_silverware.xml in Resources */,
-				3CD526D91C35F1B6005AF4A7 /* opencv_waldboost_detector in Resources */,
-				3CD527551C35F1B8005AF4A7 /* OpenCVModules-release.cmake in Resources */,
-				3CD527491C35F1B8005AF4A7 /* haarcascade_lowerbody.xml in Resources */,
-				3CD5273F1C35F1B8005AF4A7 /* haarcascade_eye_tree_eyeglasses.xml in Resources */,
-				3CD5274C1C35F1B8005AF4A7 /* haarcascade_russian_plate_number.xml in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
