@@ -20,6 +20,24 @@
 
 @implementation IterTest
 
++ (void) fillImageWithBytes:(NSArray*)pixelNums img:(Mat&)img
+{
+  uint32_t offset = 0;
+  
+  for( int y = 0; y < img.rows; y++ ) {
+    for( int x = 0; x < img.cols; x++ ) {
+      uint32_t pixel = [[pixelNums objectAtIndex:offset] unsignedIntValue];
+      offset += 1;
+      
+      uint8_t bVal = pixel & 0xFF;
+      
+      img.at<uint8_t>(y, x) = bVal;
+    }
+  }
+  
+  return;
+}
+
 + (void) fillImageWithPixels:(NSArray*)pixelNums img:(Mat&)img
 {
   uint32_t offset = 0;
@@ -51,6 +69,103 @@
     [super tearDown];
 }
 
+- (void) testConstBinIterator
+{
+  NSArray *pixelsArr = @[
+                         @(1), @(2),
+                         @(3), @(4),
+                         ];
+  
+  Mat tagsImg(2, 2, CV_MAKETYPE(CV_8U, 1));
+  
+  [self.class fillImageWithBytes:pixelsArr img:tagsImg];
+  
+  std::stringstream outStream;
+  
+  for_each_const_byte(tagsImg, [&outStream](uint8_t bVal)->void {
+    char buffer[1000];
+    snprintf(buffer, sizeof(buffer), "%3d\n", bVal);
+    outStream << buffer;
+    snprintf(buffer, sizeof(buffer), "0x%02X\n", bVal);
+    outStream << buffer;
+  });
+  
+  string result = outStream.str();
+  
+  string expectedOutput =
+  "  1\n"
+  "0x01\n"
+  "  2\n"
+  "0x02\n"
+  "  3\n"
+  "0x03\n"
+  "  4\n"
+  "0x04\n";
+  
+  XCTAssert(result == expectedOutput, @"output");
+  
+  return;
+}
+
+- (void) testNonConstBinIterator
+{
+  NSArray *pixelsArr = @[
+                         @(1), @(2),
+                         @(3), @(4),
+                         ];
+  
+  Mat tagsImg(2, 2, CV_MAKETYPE(CV_8U, 1));
+  
+  [self.class fillImageWithBytes:pixelsArr img:tagsImg];
+  
+  std::stringstream outStream;
+  
+  for_each_byte(tagsImg, [&outStream](uint8_t *bytePtr)->void {
+    uint8_t bVal = *bytePtr;
+    char buffer[1000];
+    snprintf(buffer, sizeof(buffer), "%3d\n", bVal);
+    outStream << buffer;
+    snprintf(buffer, sizeof(buffer), "0x%02X\n", bVal);
+    outStream << buffer;
+    // Write N + 5 back to the Mat
+    *bytePtr = bVal + 5;
+  });
+
+  for_each_byte(tagsImg, [&outStream](uint8_t *bytePtr)->void {
+    uint8_t bVal = *bytePtr;
+    char buffer[1000];
+    snprintf(buffer, sizeof(buffer), "%3d\n", bVal);
+    outStream << buffer;
+    snprintf(buffer, sizeof(buffer), "0x%02X\n", bVal);
+    outStream << buffer;
+    // Do not write to ptr this time
+  });
+  
+  string result = outStream.str();
+  
+  string expectedOutput =
+  "  1\n"
+  "0x01\n"
+  "  2\n"
+  "0x02\n"
+  "  3\n"
+  "0x03\n"
+  "  4\n"
+  "0x04\n"
+  "  6\n"
+  "0x06\n"
+  "  7\n"
+  "0x07\n"
+  "  8\n"
+  "0x08\n"
+  "  9\n"
+  "0x09\n";
+  
+  XCTAssert(result == expectedOutput, @"output");
+  
+  return;
+}
+
 - (void) testConstBGRIterator
 {
   NSArray *pixelsArr = @[
@@ -64,7 +179,7 @@
   
   std::stringstream outStream;
   
-  for_each_const_bgr(tagsImg, [&outStream](uint8_t R, uint8_t G, uint8_t B)->void {
+  for_each_const_bgr(tagsImg, [&outStream](uint8_t B, uint8_t G, uint8_t R)->void {
     char buffer[1000];
     snprintf(buffer, sizeof(buffer), "%3d %3d %3d\n", B, G, R);
     outStream << buffer;
@@ -105,7 +220,7 @@
   
   std::stringstream outStream;
   
-  for_each_bgr(tagsImg, [&outStream](uint8_t R, uint8_t G, uint8_t B)->Vec3b {
+  for_each_bgr(tagsImg, [&outStream](uint8_t B, uint8_t G, uint8_t R)->Vec3b {
     char buffer[1000];
     snprintf(buffer, sizeof(buffer), "%3d %3d %3d\n", B, G, R);
     outStream << buffer;
@@ -145,13 +260,13 @@
   
   [self.class fillImageWithPixels:pixelsArr img:tagsImg];
   
-  for_each_bgr(tagsImg, [](uint8_t R, uint8_t G, uint8_t B)->Vec3b {
+  for_each_bgr(tagsImg, [](uint8_t B, uint8_t G, uint8_t R)->Vec3b {
     return Vec3b(R, G, B); // Swap B and R channels
   });
   
   std::stringstream outStream;
   
-  for_each_const_bgr(tagsImg, [&outStream](uint8_t R, uint8_t G, uint8_t B)->void {
+  for_each_const_bgr(tagsImg, [&outStream](uint8_t B, uint8_t G, uint8_t R)->void {
     char buffer[1000];
     snprintf(buffer, sizeof(buffer), "%3d %3d %3d\n", B, G, R);
     outStream << buffer;
@@ -214,7 +329,7 @@
   Mat mat(1000, 1000, CV_8UC3);
   
   uint32_t offset = 0;
-  for_each_bgr (mat, [&offset](uint8_t R, uint8_t G, uint8_t B)->Vec3b {
+  for_each_bgr (mat, [&offset](uint8_t B, uint8_t G, uint8_t R)->Vec3b {
     B = offset & 0xFF;
     G = (offset >> 8) & 0xFF;
     R = (offset >> 16) & 0xFF;
@@ -246,7 +361,7 @@
   Mat mat(1000, 1000, CV_8UC3);
   
   uint32_t offset = 0;
-  for_each_bgr (mat, [&offset](uint8_t R, uint8_t G, uint8_t B)->Vec3b {
+  for_each_bgr (mat, [&offset](uint8_t B, uint8_t G, uint8_t R)->Vec3b {
     B = offset & 0xFF;
     G = (offset >> 8) & 0xFF;
     R = (offset >> 16) & 0xFF;
@@ -257,7 +372,7 @@
   [self measureBlock:^{
     int sum = 0;
     for (int i = 0; i < NUM_ITER_LOOPS; i++ ) {
-      for_each_const_bgr(mat, [&sum](uint8_t R, uint8_t G, uint8_t B)->void {
+      for_each_const_bgr(mat, [&sum](uint8_t B, uint8_t G, uint8_t R)->void {
         // Do something with the values to avoid optimizing away loop
         sum += B + G + R;
       });
@@ -275,7 +390,7 @@
   Mat mat(1000, 1000, CV_8UC3);
   
   uint32_t offset = 0;
-  for_each_bgr (mat, [&offset](uint8_t R, uint8_t G, uint8_t B)->Vec3b {
+  for_each_bgr (mat, [&offset](uint8_t B, uint8_t G, uint8_t R)->Vec3b {
     B = offset & 0xFF;
     G = (offset >> 8) & 0xFF;
     R = (offset >> 16) & 0xFF;
@@ -311,7 +426,7 @@
   Mat mat(1000, 1000, CV_8UC3);
   
   uint32_t offset = 0;
-  for_each_bgr (mat, [&offset](uint8_t R, uint8_t G, uint8_t B)->Vec3b {
+  for_each_bgr (mat, [&offset](uint8_t B, uint8_t G, uint8_t R)->Vec3b {
     B = offset & 0xFF;
     G = (offset >> 8) & 0xFF;
     R = (offset >> 16) & 0xFF;
@@ -325,7 +440,7 @@
     Mat &mat = *matPtr;
     int sum = 0;
     for (int i = 0; i < NUM_ITER_LOOPS; i++ ) {
-      for_each_bgr(mat, [&sum](uint8_t R, uint8_t G, uint8_t B)->Vec3b {
+      for_each_bgr(mat, [&sum](uint8_t B, uint8_t G, uint8_t R)->Vec3b {
         sum += B + G + R;
         B += 1;
         return Vec3b(B, G, R);

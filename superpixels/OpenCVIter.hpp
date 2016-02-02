@@ -13,20 +13,18 @@
 using namespace std;
 using namespace cv;
 
-// This iterator loop over each byte in a constant Mat
-// and invokes the function foreach byte. The original
-// Mat is constant and cannot be changed.
+// This iterator loops over all the byte values in a
+// const Mat of grayscale bytes and invokes a user
+// supplied function that takes a byte value.
 
-// F = std::function<void(const uint8_t*)>
-
-// FIXME: change name to for_each_const_byte and pass byte in ftor
+// F = std::function<void(uint8_t bVal)>
 
 template <typename F>
 void for_each_const_byte (const Mat & binMat, F f) noexcept
 {
 #if defined(DEBUG)
   assert(binMat.channels() == 1);
-  std::function<void(const uint8_t*)> funcPtr = f;
+  std::function<void(uint8_t)> funcPtr = f;
 #endif // DEBUG
   
   int numRows = binMat.rows;
@@ -40,8 +38,8 @@ void for_each_const_byte (const Mat & binMat, F f) noexcept
   for (int y = 0; y < numRows; y++) {
     const uint8_t *rowPtr = binMat.ptr<uint8_t>(y);
     for (int x = 0; x < numCols; x++) {
-      const uint8_t *bytePtr = rowPtr + x;
-      f(bytePtr);
+      uint8_t bVal = rowPtr[x];
+      f(bVal);
     }
   }
   
@@ -49,12 +47,10 @@ void for_each_const_byte (const Mat & binMat, F f) noexcept
 }
 
 // This iterator loop over each byte in a Mat and offers
-// the ability to write a byte value back to the Mat.
-// The function should return a byte value, in the case
-// where the byte value returned is not the same as the
-// original then that byte is written back to the Mat.
+// the ability to write a byte value back to the Mat
+// as the iteration progresses.
 
-// F = std::function<void(uint8_t*)>
+// F = std::function<void(uint8_t* bytePtr)>
 
 template <typename F>
 void for_each_byte (Mat & binMat, F f) noexcept
@@ -121,10 +117,11 @@ void for_each_byte (Mat & binMat1, const Mat & binMat2, F f) noexcept
   return;
 }
 
+// This iterator reads all the 24BPP pixels out of an image Mat
+// as (B G R) component triples. This iterator operates on
+// a constant Mat, so no data is written back to Mat.
 
-// This iterator reads 24BPP pixels as (B G R) component data.
-// This const iterator loop does not write pixel data back to
-// the image mat.
+// F = std::function<void(uint8_t B, uint8_t G, uint8_t R)>
 
 template <typename F>
 void for_each_const_bgr (const Mat & mat, F f) noexcept
@@ -149,12 +146,18 @@ void for_each_const_bgr (const Mat & mat, F f) noexcept
       uint8_t B = rowPtr[0];
       uint8_t G = rowPtr[1];
       uint8_t R = rowPtr[2];
-      f(R, G, B);
+      f(B, G, R);
     }
   }
   
   return;
 }
+
+// This iterator reads all the 24BPP pixels out of an image Mat
+// as (B G R) component triples. The return Vec3b value returned
+// from the method is written back to the non-constant Mat.
+
+// F = std::function<Vec3b(uint8_t B, uint8_t G, uint8_t R)>
 
 template <typename F>
 void for_each_bgr (Mat & mat, F f) noexcept
@@ -179,10 +182,10 @@ void for_each_bgr (Mat & mat, F f) noexcept
       uint8_t B = rowPtr[0];
       uint8_t G = rowPtr[1];
       uint8_t R = rowPtr[2];
-      Vec3b result = f(R, G, B);
-      rowPtr[0] = result[0];
-      rowPtr[1] = result[1];
-      rowPtr[2] = result[2];
+      Vec3b result = f(B, G, R);
+      rowPtr[0] = result[0]; // B
+      rowPtr[1] = result[1]; // G
+      rowPtr[2] = result[2]; // R
     }
   }
   
