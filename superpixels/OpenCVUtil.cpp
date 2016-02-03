@@ -1288,3 +1288,321 @@ void binMatInvert(Mat &binMat) {
   });
 }
 
+// Generate a skeleton based on simple morphological operations.
+//
+// http://felix.abecassis.me/2011/09/opencv-morphological-skeleton/
+// http://www-prima.inrialpes.fr/perso/Tran/Draft/gateway.cfm.pdf
+// http://answers.opencv.org/question/3207/what-is-a-good-thinning-algorithm-for-getting-the-skeleton-of-characters-for-ocr/
+
+/*
+
+void skelReduce(Mat &binMat) {
+  const bool debugDumpImages = true;
+  
+#if defined(DEBUG)
+  assert(binMat.channels() == 1);
+  // All input values must be either zero or 0xFF
+  for_each_const_byte(binMat, [](uint8_t bVal)->void {
+    assert(bVal == 0 || bVal == 0xFF);
+  });
+#endif // DEBUG
+  
+  if (debugDumpImages) {
+    std::stringstream fnameStream;
+    fnameStream << "skel_" << "0" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, binMat);
+    cout << "wrote " << fname << endl;
+    cout << "" << endl;
+  }
+  
+  Mat skel(binMat.size(), CV_8UC1, Scalar(0));
+  Mat temp;
+  Mat eroded;
+  
+  Mat element = getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
+  
+  int step = 1;
+  
+  Mat &img = binMat;
+  
+  bool done;
+  do
+  {
+    cv::erode(img, eroded, element);
+    cv::dilate(eroded, temp, element); // temp = open(img)
+    cv::subtract(img, temp, temp);
+    cv::bitwise_or(skel, temp, skel);
+    eroded.copyTo(img);
+    
+    if (1) {
+      std::stringstream fnameStream;
+      fnameStream << "skel_" << step << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, skel);
+      cout << "wrote " << fname << endl;
+      cout << "" << endl;
+    }
+    
+    if (1) {
+      std::stringstream fnameStream;
+      fnameStream << "eroded_" << step << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, eroded);
+      cout << "wrote " << fname << endl;
+      cout << "" << endl;
+    }
+    
+    done = (cv::countNonZero(img) == 0);
+    step++;
+  } while (!done);
+  
+  skel.copyTo(binMat);
+  return;
+}
+
+ */
+
+void ThinSubiteration1(Mat & pSrc, Mat & pDst) {
+  int rows = pSrc.rows;
+  int cols = pSrc.cols;
+  pSrc.copyTo(pDst);
+  for(int i = 0; i < rows; i++) {
+    for(int j = 0; j < cols; j++) {
+      if(pSrc.at<float>(i, j) == 1.0f) {
+        /// get 8 neighbors
+        /// calculate C(p)
+        int neighbor0 = (int) pSrc.at<float>( i-1, j-1);
+        int neighbor1 = (int) pSrc.at<float>( i-1, j);
+        int neighbor2 = (int) pSrc.at<float>( i-1, j+1);
+        int neighbor3 = (int) pSrc.at<float>( i, j+1);
+        int neighbor4 = (int) pSrc.at<float>( i+1, j+1);
+        int neighbor5 = (int) pSrc.at<float>( i+1, j);
+        int neighbor6 = (int) pSrc.at<float>( i+1, j-1);
+        int neighbor7 = (int) pSrc.at<float>( i, j-1);
+        int C = int(~neighbor1 & ( neighbor2 | neighbor3)) +
+        int(~neighbor3 & ( neighbor4 | neighbor5)) +
+        int(~neighbor5 & ( neighbor6 | neighbor7)) +
+        int(~neighbor7 & ( neighbor0 | neighbor1));
+        if(C == 1) {
+          /// calculate N
+          int N1 = int(neighbor0 | neighbor1) +
+          int(neighbor2 | neighbor3) +
+          int(neighbor4 | neighbor5) +
+          int(neighbor6 | neighbor7);
+          int N2 = int(neighbor1 | neighbor2) +
+          int(neighbor3 | neighbor4) +
+          int(neighbor5 | neighbor6) +
+          int(neighbor7 | neighbor0);
+          int N = min(N1,N2);
+          if ((N == 2) || (N == 3)) {
+            /// calculate criteria 3
+            int c3 = ( neighbor1 | neighbor2 | ~neighbor4) & neighbor3;
+            if(c3 == 0) {
+              pDst.at<float>( i, j) = 0.0f;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+
+void ThinSubiteration2(Mat & pSrc, Mat & pDst) {
+  int rows = pSrc.rows;
+  int cols = pSrc.cols;
+  pSrc.copyTo( pDst);
+  for(int i = 0; i < rows; i++) {
+    for(int j = 0; j < cols; j++) {
+      if (pSrc.at<float>( i, j) == 1.0f) {
+        /// get 8 neighbors
+        /// calculate C(p)
+        int neighbor0 = (int) pSrc.at<float>( i-1, j-1);
+        int neighbor1 = (int) pSrc.at<float>( i-1, j);
+        int neighbor2 = (int) pSrc.at<float>( i-1, j+1);
+        int neighbor3 = (int) pSrc.at<float>( i, j+1);
+        int neighbor4 = (int) pSrc.at<float>( i+1, j+1);
+        int neighbor5 = (int) pSrc.at<float>( i+1, j);
+        int neighbor6 = (int) pSrc.at<float>( i+1, j-1);
+        int neighbor7 = (int) pSrc.at<float>( i, j-1);
+        int C = int(~neighbor1 & ( neighbor2 | neighbor3)) +
+        int(~neighbor3 & ( neighbor4 | neighbor5)) +
+        int(~neighbor5 & ( neighbor6 | neighbor7)) +
+        int(~neighbor7 & ( neighbor0 | neighbor1));
+        if(C == 1) {
+          /// calculate N
+          int N1 = int(neighbor0 | neighbor1) +
+          int(neighbor2 | neighbor3) +
+          int(neighbor4 | neighbor5) +
+          int(neighbor6 | neighbor7);
+          int N2 = int(neighbor1 | neighbor2) +
+          int(neighbor3 | neighbor4) +
+          int(neighbor5 | neighbor6) +
+          int(neighbor7 | neighbor0);
+          int N = min(N1,N2);
+          if((N == 2) || (N == 3)) {
+            int E = (neighbor5 | neighbor6 | ~neighbor0) & neighbor7;
+            if(E == 0) {
+              pDst.at<float>(i, j) = 0.0f;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+void NormalizeLetter(Mat & inputarray, Mat & outputarray) {
+  bool bDone = false;
+  int rows = inputarray.rows;
+  int cols = inputarray.cols;
+  
+  /*
+  
+  inputarray.convertTo(inputarray,CV_32FC1);
+  
+  inputarray.copyTo(outputarray);
+  
+  outputarray.convertTo(outputarray,CV_32FC1);
+   
+  */
+  
+//  inputarray.copyTo(outputarray);
+  
+  /// pad source
+  Mat p_enlarged_src = Mat(rows + 2, cols + 2, CV_32FC1);
+  for(int i = 0; i < (rows+2); i++) {
+    p_enlarged_src.at<float>(i, 0) = 0.0f;
+    p_enlarged_src.at<float>( i, cols+1) = 0.0f;
+  }
+  for(int j = 0; j < (cols+2); j++) {
+    p_enlarged_src.at<float>(0, j) = 0.0f;
+    p_enlarged_src.at<float>(rows+1, j) = 0.0f;
+  }
+  for(int y = 0; y < rows; y++) {
+    for(int x = 0; x < cols; x++) {
+      float f = inputarray.at<float>(y, x);
+      assert(f == 0.0f || f == 1.0f);
+      //int roundF = round(f);
+      //assert(roundF == 0 || roundF == 1);
+      //p_enlarged_src.at<float>(y+1, x+1) = (float)roundF;
+      p_enlarged_src.at<float>(y+1, x+1) = f;
+    }
+  }
+  
+  /// start to thin
+  Mat p_thinMat1 = Mat::zeros(rows + 2, cols + 2, CV_32FC1);
+  Mat p_thinMat2 = Mat::zeros(rows + 2, cols + 2, CV_32FC1);
+  Mat p_cmp = Mat::zeros(rows + 2, cols + 2, CV_8UC1);
+  
+  while (bDone != true) {
+    /// sub-iteration 1
+    ThinSubiteration1(p_enlarged_src, p_thinMat1);
+    /// sub-iteration 2
+    ThinSubiteration2(p_thinMat1, p_thinMat2);
+    /// compare
+    compare(p_enlarged_src, p_thinMat2, p_cmp, CV_CMP_EQ);
+    /// check
+    int num_non_zero = countNonZero(p_cmp);
+    if (num_non_zero == (rows + 2) * (cols + 2)) {
+      bDone = true;
+    }
+    /// copy
+    p_thinMat2.copyTo(p_enlarged_src);
+  }
+  
+  // copy result
+  for (int i = 0; i < rows; i++) {
+    for (int j = 0; j < cols; j++) {
+      float f = p_enlarged_src.at<float>(i+1, j+1);
+      assert(f == 0.0f || f == 1.0f);
+      outputarray.at<float>(i, j) = f;
+    }
+  }
+  
+  return;
+}
+
+void skelReduce(Mat &binMat) {
+  const bool debugDumpImages = true;
+  
+#if defined(DEBUG)
+  assert(binMat.channels() == 1);
+  // All input values must be either zero or 0xFF
+  for_each_const_byte(binMat, [](uint8_t bVal)->void {
+    assert(bVal == 0 || bVal == 0xFF);
+  });
+#endif // DEBUG
+  
+  if (debugDumpImages) {
+    std::stringstream fnameStream;
+    fnameStream << "skel_" << "input" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, binMat);
+    cout << "wrote " << fname << endl;
+    cout << "" << endl;
+  }
+
+  // FIXME: output should be bin Mat
+  
+  Mat inFloatMat(binMat.size(), CV_32FC1, 0.0f);
+  Mat outFloatMat(binMat.size(), CV_32FC1, 0.0f);
+  
+  for ( int y = 0; y < binMat.rows; y++ ) {
+    for ( int x = 0; x < binMat.cols; x++ ) {
+      uint8_t bVal = binMat.at<uint8_t>(y, x);
+      float fVal;
+      if (bVal) {
+        fVal = 1.0f;
+      } else {
+        fVal = 0.0f;
+      }
+      inFloatMat.at<float>(y, x) = fVal;
+      
+//      if (bVal) {
+//        cout << "wrote TRUE " << x << "," << y << " = " << inFloatMat.at<float>(y, x) << endl;
+//      } else {
+//        cout << "wrote FALSE " << x << "," << y << " = " << inFloatMat.at<float>(y, x) << endl;
+//      }
+    }
+  }
+  
+  NormalizeLetter(inFloatMat, outFloatMat);
+  
+  binMat = Scalar(0);
+  
+  for ( int y = 0; y < outFloatMat.rows; y++ ) {
+    for ( int x = 0; x < outFloatMat.cols; x++ ) {
+      float fVal = outFloatMat.at<float>(y, x);
+      //printf("mat[%5d,%5d] = %0.4f\n", x, y, fVal);
+      
+      uint8_t outByte = 0;
+      if (fVal == 0.0f) {
+        outByte = 0;
+      } else if (fVal == 1.0f) {
+        outByte = 0xFF;
+      } else {
+        assert(0);
+      }
+      
+      binMat.at<uint8_t>(y, x) = outByte;
+    }
+  }
+  
+  if (debugDumpImages) {
+    std::stringstream fnameStream;
+    fnameStream << "skel_" << "output" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, binMat);
+    cout << "wrote " << fname << endl;
+    cout << "" << endl;
+  }
+
+  return;
+}

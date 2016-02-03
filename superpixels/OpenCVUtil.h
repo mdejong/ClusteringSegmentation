@@ -79,6 +79,10 @@ Vec3f xyzDeltaToUnitVec3f(int32_t &dR, int32_t &dG, int32_t &dB) {
 
 void binMatInvert(Mat &binMat);
 
+// Generate a skeleton based on simple morphological operations.
+
+void skelReduce(Mat &binMat);
+
 // Print SSIM for two images to cout
 
 int printSSIM(Mat inImage1, Mat inImage2);
