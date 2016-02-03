@@ -5087,7 +5087,10 @@ clockwiseScanForShapeBounds(
     
     vector<vector<Point> > contours;
     
-    findContours(binMat, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE|CV_CLOCKWISE);
+    // CHAIN_APPROX_NONE
+    // CV_CHAIN_APPROX_SIMPLE
+    
+    findContours(binMat, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
     
     if (debug) {
       cout << "num contour(s) detected " << contours.size() << endl;
@@ -5099,8 +5102,10 @@ clockwiseScanForShapeBounds(
     if (debug) {
       cout << "contour simplified to " << contour.size() << " points" << endl;
       
+      int i = 0;
       for ( Point2i p : contour ) {
-        cout << "(" << p.x << "," << p.y << ")" << endl;
+        cout << "contour[" << i << "] = " << "(" << p.x << "," << p.y << ")" << endl;
+        i++;
       }
     }
     
@@ -5138,15 +5143,24 @@ clockwiseScanForShapeBounds(
     
     Point pt0;
     
-    for ( int i = 0; i < hullCount; i++ ) {
-      if (i == 0) {
+    for ( int i = 1; i < hullCount; i++ ) {
+      if (i == 1) {
         int offset = hull[hullCount-1];
         pt0 = contour[offset];
+        
+        if (debug) {
+          cout << "init point " << Coord(pt0.x,pt0.y) << " from hull offset " << offset << endl;
+        }
       }
       
       int offset = hull[i];
       Point pt = contour[offset];
-      Scalar gray(96 + i*((255-96)/hullCount));
+      
+      if (debug) {
+        cout << "next point " << Coord(pt.x,pt.y) << " from hull offset " << offset << endl;
+      }
+      
+      Scalar gray(96 + (i+1)*((255-96)/hullCount));
       line(binMat, pt0, pt, gray, 1, 0);
       
       if (debug) {
@@ -5174,19 +5188,33 @@ clockwiseScanForShapeBounds(
       if (i == 0) {
         int offset = hull[hullCount-1];
         pt0 = contour[offset];
+        
+        if (debug) {
+          cout << "init point " << Coord(pt0.x,pt0.y) << " from hull offset " << offset << endl;
+        }
       }
       
       int offset = hull[i];
       Point pt = contour[offset];
       
+      if (debug) {
+        cout << "next point " << Coord(pt.x,pt.y) << " from hull offset " << offset << endl;
+      }
+      
       // Determine half way point between line points
       
-      Point2f p0f(pt0.x, pt0.y);
-      Point2f p1f(pt.x, pt.y);
-      Point2f midf = p0f + ((p1f - p0f) * 0.5f);
+      Point2f pt0f(pt0.x, pt0.y);
+      Point2f ptf(pt.x, pt.y);
+      Point2f midf = pt0f + ((ptf - pt0f) * 0.5f);
       Point2i midi(round(midf.x), round(midf.y));
       
-      line(binMat, midi, midi, Scalar(255), 1, 0);
+      if (debug) {
+        cout << "midway point between " << Coord(pt0.x,pt0.y) << " to " << Coord(pt.x,pt.y) << " is " << Coord(midi.x,midi.y) << " at gray " << 0xFF << endl;
+      }
+      
+      //line(binMat, midi, midi, Scalar(255), 1, 0);
+      
+      binMat.at<uint8_t>(midi.y, midi.x) = 0xFF;
       
       pt0 = pt;
     }
