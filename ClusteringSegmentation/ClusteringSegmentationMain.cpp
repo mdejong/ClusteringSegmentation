@@ -204,6 +204,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     
     unordered_map<int32_t, vector<int32_t> > containsTreeMap;
     
+    // FIXME: If just 1 interior shape touches edge, do not conside as sigblings
+    
     vector<int32_t> rootTags = recurseSuperpixelContainment(spImage, srmTags, containsTreeMap);
     
     for ( auto &pair : containsTreeMap ) {

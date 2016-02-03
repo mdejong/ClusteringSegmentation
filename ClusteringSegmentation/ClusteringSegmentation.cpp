@@ -76,6 +76,12 @@ getEdgesInRegion(SuperpixelImage &spImage,
                  int32_t tag,
                  const vector<Coord> &coords);
 
+void
+clockwiseScanForShapeBounds(
+                            const Mat & tagsImg,
+                            int32_t tag,
+                            const vector<Coord> &regionCoords);
+
 // Data and method for scanning ranges of tags around a shape.
 // The total number of divisions (start, end) depends on the
 // size of the bbox.
@@ -112,6 +118,8 @@ contractOrExpandRegion(const Mat & inputImg,
                        bool isExpand,
                        int numPixels,
                        vector<Coord> &outCoords);
+
+vector<Coord> genRectangleOutline(int regionWidth, int regionHeight);
 
 // Given an input image and a pixel buffer that is of the same dimensions
 // write the buffer of pixels out as an image in a file.
@@ -1253,31 +1261,11 @@ captureRegion(SuperpixelImage &spImage,
     return;
   }
   
-  // If the shape is convex then wrap it in a convex hull and simplify the shape with
-  // smallish straight lines so that perpendicular lines can be computed as compared
-  // to each line segment in order to find the shape normals.
+  // At the start of a region identification operation, a rough estimate of the region bounds is available
+  // but the contracted or expanded bounds are not known. Scan clockwise to determine likely bounds based
+  // on the initial region shape.
   
-  // Dump skel generated from region bin Mat
-  
-  if ((1)) {
-    Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
-    
-    for ( Coord c : srmRegionCoords ) {
-      binMat.at<uint8_t>(c.y, c.x) = 0xFF;
-    }
-    
-    skelReduce(binMat);
-    
-    if (debugDumpImages) {
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_region_skel" << ".png";
-      string fname = fnameStream.str();
-      
-      imwrite(fname, binMat);
-      cout << "wrote " << fname << endl;
-      cout << "" << endl;
-    }
-  }
+  clockwiseScanForShapeBounds(srmTags, tag, srmRegionCoords);
   
   vector<Coord> outCoords;
   
@@ -4525,60 +4513,7 @@ clockwiseScanForTagsAroundShape(
   // Generate coords that iterate around the region bbox starting from up which
   // is taken to be degree zero.
   
-  vector<Coord> outlineCoords;
-  
-  // top right half
-  {
-    int y = 0;
-    int xMax = regionWidth - 1;
-    
-    for ( int x = regionWidth / 2; x < xMax; x++ ) {
-      Coord c(x, y);
-      outlineCoords.push_back(c);
-    }
-  }
-  
-  // right side
-  {
-    int x = regionWidth - 1;
-    int yMax = regionHeight - 1;
-    
-    for ( int y = 0; y < yMax; y++ ) {
-      Coord c(x, y);
-      outlineCoords.push_back(c);
-    }
-  }
-  
-  // bottom side
-  {
-    int y = regionHeight - 1;
-    
-    for ( int x = regionWidth - 1; x > 0; x-- ) {
-      Coord c(x, y);
-      outlineCoords.push_back(c);
-    }
-  }
-  
-  // left side
-  {
-    int x = 0;
-    
-    for ( int y = regionHeight - 1; y > 0; y-- ) {
-      Coord c(x, y);
-      outlineCoords.push_back(c);
-    }
-  }
-  
-  // top left half
-  {
-    int y = 0;
-    int xMax = regionWidth / 2;
-    
-    for ( int x = 0; x < xMax; x++ ) {
-      Coord c(x, y);
-      outlineCoords.push_back(c);
-    }
-  }
+  vector<Coord> outlineCoords = genRectangleOutline(regionWidth, regionHeight);
   
   // Render points in outlineCoords to binary mat and debug dump
   
@@ -4597,16 +4532,6 @@ clockwiseScanForTagsAroundShape(
     cout << "wrote " << fname << endl;
     cout << "";
   }
-  
-#if defined(DEBUG)
-  for ( int i = 1; i < outlineCoords.size(); i++ ) {
-    Coord prevCoord = outlineCoords[i-1];
-    Coord currentCoord = outlineCoords[i];
-    if (currentCoord == prevCoord) {
-      assert(0); // must not repeat
-    }
-  }
-#endif // DEBUG
   
   // Map from global coordinates to the specific tag at that coordinate
   // but ignore the current shape tag since most coords will be for the
@@ -5043,6 +4968,793 @@ clockwiseScanForTagsAroundShape(
   
   if (debug) {
     cout << "return clockwiseScanForTagsAroundShape " << tag << " with N = " << tagsAroundVec.size() << " ranges" << endl;
+  }
+  
+  return;
+}
+
+// Generate rectangle coordinates given region width and height
+
+vector<Coord> genRectangleOutline(int regionWidth, int regionHeight)
+{
+  vector<Coord> outlineCoords;
+  
+  // top right half
+  {
+    int y = 0;
+    int xMax = regionWidth - 1;
+    
+    for ( int x = regionWidth / 2; x < xMax; x++ ) {
+      Coord c(x, y);
+      outlineCoords.push_back(c);
+    }
+  }
+  
+  // right side
+  {
+    int x = regionWidth - 1;
+    int yMax = regionHeight - 1;
+    
+    for ( int y = 0; y < yMax; y++ ) {
+      Coord c(x, y);
+      outlineCoords.push_back(c);
+    }
+  }
+  
+  // bottom side
+  {
+    int y = regionHeight - 1;
+    
+    for ( int x = regionWidth - 1; x > 0; x-- ) {
+      Coord c(x, y);
+      outlineCoords.push_back(c);
+    }
+  }
+  
+  // left side
+  {
+    int x = 0;
+    
+    for ( int y = regionHeight - 1; y > 0; y-- ) {
+      Coord c(x, y);
+      outlineCoords.push_back(c);
+    }
+  }
+  
+  // top left half
+  {
+    int y = 0;
+    int xMax = regionWidth / 2;
+    
+    for ( int x = 0; x < xMax; x++ ) {
+      Coord c(x, y);
+      outlineCoords.push_back(c);
+    }
+  }
+  
+#if defined(DEBUG)
+  for ( int i = 1; i < outlineCoords.size(); i++ ) {
+    Coord prevCoord = outlineCoords[i-1];
+    Coord currentCoord = outlineCoords[i];
+    if (currentCoord == prevCoord) {
+      assert(0); // must not repeat
+    }
+  }
+#endif // DEBUG
+  
+  return outlineCoords;
+}
+
+
+// Scan region given likely bounds and determine where most accurate region bounds are likely to be
+
+void
+clockwiseScanForShapeBounds(
+                            const Mat & tagsImg,
+                            int32_t tag,
+                            const vector<Coord> &regionCoords)
+{
+  const bool debug = true;
+  const bool debugDumpImages = true;
+  const bool debugDumpStepImages = false;
+  
+  if (debug) {
+    cout << "clockwiseScanForShapeBounds " << tag << endl;
+  }
+  
+  // If the shape is convex then wrap it in a convex hull and simplify the shape with
+  // smallish straight lines so that perpendicular lines can be computed as compared
+  // to each line segment in order to find the shape normals.
+  
+  if ((1)) {
+    Mat binMat(tagsImg.size(), CV_8UC1, Scalar(0));
+    
+    for ( Coord c : regionCoords ) {
+      binMat.at<uint8_t>(c.y, c.x) = 0xFF;
+    }
+    
+    if (debugDumpImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_contour_detect" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, binMat);
+      cout << "wrote " << fname << endl;
+      cout << "" << endl;
+    }
+    
+    // Convert point into a simplified contour of straight lines
+    
+    vector<vector<Point> > contours;
+    
+    findContours(binMat, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE|CV_CLOCKWISE);
+    
+    if (debug) {
+      cout << "num contour(s) detected " << contours.size() << endl;
+    }
+    
+    assert(contours.size() >= 1);
+    vector<Point> contour = contours[0];
+    
+    if (debug) {
+      cout << "contour simplified to " << contour.size() << " points" << endl;
+      
+      for ( Point2i p : contour ) {
+        cout << "(" << p.x << "," << p.y << ")" << endl;
+      }
+    }
+    
+    // Render as contour
+    
+    binMat = Scalar(0);
+    
+    drawContours(binMat, contours, 0, Scalar(0xFF));
+    
+    if (debugDumpImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_contour" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, binMat);
+      cout << "wrote " << fname << endl;
+      cout << "" << endl;
+    }
+    
+    // hull around contour
+    
+    Mat contourMat(contour);
+    
+    vector<int> hull;
+    
+    convexHull(contourMat, hull, false);
+    
+    int hullCount = (int)hull.size();
+    
+    if (debug) {
+      cout << "hullCount " << hullCount << endl;
+    }
+    
+    binMat = Scalar(0);
+    
+    Point pt0;
+    
+    for ( int i = 0; i < hullCount; i++ ) {
+      if (i == 0) {
+        int offset = hull[hullCount-1];
+        pt0 = contour[offset];
+      }
+      
+      int offset = hull[i];
+      Point pt = contour[offset];
+      Scalar gray(96 + i*((255-96)/hullCount));
+      line(binMat, pt0, pt, gray, 1, 0);
+      
+      if (debug) {
+        cout << "hull line " << i << " from " << Coord(pt0.x,pt0.y) << " to " << Coord(pt.x,pt.y) << " at gray " << gray[0] << endl;
+      }
+      
+      pt0 = pt;
+    }
+    
+    if (debugDumpImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_hull_lines" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, binMat);
+      cout << "wrote " << fname << endl;
+      cout << "" << endl;
+    }
+    
+    // Generate another output Mat where each line centerpoint is rendered
+    
+    binMat = Scalar(0);
+    
+    for ( int i = 0; i < hullCount; i++ ) {
+      if (i == 0) {
+        int offset = hull[hullCount-1];
+        pt0 = contour[offset];
+      }
+      
+      int offset = hull[i];
+      Point pt = contour[offset];
+      
+      // Determine half way point between line points
+      
+      Point2f p0f(pt0.x, pt0.y);
+      Point2f p1f(pt.x, pt.y);
+      Point2f midf = p0f + ((p1f - p0f) * 0.5f);
+      Point2i midi(round(midf.x), round(midf.y));
+      
+      line(binMat, midi, midi, Scalar(255), 1, 0);
+      
+      pt0 = pt;
+    }
+    
+    if (debugDumpImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_hull_midpoints" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, binMat);
+      cout << "wrote " << fname << endl;
+      cout << "" << endl;
+    }
+    
+    // Generate hull defects to indicate where shape becomes convex
+    
+    vector<Vec4i> defectVec;
+    
+    convexityDefects(contour, hull, defectVec);
+    
+    binMat = Scalar(0);
+    
+    for (int cDefIt = 0; cDefIt < defectVec.size(); cDefIt++) {
+//      if (cDefIt != 1) {
+//        continue;
+//      }
+      
+//      if (cDefIt != 0) {
+//        continue;
+//      }
+      
+      int startIdx = defectVec[cDefIt].val[0];
+      int endIdx = defectVec[cDefIt].val[1];
+      int defectPtIdx = defectVec[cDefIt].val[2];
+      double depth = (double)defectVec[cDefIt].val[3]/256.0f;  // see documentation link below why this
+      
+      Point2i startP = contour[startIdx];
+      Point2i endP = contour[endIdx];
+      Point2i defectP = contour[defectPtIdx];
+      
+      printf("start  %8d = (%4d,%4d)\n", startIdx, startP.x, startP.y);
+      printf("end    %8d = (%4d,%4d)\n", endIdx, endP.x, endP.y);
+      printf("defect %8d = (%4d,%4d)\n", defectPtIdx, defectP.x, defectP.y);
+      printf("depth  %0.3f\n", depth);
+      
+//      line(binMat, pointVec[startIdx], pointVec[endIdx], Scalar(255), 1, 0);
+      
+      line(binMat, startP, defectP, Scalar(255), 1, 0);
+      line(binMat, endP, defectP, Scalar(128), 1, 0);
+      
+//      if (cDefIt == 0) {
+//      break;
+//      }
+    }
+    
+    if (debugDumpImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_hull_defectpoints" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, binMat);
+      cout << "wrote " << fname << endl;
+      cout << "" << endl;
+    }
+    
+  }
+  
+  // Dump skel generated from region bin Mat
+  
+  if ((1)) {
+    Mat binMat(tagsImg.size(), CV_8UC1, Scalar(0));
+    
+    for ( Coord c : regionCoords ) {
+      binMat.at<uint8_t>(c.y, c.x) = 0xFF;
+    }
+    
+    skelReduce(binMat);
+    
+    if (debugDumpImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_region_skel" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, binMat);
+      cout << "wrote " << fname << endl;
+      cout << "" << endl;
+    }
+  }
+  
+  // The tagsImg mat contains tags, so generate lines around the 360 degrees
+  // of rotation and determine which tags the line pixels hit.
+  
+  int32_t originX, originY, regionWidth, regionHeight;
+  Superpixel::bbox(originX, originY, regionWidth, regionHeight, regionCoords);
+  Rect roiRect(originX, originY, regionWidth, regionHeight);
+  
+  Coord originCoord(originX, originY);
+  
+  Mat renderMat(roiRect.size(), CV_8UC1);
+  
+  renderMat = Scalar(0);
+  
+  // Generate coords that iterate around the region bbox starting from up which
+  // is taken to be degree zero.
+  
+  vector<Coord> outlineCoords = genRectangleOutline(regionWidth, regionHeight);
+  
+  // Render points in outlineCoords to binary mat and debug dump
+  
+  if (debugDumpImages) {
+    renderMat = Scalar(0);
+    
+    for ( Coord c : outlineCoords ) {
+      renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_region_outline_coords" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, renderMat);
+    cout << "wrote " << fname << endl;
+    cout << "";
+  }
+  
+  // Map from global coordinates to the specific tag at that coordinate
+  // but ignore the current shape tag since most coords will be for the
+  // interior of the shape.
+  
+  unordered_map<Coord, int32_t> tagMap;
+  
+  for ( Coord c : regionCoords ) {
+    Vec3b vec = tagsImg.at<Vec3b>(c.y, c.x);
+    int32_t inRegionTag = Vec3BToUID(vec);
+    if (inRegionTag == tag) {
+      continue;
+    }
+    tagMap[c] = inRegionTag;
+    if (debug) {
+      cout << "add mapping for " << c << " -> " << vec << endl;
+    }
+  }
+  
+  // Determine region center point and distance transform for approx region.
+  
+  renderMat = Scalar(0);
+  
+  // FIXME: could pass this in, but just query for now
+  
+  vector<Coord> currentTagCoords;
+  
+  for ( Coord c : regionCoords ) {
+    Vec3b vec = tagsImg.at<Vec3b>(c.y, c.x);
+    int32_t regionTag = Vec3BToUID(vec);
+    if (tag == regionTag) {
+      currentTagCoords.push_back(c);
+    }
+  }
+  
+  for ( Coord c : currentTagCoords ) {
+    c = c - originCoord;
+    renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
+  }
+  
+  Mat outDistMat;
+  Coord regionCenter = findRegionCenter(renderMat, Rect2d(0,0,regionWidth,regionHeight), outDistMat, tag);
+  
+  Point2i center(regionCenter.x, regionCenter.y);
+  
+  if (debugDumpImages) {
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_region_center_dist" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, outDistMat);
+    cout << "wrote " << fname << endl;
+    cout << "";
+  }
+  
+  // Use the dist mat to determine the "most alike" area inside the region and then
+  // start from the common or most alike bound and then move outward as the gradient
+  // increases. So, this should segment into "layers" where each layer is how alike
+  // a certain range is.
+  
+  /*
+  
+  // Iterate over each vector of (center, edgePoint) along the bbox bounds
+  
+  vector<set<int32_t> > allTagSetsForVectors;
+  
+  // Store coords found for each vector
+  
+  vector<vector<Coord> > allCoordForVectors;
+  
+  int stepi = 0;
+  int stepMax = (int) outlineCoords.size();
+  
+  for ( ; stepi < stepMax; stepi++ ) {
+    
+    set<int32_t> tagsForVector;
+    vector<Coord> coordsForVector;
+    
+    Coord edgeCoord = outlineCoords[stepi];
+    
+    Point2i edgePoint(edgeCoord.x, edgeCoord.y);
+    
+    renderMat = Scalar(0);
+    line(renderMat, center, edgePoint, Scalar(0xFF));
+    
+    if (debug) {
+      cout << "render center line from " << center << " to " << edgePoint << endl;
+    }
+    
+    if (debugDumpImages && debugDumpStepImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_step" << stepi << "_region_vec" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, renderMat);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    vector<Point> locations;
+    findNonZero(renderMat, locations);
+    
+    for ( Point p : locations ) {
+      Coord c(p.x, p.y);
+      c = originCoord + c;
+      if (tagMap.count(c) > 0) {
+        int32_t regionTag = tagMap[c];
+        tagsForVector.insert(regionTag);
+        coordsForVector.push_back(c);
+      }
+    }
+    
+    allTagSetsForVectors.push_back(tagsForVector);
+    allCoordForVectors.push_back(coordsForVector);
+    
+    if (debugDumpImages && debugDumpStepImages) {
+      Mat regionRoiMat = tagsImg(roiRect);
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_step" << stepi << "_region_input_tags_roi" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, regionRoiMat);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    if (debugDumpImages && debugDumpStepImages) {
+      // Dump tags that are defined as on in regionCoords
+      
+      Mat allTagsOn = tagsImg.clone();
+      allTagsOn = Scalar(0,0,0);
+      
+      for ( Coord c : regionCoords ) {
+        allTagsOn.at<Vec3b>(c.y, c.x) = tagsImg.at<Vec3b>(c.y, c.x);
+      }
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_step" << stepi << "_region_input_tags" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, allTagsOn);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    if (debugDumpImages && debugDumpStepImages) {
+      renderMat = Scalar(0);
+      
+      for ( Point p : locations ) {
+        Coord c(p.x, p.y);
+        c = originCoord + c;
+        if (tagMap.count(c) > 0) {
+          c = c - originCoord;
+          renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
+        }
+      }
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_step" << stepi << "_hits_for_tag_vec" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, renderMat);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+    if (debugDumpImages && debugDumpStepImages) {
+      // Dump tags that are defined as on in regionCoords
+      
+      Mat allTagsHit = tagsImg.clone();
+      allTagsHit = Scalar(0,0,0);
+      
+      for ( Point p : locations ) {
+        Coord c(p.x, p.y);
+        c = originCoord + c;
+        if (tagMap.count(c) > 0) {
+          allTagsHit.at<Vec3b>(c.y, c.x) = tagsImg.at<Vec3b>(c.y, c.x);
+        }
+      }
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_step" << stepi << "_hit_tags_for_tag_vec" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, allTagsHit);
+      cout << "wrote " << fname << endl;
+      cout << "";
+    }
+    
+  }
+  
+  // Identify all the tags found in the region and with a tag other than this one
+  
+  unordered_map<int32_t, bool> allTagsCombined;
+  
+  for ( set<int32_t> & tagSet : allTagSetsForVectors ) {
+    for ( int32_t regionTag : tagSet ) {
+      allTagsCombined[regionTag] = true;
+    }
+  }
+  
+  if (debug) {
+    cout << "all tags found around region" << endl;
+    
+    for ( auto & pair : allTagsCombined ) {
+      int32_t regionTag = pair.first;
+      printf("tag = 0x%08X aka %d\n", regionTag, regionTag);
+    }
+  }
+  
+  if (debugDumpImages) {
+    // Dump tags that are defined as on in regionCoords
+    
+    Mat allTagsHit = tagsImg.clone();
+    allTagsHit = Scalar(0,0,0);
+    
+    for ( Coord c : regionCoords ) {
+      Vec3b vec = tagsImg.at<Vec3b>(c.y, c.x);
+      int32_t regionTag = Vec3BToUID(vec);
+      
+      if (allTagsCombined.count(regionTag) > 0) {
+        allTagsHit.at<Vec3b>(c.y, c.x) = vec;
+        
+        if (debug) {
+          printf("found region tag %9d at coord (%5d, %5d)\n", regionTag, c.x, c.y);
+        }
+      }
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_hit_tags_in_scan_region" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, allTagsHit);
+    cout << "wrote " << fname << endl;
+    cout << "";
+  }
+  
+  // Condense tags in regions starting from the top. A region range is condensed as long
+  // as the tags in the range are the same or if there are no tags.
+  
+  unordered_map<Coord, bool> uniqueCoords;
+  
+  for ( stepi = 0 ; stepi < stepMax; ) {
+    if (debug) {
+      cout << "consider stepi " << stepi << endl;
+    }
+    
+    set<int32_t> &currentSet = allTagSetsForVectors[stepi];
+    
+    int nextStepi = stepi + 1;
+    
+    for ( ; nextStepi < stepMax; nextStepi++ ) {
+      set<int32_t> &nextSet = allTagSetsForVectors[nextStepi];
+      
+      // If the sets are identical then merge the regions.
+      
+      if (currentSet == nextSet) {
+        if (debug && true) {
+          cout << "same set for step " << nextStepi << endl;
+        }
+        if (debug && false) {
+          cout << "set 1" << endl;
+          for ( int32_t tag : currentSet ) {
+            cout << tag << endl;
+          }
+          cout << "set 2" << endl;
+          for ( int32_t tag : nextSet ) {
+            cout << tag << endl;
+          }
+        }
+      } else {
+        nextStepi -= 1;
+        break;
+      }
+    }
+    
+    // Range is (stepi, nextStepi)
+    
+    if (debug) {
+      cout << "step same range (" << stepi << "," << nextStepi << ")" << endl;
+    }
+    
+    tagsAroundVec.push_back(TagsAroundShape());
+    TagsAroundShape &tas = tagsAroundVec[tagsAroundVec.size() - 1];
+    
+    tas.start = stepi;
+    tas.end = nextStepi;
+    
+    vector<int32_t> vecOfTags;
+    
+    for ( int32_t tag : currentSet ) {
+      vecOfTags.push_back(tag);
+    }
+    
+    tas.tags = vecOfTags;
+    
+    // Gather all unique coords from combined range
+    
+#if defined(DEBUG)
+    for ( auto &pair : uniqueCoords ) {
+      bool uniqueThisLoop = pair.second;
+      assert(uniqueThisLoop == false);
+    }
+#endif // DEBUG
+    
+    int maxStepi = mini((nextStepi + 1), stepMax);
+    
+#if defined(DEBUG)
+    assert(allTagSetsForVectors.size() == allCoordForVectors.size());
+    assert(maxStepi <= allCoordForVectors.size());
+#endif // DEBUG
+    
+    for ( int i = stepi ; i < maxStepi; i++ ) {
+#if defined(DEBUG)
+      assert(i < allCoordForVectors.size());
+#endif // DEBUG
+      
+      if (debug) {
+        cout << "allCoordForVectors[" << i << "] num coords " << allCoordForVectors[i].size() << endl;
+      }
+      
+      for ( Coord c : allCoordForVectors[i] ) {
+        if (uniqueCoords.count(c) == 0) {
+          uniqueCoords[c] = true;
+        }
+      }
+    }
+    
+    vector<Coord> &uniqueCoordsVec = tas.coords;
+    for ( auto &pair : uniqueCoords ) {
+      Coord c = pair.first;
+      bool uniqueThisLoop = pair.second;
+      if (uniqueThisLoop) {
+        pair.second = false;
+        uniqueCoordsVec.push_back(c);
+      }
+    }
+    
+#if defined(DEBUG)
+    assert((nextStepi + 1) > stepi);
+#endif // DEBUG
+    stepi = nextStepi + 1;
+  }
+  
+  // In the special case where the final range is larger than 1 element
+  // and the range extends to 12 oclock and the sets match, then combine
+  // the last range with the first one.
+  
+  if (tagsAroundVec.size() > 1) {
+    
+    if (allTagSetsForVectors.size() > 2) {
+      // Check for the special case of the first and second sets being exactly equal,
+      // in this case iterate backwards from 12 oclock so that and initial same range
+      // at the front of the vector is moved to the start of the vector.
+      
+      set<int32_t> &firstSet = allTagSetsForVectors[0];
+      
+      set<int32_t> &lastSet = allTagSetsForVectors[stepMax - 1];
+      
+      if (firstSet == lastSet) {
+        if (debug) {
+          cout << "first and last range sets are the same" << endl;
+        }
+        
+        assert(tagsAroundVec.size() > 0);
+        TagsAroundShape &firstTas = tagsAroundVec[0];
+        TagsAroundShape &lastTas = tagsAroundVec[tagsAroundVec.size() - 1];
+        
+        firstTas.start = lastTas.start;
+        //firstTas.end = nextStepi;
+        
+        for ( Coord c : lastTas.coords ) {
+          firstTas.coords.push_back(c);
+        }
+        
+        int numBefore = (int) tagsAroundVec.size();
+        tagsAroundVec.erase(end(tagsAroundVec) - 1);
+        int numAfter = (int) tagsAroundVec.size();
+        assert(numBefore == (numAfter + 1));
+      }
+    }
+    
+    // Mark entries that are simple clusters of N tags
+    
+    for ( TagsAroundShape &tas : tagsAroundVec ) {
+      if (tas.start == tas.end) {
+        tas.flag = true;
+      } else {
+        tas.flag = false;
+      }
+    }
+    
+    // Do a second scan of the resulting TagsAroundShape elements and combine ranges that consist of just
+    // one single step
+    
+    stepMax = (int) tagsAroundVec.size() - 1;
+    
+    bool mergeNext = false;
+    
+    for ( stepi = 0; stepi < stepMax; stepi += 1) {
+      TagsAroundShape &oneTas = tagsAroundVec[stepi];
+      TagsAroundShape &nextTas = tagsAroundVec[stepi+1];
+      
+      if (oneTas.flag && nextTas.flag) {
+        // Merge 2 in a row that differ in set contents
+        
+        oneTas.end = nextTas.end;
+        
+        set<int32_t> uniqueTags;
+        
+        for ( int32_t tag : oneTas.tags ) {
+          uniqueTags.insert(tag);
+        }
+        
+        for ( int32_t tag : nextTas.tags ) {
+          uniqueTags.insert(tag);
+        }
+        
+        oneTas.tags.clear();
+        
+        for ( int32_t tag : uniqueTags ) {
+          oneTas.tags.push_back(tag);
+        }
+        
+        for ( Coord c : nextTas.coords ) {
+          oneTas.coords.push_back(c);
+        }
+        
+        tagsAroundVec.erase(begin(tagsAroundVec) + stepi+1);
+        stepMax = (int) tagsAroundVec.size() - 1;
+        mergeNext = true;
+      } else {
+        mergeNext = false;
+      }
+    }
+    
+  } // end if more than 1 segment block
+   
+   */
+  
+  if (debug) {
+    cout << "return clockwiseScanForShapeBounds " << tag << " with N = " << 0 << " ranges" << endl;
   }
   
   return;
