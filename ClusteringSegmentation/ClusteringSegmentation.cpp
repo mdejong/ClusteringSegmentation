@@ -1253,12 +1253,16 @@ captureRegion(SuperpixelImage &spImage,
     return;
   }
   
+  // If the shape is convex then wrap it in a convex hull and simplify the shape with
+  // smallish straight lines so that perpendicular lines can be computed as compared
+  // to each line segment in order to find the shape normals.
+  
   // Dump skel generated from region bin Mat
   
   if ((1)) {
     Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
     
-    for ( Coord c : regionCoords ) {
+    for ( Coord c : srmRegionCoords ) {
       binMat.at<uint8_t>(c.y, c.x) = 0xFF;
     }
     
