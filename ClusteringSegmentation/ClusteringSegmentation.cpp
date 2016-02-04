@@ -5045,7 +5045,6 @@ vector<Coord> genRectangleOutline(int regionWidth, int regionHeight)
   return outlineCoords;
 }
 
-
 // Scan region given likely bounds and determine where most accurate region bounds are likely to be
 
 void
@@ -5087,8 +5086,7 @@ clockwiseScanForShapeBounds(
     
     vector<vector<Point> > contours;
     
-    // CHAIN_APPROX_NONE
-    // CV_CHAIN_APPROX_SIMPLE
+    // CHAIN_APPROX_NONE or CV_CHAIN_APPROX_SIMPLE
     
     findContours(binMat, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
     
@@ -5105,6 +5103,18 @@ clockwiseScanForShapeBounds(
       int i = 0;
       for ( Point2i p : contour ) {
         cout << "contour[" << i << "] = " << "(" << p.x << "," << p.y << ")" << endl;
+        i++;
+      }
+    }
+    
+    if (debug) {
+      cout << "contour as Point2i" << endl;
+
+      cout << "\tPoint2i contour[" << contour.size() << "];" << endl;
+      
+      int i = 0;
+      for ( Point2i p : contour ) {
+        cout << "\tcontour[" << i << "] = " << "Point2i(" << p.x << "," << p.y << ");" << endl;
         i++;
       }
     }
@@ -5141,6 +5151,8 @@ clockwiseScanForShapeBounds(
     
     binMat = Scalar(0);
     
+    /*
+    
     Point pt0;
     
     for ( int i = 1; i < hullCount; i++ ) {
@@ -5169,6 +5181,10 @@ clockwiseScanForShapeBounds(
       
       pt0 = pt;
     }
+     
+    */
+    
+    drawOneHull(binMat, hull, contour, Scalar(0xFF), 1, 8 );
     
     if (debugDumpImages) {
       std::stringstream fnameStream;
@@ -5183,6 +5199,8 @@ clockwiseScanForShapeBounds(
     // Generate another output Mat where each line centerpoint is rendered
     
     binMat = Scalar(0);
+    
+    /*
     
     for ( int i = 0; i < hullCount; i++ ) {
       if (i == 0) {
@@ -5218,6 +5236,8 @@ clockwiseScanForShapeBounds(
       
       pt0 = pt;
     }
+     
+    */
     
     if (debugDumpImages) {
       std::stringstream fnameStream;
@@ -5232,20 +5252,23 @@ clockwiseScanForShapeBounds(
     // Generate hull defects to indicate where shape becomes convex
     
     vector<Vec4i> defectVec;
+
+    assert(hull.size() > 2);
+    assert(contour.size() > 3);
     
     convexityDefects(contour, hull, defectVec);
     
     binMat = Scalar(0);
     
+    Mat colorMat;
+    
+    if (debugDumpImages) {
+      colorMat = tagsImg.clone();
+      colorMat = Scalar(0, 0, 0);
+      drawContours(colorMat, contours, 0, Scalar(0xFF,0xFF,0xFF), CV_FILLED, 8); // Draw contour as white filled region
+    }
+    
     for (int cDefIt = 0; cDefIt < defectVec.size(); cDefIt++) {
-//      if (cDefIt != 1) {
-//        continue;
-//      }
-      
-//      if (cDefIt != 0) {
-//        continue;
-//      }
-      
       int startIdx = defectVec[cDefIt].val[0];
       int endIdx = defectVec[cDefIt].val[1];
       int defectPtIdx = defectVec[cDefIt].val[2];
@@ -5260,14 +5283,15 @@ clockwiseScanForShapeBounds(
       printf("defect %8d = (%4d,%4d)\n", defectPtIdx, defectP.x, defectP.y);
       printf("depth  %0.3f\n", depth);
       
-//      line(binMat, pointVec[startIdx], pointVec[endIdx], Scalar(255), 1, 0);
-      
+      if (debugDumpImages) {
       line(binMat, startP, defectP, Scalar(255), 1, 0);
       line(binMat, endP, defectP, Scalar(128), 1, 0);
+      }
       
-//      if (cDefIt == 0) {
-//      break;
-//      }
+      if (debugDumpImages) {
+        line(colorMat, startP, endP, Scalar(0xFF,0,0), 1, 0);
+        circle(colorMat, defectP, 4, Scalar(0,0,0xFF), 2);
+      }
     }
     
     if (debugDumpImages) {
@@ -5279,9 +5303,22 @@ clockwiseScanForShapeBounds(
       cout << "wrote " << fname << endl;
       cout << "" << endl;
     }
-    
+
+    if (debugDumpImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_hull_defect_render" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, colorMat);
+      cout << "wrote " << fname << endl;
+      cout << "" << endl;
+    }
   }
   
+  // Filter the defect results obtained above to remove the detected defects that are
+  // actually not defects but are overdetected when the line slope changes only a tiny
+  // bit.
+
   // Dump skel generated from region bin Mat
   
   if ((1)) {

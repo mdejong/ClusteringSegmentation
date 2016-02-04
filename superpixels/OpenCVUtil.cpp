@@ -1534,3 +1534,69 @@ void skelReduce(Mat &binMat) {
 
   return;
 }
+
+// Like cv::drawContours() except that this simplified method
+// renders just one contour.
+
+void drawOneContour(
+                    Mat & mat,
+                    const vector<Point2i> &contourPointsVec,
+                    const Scalar& color,
+                    int thickness,
+                    int lineType )
+{
+  CvMat _cimage = mat;
+  
+  int first = 0;
+  std::vector<CvSeq> seq;
+  std::vector<CvSeqBlock> block;
+  
+  seq.resize(1);
+  block.resize(1);
+  seq[0].first = 0;
+  
+  // Lookup points
+  
+  int npoints = (int) contourPointsVec.size();
+  Point *pointArr = new Point[npoints];
+  
+  int i = 0;
+  for ( Point2i p : contourPointsVec ) {
+    pointArr[i++] = p;
+  }
+  
+  cvMakeSeqHeaderForArray( CV_SEQ_POLYGON, sizeof(CvSeq), sizeof(Point), pointArr, npoints, &seq[0], &block[0] );
+  
+  const int last = 1;
+  i = 0;
+  seq[i].h_next = i < last-1 ? &seq[i+1] : 0;
+  seq[i].h_prev = i > first ? &seq[i-1] : 0;
+  
+  Point defP;
+  
+  cvDrawContours( &_cimage, &seq[first], color, color, 0, thickness, lineType, defP );
+  
+  delete [] pointArr;
+}
+
+// Invoke drawOneContour() with the results of looking up points in an existing
+// points vector. This method assumes a vector of int as returned by convexHull().
+
+void drawOneHull(
+                 Mat & mat,
+                 const vector<int> &hull,
+                 const vector<Point2i> &points,
+                 const Scalar& color,
+                 int thickness,
+                 int lineType )
+{
+  vector<Point2i> contourPoints;
+  contourPoints.reserve((int) hull.size());
+  
+  for ( int offset : hull ) {
+    Point2i p = points[offset];
+    contourPoints.push_back(p);
+  }
+  
+  drawOneContour(mat, contourPoints, color, thickness, lineType);
+}

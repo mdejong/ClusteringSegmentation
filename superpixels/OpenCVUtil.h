@@ -160,4 +160,25 @@ vector<uint32_t> generateVector(uint32_t fromPixel, uint32_t toPixel);
 
 int floodFillMask(Mat &inBinMask, Mat &outBinMask, Point2i startPoint, int connectivity);
 
+// Like cv::drawContours() except that this simplified method
+// renders just one contour.
+
+void drawOneContour(
+                    Mat & mat,
+                    const vector<Point2i> &contourPointsVec,
+                    const Scalar& color,
+                    int thickness,
+                    int lineType );
+
+// Invoke drawOneContour() with the results of looking up points in an existing
+// points vector. This method assumes a vector of int as returned by convexHull().
+
+void drawOneHull(
+                 Mat & mat,
+                 const vector<int> &hull,
+                 const vector<Point2i> &points,
+                 const Scalar& color,
+                 int thickness,
+                 int lineType );
+
 #endif // OPENCV_UTIL_H

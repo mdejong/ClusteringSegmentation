@@ -120,6 +120,9 @@
 /* NVidia Video Decoding API*/
 /* #undef HAVE_NVCUVID */
 
+/* NVidia Video Encoding API*/
+/* #undef HAVE_NVCUVENC */
+
 /* OpenCL Support */
 /* #undef HAVE_OPENCL */
 /* #undef HAVE_OPENCL_STATIC */
