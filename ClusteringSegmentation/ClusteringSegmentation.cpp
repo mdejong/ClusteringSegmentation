@@ -5322,8 +5322,8 @@ clockwiseScanForShapeBounds(
       // Map specific point to defect offset
       
       unordered_map<Coord, int> defectStartMap;
-      unordered_map<Coord, int> defectEndMap;
-      unordered_map<Coord, int> defectTargetMap;
+//      unordered_map<Coord, int> defectEndMap;
+//      unordered_map<Coord, int> defectTargetMap;
       
       for (int cDefIt = 0; cDefIt < defectVec.size(); cDefIt++) {
         int startIdx = defectVec[cDefIt].val[0];
@@ -5347,11 +5347,11 @@ clockwiseScanForShapeBounds(
         assert(defectStartMap.count(startC) == 0);
         defectStartMap[startC] = cDefIt;
 
-        assert(defectEndMap.count(endC) == 0);
-        defectEndMap[endC] = cDefIt;
+//        assert(defectEndMap.count(endC) == 0);
+//        defectEndMap[endC] = cDefIt;
 
-        assert(defectTargetMap.count(defectC) == 0);
-        defectTargetMap[defectC] = cDefIt;
+//        assert(defectTargetMap.count(defectC) == 0);
+//        defectTargetMap[defectC] = cDefIt;
       }
       
       // Iterate over each coord in the contour and determine if the next N coords
@@ -5365,14 +5365,6 @@ clockwiseScanForShapeBounds(
       vector<TypedHullCoords> hullCoords;
       
       Point2i pt0;
-      
-      stack<Coord> coordStack;
-      
-      for ( auto it = contour.rbegin(); it != contour.rend(); it++ ) {
-        Point2i p = *it;
-        Coord c(p.x, p.y);
-        coordStack.push(c);
-      }
       
       // Determine hull point iteration order that is clockwise and
       // increases in terms of offsets as the iteration progresses.
@@ -5419,8 +5411,6 @@ clockwiseScanForShapeBounds(
       // Reorder orderedOffsetsPairs by placing the element that starts at
       // offset 0 at the front of the vector.
       
-      cout << "rotate so that " << minOffset << " is at the front" << endl;
-      
       auto midIt = begin(orderedOffsetsPairs);
       auto endIt = end(orderedOffsetsPairs);
       
@@ -5434,26 +5424,30 @@ clockwiseScanForShapeBounds(
       }
       assert(midIt != endIt);
       
-      cout << "rotate()" << endl << endl;
-      
-      int numBefore = (int) orderedOffsetsPairs.size();
-      
-      rotate(begin(orderedOffsetsPairs), midIt, end(orderedOffsetsPairs));
-      
-      int numAfter = (int) orderedOffsetsPairs.size();
-      
-      assert(numBefore == numAfter);
-      
       if (debug) {
-        for ( pair<int, int> &pairRef : orderedOffsetsPairs ) {
-          int offset1 = pairRef.first;
-          int offset2 = pairRef.second;
-          Point2i p1 = contour[offset1];
-          Point2i p2 = contour[offset2];
-          cout << "pair (" << offset1 << " , " << offset2 << ") -> (" << Coord(p1.x,p1.y) << ", " <<  Coord(p2.x,p2.y) << ")" << endl;
-          
-          // FIXME: check prev
-          //          assert(offset1 <= offset2);
+        cout << "rotate so that " << minOffset << " is at the front" << endl;
+      }
+      
+      if (midIt != begin(orderedOffsetsPairs)) {
+        
+        cout << "rotate()" << endl << endl;
+        
+        int numBefore = (int) orderedOffsetsPairs.size();
+        
+        rotate(begin(orderedOffsetsPairs), midIt, end(orderedOffsetsPairs));
+        
+        int numAfter = (int) orderedOffsetsPairs.size();
+        
+        assert(numBefore == numAfter);
+        
+        if (debug) {
+          for ( pair<int, int> &pairRef : orderedOffsetsPairs ) {
+            int offset1 = pairRef.first;
+            int offset2 = pairRef.second;
+            Point2i p1 = contour[offset1];
+            Point2i p2 = contour[offset2];
+            cout << "pair (" << offset1 << " , " << offset2 << ") -> (" << Coord(p1.x,p1.y) << ", " <<  Coord(p2.x,p2.y) << ")" << endl;
+          }
         }
       }
       
@@ -5472,13 +5466,14 @@ clockwiseScanForShapeBounds(
         Point2i pt1 = contour[offset1];
         Point2i pt2 = contour[offset2];
         
+        assert(offset2 > offset1);
+        
         Coord ct1(pt1.x, pt1.y);
         Coord ct2(pt2.x, pt2.y);
         
         if (debug) {
           cout << "hull offsets between " << offset1 << " to " << offset2 << endl;
           cout << "hull line between " << ct1 << " to " << ct2 << endl;
-          cout << "num coords left " << coordStack.size() << " from  " << i << " / " << iMax << endl;
         }
         
         // Gather all the coords from contour that in the set (pt0, pt)
@@ -5486,52 +5481,10 @@ clockwiseScanForShapeBounds(
         hullCoords.push_back(TypedHullCoords());
         TypedHullCoords &typedHullCoords = hullCoords[hullCoords.size() - 1];
         
-#if defined(DEBUG)
-        {
-          Coord topC = coordStack.top();
-          assert(ct1 == topC); // Next coord must be last one from prev iter
-        }
-#endif // DEBUG
-        
-        if (debug) {
-          cout << "will search for end coord " << ct2 << endl;
-        }
-        
-        Coord topC;
-        
-        while (1) {
-          topC = coordStack.top();
-          
-          if (debug) {
-            cout << "next coord " << topC << endl;
-          }
-          
-          if (topC == ct2) {
-            // At the end of a specific hull segment
-            
-            if (debug) {
-              cout << "end of hull segment at coord " << topC << endl;
-            }
-            
-            break;
-          }
-          
-          coordStack.pop();
-          
-          if (Coord(2, 99) == topC) {
-              cout << "dup coord " << topC << endl;
-          }
-          
-#if defined(DEBUG)
-          for ( Coord c : typedHullCoords.coords ) {
-            if (c == topC) {
-              // Repeated coord cann be added again
-              assert(0);
-            }
-          }
-#endif // DEBUG
-          
-          typedHullCoords.coords.push_back(topC);
+        for ( int contouri = offset1; contouri < offset2; contouri++ ) {
+          Point2i p = contour[contouri];
+          Coord c(p.x, p.y);
+          typedHullCoords.coords.push_back(c);
         }
         
         // In the case of the last hull line, append the final coordinate
@@ -5543,29 +5496,13 @@ clockwiseScanForShapeBounds(
             cout << "last hull line at " << i << endl;
           }
           
-          assert(coordStack.size() == 1);
-          topC = coordStack.top();
-          coordStack.pop();
-          assert(topC == ct2);
-          
-          if (Coord(2, 99) == topC) {
-            cout << "dup coord " << topC << endl;
-          }
-          
-#if defined(DEBUG)
-          for ( Coord c : typedHullCoords.coords ) {
-            if (c == topC) {
-              // Repeated coord cann be added again
-              assert(0);
-            }
-          }
-#endif // DEBUG
-          
-          typedHullCoords.coords.push_back(topC);
+          Point2i p = contour[offset2];
+          Coord c(p.x, p.y);
+          typedHullCoords.coords.push_back(c);
         } else {
           // Not the last hull line
           
-          if (debug) {
+          if (debug && false) {
             cout << "NOT last hull line at " << i << endl;
           }
         }
@@ -5590,12 +5527,11 @@ clockwiseScanForShapeBounds(
       }
       assert(coordCount == contour.size());
       
-      // hullCoords must not contain duplicates
+      // hullCoords could contain duplicates
       unordered_map<Coord, bool> seen;
       for ( TypedHullCoords &typedHullCoords : hullCoords ) {
         auto vec = typedHullCoords.coords;
         for ( Coord c : vec ) {
-          assert(seen.count(c) == 0);
           seen[c] = true;
         }
       }
