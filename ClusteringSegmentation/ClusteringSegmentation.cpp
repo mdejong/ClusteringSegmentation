@@ -5378,7 +5378,7 @@ clockwiseScanForShapeBounds(
       const uint32_t maxUint = 0xFFFFFFFF;
       uint32_t minOffset = maxUint;
       
-      for ( int i = 0; i < (hullCount - 1); i++ ) {
+      for ( int i = 0; i < hullCount; i++ ) {
         if (i == 0) {
           prevOffset = hull[hull.size() - 1];
         }
@@ -5413,6 +5413,7 @@ clockwiseScanForShapeBounds(
       
       auto midIt = begin(orderedOffsetsPairs);
       auto endIt = end(orderedOffsetsPairs);
+      bool atFirstIterPos = true;
       
       for ( ; midIt != endIt; midIt++ ) {
         int offset1 = midIt->first;
@@ -5421,6 +5422,8 @@ clockwiseScanForShapeBounds(
         if (offset1 == minOffset) {
           break;
         }
+        
+        atFirstIterPos = false;
       }
       assert(midIt != endIt);
       
@@ -5428,7 +5431,7 @@ clockwiseScanForShapeBounds(
         cout << "rotate so that " << minOffset << " is at the front" << endl;
       }
       
-      if (midIt != begin(orderedOffsetsPairs)) {
+      if (atFirstIterPos == false) {
         
         cout << "rotate()" << endl << endl;
         
@@ -5451,9 +5454,28 @@ clockwiseScanForShapeBounds(
         }
       }
       
-      // Iterate over hull offset pairs in clockwise order
-      
       int iMax = (int) orderedOffsetsPairs.size();
+      
+      // Verify that the end of each pair is the same offset as the start of the next pair.
+      
+      for ( int i = 0; i < (iMax - 1); i++ ) {
+        pair<int, int> &pairRef1 = orderedOffsetsPairs[i];
+        pair<int, int> &pairRef2 = orderedOffsetsPairs[i+1];
+
+        int offsetA1 = pairRef1.first;
+        int offsetA2 = pairRef1.second;
+        
+        int offsetB1 = pairRef2.first;
+        int offsetB2 = pairRef2.second;
+
+        cout << "" << endl;
+        cout << "pair 1 " << offsetA1 << " , " << offsetA2 << endl;
+        cout << "pair 2 " << offsetB1 << " , " << offsetB2 << endl;
+        
+        assert(offsetA2 == offsetB1);
+      }
+      
+      // Iterate over hull offset pairs in clockwise order
       
       for ( int i = 0; i < iMax; i++ ) {
         pair<int, int> &pairRef = orderedOffsetsPairs[i];
@@ -5461,12 +5483,19 @@ clockwiseScanForShapeBounds(
         int offset1 = pairRef.first;
         int offset2 = pairRef.second;
         
+        if (i == (iMax - 1)) {
+          if (offset2 < offset1) {
+            // Wrap around by setting offset2 to last offset in contour
+            offset2 = (int) contour.size() - 1;
+          }
+        } else {
+          assert(offset1 < offset2);
+        }
+        
         // Gather pair of points that indicate a hull line.
         
         Point2i pt1 = contour[offset1];
         Point2i pt2 = contour[offset2];
-        
-        assert(offset2 > offset1);
         
         Coord ct1(pt1.x, pt1.y);
         Coord ct2(pt2.x, pt2.y);
@@ -5480,11 +5509,12 @@ clockwiseScanForShapeBounds(
         
         hullCoords.push_back(TypedHullCoords());
         TypedHullCoords &typedHullCoords = hullCoords[hullCoords.size() - 1];
+        auto &coordsVec = typedHullCoords.coords;
         
         for ( int contouri = offset1; contouri < offset2; contouri++ ) {
           Point2i p = contour[contouri];
           Coord c(p.x, p.y);
-          typedHullCoords.coords.push_back(c);
+          coordsVec.push_back(c);
         }
         
         // In the case of the last hull line, append the final coordinate
@@ -5498,7 +5528,7 @@ clockwiseScanForShapeBounds(
           
           Point2i p = contour[offset2];
           Coord c(p.x, p.y);
-          typedHullCoords.coords.push_back(c);
+          coordsVec.push_back(c);
         } else {
           // Not the last hull line
           
@@ -5509,6 +5539,8 @@ clockwiseScanForShapeBounds(
         
         // Check hull segment start and end coords. A hull segment
         // should start at ct1.
+        
+        // FIXME: need to put defectStartMap with Point, as opposed to offset since points could be duplicated
         
         if (defectStartMap.count(ct1) > 0) {
           // (start, end) indicates a convex range
@@ -5522,8 +5554,30 @@ clockwiseScanForShapeBounds(
       
 #if defined(DEBUG)
       int coordCount = 0;
+      
+      vector<Coord> combined;
+      
       for ( TypedHullCoords &typedHullCoords : hullCoords ) {
-        coordCount += typedHullCoords.coords.size();
+        auto vec = typedHullCoords.coords;
+        assert(vec.size() > 0);
+        coordCount += vec.size();
+        
+        append_to_vector(combined, vec);
+      }
+      
+      if (coordCount != contour.size()) {
+        for ( int i = 0; i < mini(coordCount, (int)contour.size()); i++ ) {
+          Point2i p = contour[i];
+          Coord c1(p.x, p.y);
+          
+          Coord c2 = combined[i];
+
+          cout << "c1 == c2 : " << i << " : " << c1 << " <-> " << c2 << endl;
+          
+          if (c1 != c2) { assert(0); }
+        }
+        
+        assert(coordCount == contour.size());
       }
       assert(coordCount == contour.size());
       
