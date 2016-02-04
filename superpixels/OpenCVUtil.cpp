@@ -1600,3 +1600,54 @@ void drawOneHull(
   
   drawOneContour(mat, contourPoints, color, thickness, lineType);
 }
+
+// Draw line between points, note that this shape is not considered
+// closed like a contour would be.
+
+void drawLine(
+              Mat & mat,
+              const vector<Point2i> &linePointsVec,
+              const Scalar& color,
+              int thickness,
+              int lineType )
+{
+  // create a pointer to the data as an array of points (via a conversion to a Mat object)
+  
+  Mat linePointsMat(linePointsVec);
+  const cv::Point *pts = (const cv::Point*) linePointsMat.data;
+  int npts = linePointsMat.rows;
+  
+  polylines(mat, &pts, &npts, 1, false, color, thickness, lineType );
+}
+
+// Quickly convert vector of Coord to Point2i for passing to OpenCV functions
+
+vector<Point2i>
+convertCoordsToPoints(const vector<Coord> &coordsVec)
+{
+  vector<Point2i> points;
+  points.reserve((int) coordsVec.size());
+  
+  for ( Coord c : coordsVec ) {
+    Point2i p(c.x, c.y);
+    points.push_back(p);
+  }
+  
+  return points;
+}
+
+// Quickly convert vector of Coord to Point2i for passing to OpenCV functions
+
+vector<Coord>
+convertPointsToCoords(const vector<Point2i> &pointsVec)
+{
+  vector<Coord> coords;
+  coords.reserve((int) pointsVec.size());
+  
+  for ( Point2i p : pointsVec ) {
+    Coord c(p.x, p.y);
+    coords.push_back(c);
+  }
+  
+  return coords;
+}

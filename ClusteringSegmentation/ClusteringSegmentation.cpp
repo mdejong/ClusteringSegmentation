@@ -27,6 +27,8 @@
 
 #include "peakdetect.h"
 
+#include <stack>
+
 using namespace cv;
 using namespace std;
 
@@ -5090,12 +5092,22 @@ clockwiseScanForShapeBounds(
     
     findContours(binMat, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
     
+    assert(contours.size() >= 1);
+    vector<Point> contour = contours[0];
+    
+    // Invert the default counter clockwise contour orientation
+    
+    vector<Point2i> tmp = contour;
+    contour.clear();
+    for ( auto it = tmp.rbegin(); it != tmp.rend(); ++it ) {
+      Point2i p = *it;
+      contour.push_back(p);
+    }
+    tmp.clear();
+    
     if (debug) {
       cout << "num contour(s) detected " << contours.size() << endl;
     }
-    
-    assert(contours.size() >= 1);
-    vector<Point> contour = contours[0];
     
     if (debug) {
       cout << "contour simplified to " << contour.size() << " points" << endl;
@@ -5121,13 +5133,43 @@ clockwiseScanForShapeBounds(
     
     // Render as contour
     
-    binMat = Scalar(0);
-    
-    drawContours(binMat, contours, 0, Scalar(0xFF));
-    
     if (debugDumpImages) {
+      binMat = Scalar(0);
+      
+      drawContours(binMat, contours, 0, Scalar(0xFF));
+      
       std::stringstream fnameStream;
       fnameStream << "srm" << "_tag_" << tag << "_contour" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, binMat);
+      cout << "wrote " << fname << endl;
+      cout << "" << endl;
+    }
+    
+    // Dump contour points rendered with incresing grayscale values in the range 0xFF/4 -> 0xFF
+    // so that the ordering is clear.
+    
+    if (debugDumpImages) {
+      binMat = Scalar(0);
+      
+      int iMax = (int) contour.size();
+      uint8_t grayLevel[iMax];
+      
+      for ( int i = iMax-1; i >= 0; i-- ) {
+        grayLevel[i] = 0xFF - ((iMax - i) * (0xFF/(iMax)));
+        printf("grayLevel[%5d] = %d\n", i, grayLevel[i]);
+      }
+      
+      int i = 0;
+      for ( Point2i p : contour ) {
+        uint8_t gray = grayLevel[i];
+        binMat.at<uint8_t>(p.y, p.x) = gray;
+        i++;
+      }
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_contour_order" << ".png";
       string fname = fnameStream.str();
       
       imwrite(fname, binMat);
@@ -5151,39 +5193,6 @@ clockwiseScanForShapeBounds(
     
     binMat = Scalar(0);
     
-    /*
-    
-    Point pt0;
-    
-    for ( int i = 1; i < hullCount; i++ ) {
-      if (i == 1) {
-        int offset = hull[hullCount-1];
-        pt0 = contour[offset];
-        
-        if (debug) {
-          cout << "init point " << Coord(pt0.x,pt0.y) << " from hull offset " << offset << endl;
-        }
-      }
-      
-      int offset = hull[i];
-      Point pt = contour[offset];
-      
-      if (debug) {
-        cout << "next point " << Coord(pt.x,pt.y) << " from hull offset " << offset << endl;
-      }
-      
-      Scalar gray(96 + (i+1)*((255-96)/hullCount));
-      line(binMat, pt0, pt, gray, 1, 0);
-      
-      if (debug) {
-        cout << "hull line " << i << " from " << Coord(pt0.x,pt0.y) << " to " << Coord(pt.x,pt.y) << " at gray " << gray[0] << endl;
-      }
-      
-      pt0 = pt;
-    }
-     
-    */
-    
     drawOneHull(binMat, hull, contour, Scalar(0xFF), 1, 8 );
     
     if (debugDumpImages) {
@@ -5195,60 +5204,7 @@ clockwiseScanForShapeBounds(
       cout << "wrote " << fname << endl;
       cout << "" << endl;
     }
-    
-    // Generate another output Mat where each line centerpoint is rendered
-    
-    binMat = Scalar(0);
-    
-    /*
-    
-    for ( int i = 0; i < hullCount; i++ ) {
-      if (i == 0) {
-        int offset = hull[hullCount-1];
-        pt0 = contour[offset];
         
-        if (debug) {
-          cout << "init point " << Coord(pt0.x,pt0.y) << " from hull offset " << offset << endl;
-        }
-      }
-      
-      int offset = hull[i];
-      Point pt = contour[offset];
-      
-      if (debug) {
-        cout << "next point " << Coord(pt.x,pt.y) << " from hull offset " << offset << endl;
-      }
-      
-      // Determine half way point between line points
-      
-      Point2f pt0f(pt0.x, pt0.y);
-      Point2f ptf(pt.x, pt.y);
-      Point2f midf = pt0f + ((ptf - pt0f) * 0.5f);
-      Point2i midi(round(midf.x), round(midf.y));
-      
-      if (debug) {
-        cout << "midway point between " << Coord(pt0.x,pt0.y) << " to " << Coord(pt.x,pt.y) << " is " << Coord(midi.x,midi.y) << " at gray " << 0xFF << endl;
-      }
-      
-      //line(binMat, midi, midi, Scalar(255), 1, 0);
-      
-      binMat.at<uint8_t>(midi.y, midi.x) = 0xFF;
-      
-      pt0 = pt;
-    }
-     
-    */
-    
-    if (debugDumpImages) {
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_hull_midpoints" << ".png";
-      string fname = fnameStream.str();
-      
-      imwrite(fname, binMat);
-      cout << "wrote " << fname << endl;
-      cout << "" << endl;
-    }
-    
     // Generate hull defects to indicate where shape becomes convex
     
     vector<Vec4i> defectVec;
@@ -5313,12 +5269,261 @@ clockwiseScanForShapeBounds(
       cout << "wrote " << fname << endl;
       cout << "" << endl;
     }
+    
+    // Filter the defect results obtained above to remove the detected defects that are
+    // actually not defects but are overdetected when the line slope changes only a tiny
+    // bit.
+    
+    if ((1)) {
+      // Map specific point to defect offset
+      
+      unordered_map<Coord, int> defectStartMap;
+      unordered_map<Coord, int> defectEndMap;
+      unordered_map<Coord, int> defectTargetMap;
+      
+      for (int cDefIt = 0; cDefIt < defectVec.size(); cDefIt++) {
+        int startIdx = defectVec[cDefIt].val[0];
+        int endIdx = defectVec[cDefIt].val[1];
+        int defectPtIdx = defectVec[cDefIt].val[2];
+        double depth = (double)defectVec[cDefIt].val[3]/256.0f;  // see documentation link below why this
+        
+        Point2i startP = contour[startIdx];
+        Point2i endP = contour[endIdx];
+        Point2i defectP = contour[defectPtIdx];
+        
+        printf("start  %8d = (%4d,%4d)\n", startIdx, startP.x, startP.y);
+        printf("end    %8d = (%4d,%4d)\n", endIdx, endP.x, endP.y);
+        printf("defect %8d = (%4d,%4d)\n", defectPtIdx, defectP.x, defectP.y);
+        printf("depth  %0.3f\n", depth);
+        
+        Coord startC(startP.x, startP.y);
+        Coord endC(endP.x, endP.y);
+        Coord defectC(defectP.x, defectP.y);
+        
+        assert(defectStartMap.count(startC) == 0);
+        defectStartMap[startC] = cDefIt;
+
+        assert(defectEndMap.count(endC) == 0);
+        defectEndMap[endC] = cDefIt;
+
+        assert(defectTargetMap.count(defectC) == 0);
+        defectTargetMap[defectC] = cDefIt;
+      }
+      
+      // Iterate over each coord in the contour and determine if the next N coords
+      // is a convex region or a regular non-convex region.
+      
+      typedef struct {
+        bool isConcave; // Region curves in on itself at this segment
+        vector<Coord> coords;
+      } TypedHullCoords;
+      
+      vector<TypedHullCoords> hullCoords;
+      
+      Point2i pt0;
+      
+      stack<Coord> coordStack;
+      
+      for ( auto it = contour.rbegin(); it != contour.rend(); it++ ) {
+        Point2i p = *it;
+        Coord c(p.x, p.y);
+        coordStack.push(c);
+      }
+      
+      // Determine hull point iteration order that is clockwise and
+      // increases in terms of offsets as the iteration progresses.
+      
+      vector<pair<int, int> > orderedOffsetsPairs;
+
+      // Iterate over clockwise hull ordering so that result pairs start from N
+      // and progress clockwise around the shape.
+      
+      int prevOffset = 0;
+      
+      for ( int i = 0; i < (hullCount - 1); i++ ) {
+        if (i == 0) {
+          prevOffset = hull[hull.size() - 1];
+        }
+        
+        int offset = hull[i];
+        
+        orderedOffsetsPairs.push_back(make_pair(prevOffset, offset));
+        
+        prevOffset = offset;
+      }
+      
+      if (debug) {
+        for ( pair<int, int> &pairRef : orderedOffsetsPairs ) {
+          int offset1 = pairRef.first;
+          int offset2 = pairRef.second;
+          Point2i p1 = contour[offset1];
+          Point2i p2 = contour[offset2];
+          cout << "pair (" << offset1 << " , " << offset2 << ") -> (" << Coord(p1.x,p1.y) << ", " <<  Coord(p2.x,p2.y) << ")" << endl;
+  
+// FIXME: check prev
+//          assert(offset1 <= offset2);
+        }
+      }
+      
+      // Iterate over hull offset pairs in clockwise order
+      
+      int iMax = (int) orderedOffsetsPairs.size();
+      
+      for ( int i = 0; i < iMax; i++ ) {
+        pair<int, int> &pairRef = orderedOffsetsPairs[i];
+
+        int offset1 = pairRef.first;
+        int offset2 = pairRef.second;
+        
+        // Gather pair of points that indicate a hull line.
+        
+        Point2i pt1 = contour[offset1];
+        Point2i pt2 = contour[offset2];
+        
+        Coord ct1(pt1.x, pt1.y);
+        Coord ct2(pt2.x, pt2.y);
+        
+        if (debug) {
+          cout << "hull line between " << ct1 << " to " << ct2 << endl;
+        }
+        
+        // Gather all the coords from contour that in the set (pt0, pt)
+        
+        hullCoords.push_back(TypedHullCoords());
+        TypedHullCoords &typedHullCoords = hullCoords[hullCoords.size() - 1];
+        
+#if defined(DEBUG)
+        {
+          Coord topC = coordStack.top();
+          assert(ct1 == topC); // Next coord must be last one from prev iter
+        }
+#endif // DEBUG
+
+        Coord topC;
+        
+        while (1) {
+          topC = coordStack.top();
+          
+          if (debug) {
+            cout << "next coord " << topC << endl;
+          }
+          
+          if (topC == ct2) {
+            // At the end of a specific hull segment
+            
+            if (debug) {
+              cout << "end of hull segment at coord " << topC << endl;
+            }
+            
+            break;
+          }
+          
+          coordStack.pop();
+          
+          typedHullCoords.coords.push_back(topC);
+        }
+        
+        // In the case of the last hull line, append the final coordinate
+        
+        if (i == (iMax - 1)) {
+          // Last hull line
+          
+          if (debug) {
+            cout << "last hull line at " << i << endl;
+          }
+          
+          assert(coordStack.size() == 1);
+          topC = coordStack.top();
+          coordStack.pop();
+          assert(topC == ct2);
+          typedHullCoords.coords.push_back(topC);
+        } else {
+          // Not the last hull line
+          
+          if (debug) {
+            cout << "NOT last hull line at " << i << endl;
+          }
+        }
+        
+        // Check hull segment start and end coords. A hull segment
+        // should start at ct1.
+        
+        if (defectStartMap.count(ct1) > 0) {
+          // (start, end) indicates a convex range
+          typedHullCoords.isConcave = true;
+        } else {
+          typedHullCoords.isConcave = false;
+        }
+      }
+      
+      // All coordinates from original contour must be accounted for in hullCoords
+      
+#if defined(DEBUG)
+      int coordCount = 0;
+      for ( TypedHullCoords &typedHullCoords : hullCoords ) {
+        coordCount += typedHullCoords.coords.size();
+      }
+      assert(coordCount == contour.size());
+      
+      // hullCoords must not contain duplicates
+      unordered_map<Coord, bool> seen;
+      for ( TypedHullCoords &typedHullCoords : hullCoords ) {
+        for ( Coord c : typedHullCoords.coords ) {
+          assert(seen.count(c) == 0);
+          seen[c] = true;
+        }
+      }
+      // every coord in contour must be in hullCoords
+      for ( Point2i p : contour ) {
+        Coord c(p.x, p.y);
+        assert(seen.count(c) == 1);
+      }
+#endif // DEBUG
+      
+      if (debug) {
+        for ( TypedHullCoords &typedHullCoords : hullCoords ) {
+          if (debug) {
+            cout << "typedHullCoords.isConcave " << typedHullCoords.isConcave << " and coords " << endl;
+            
+            for ( Coord c : typedHullCoords.coords ) {
+              cout << c << " ";
+            }
+            cout << endl;
+          }
+        }
+        cout << "";
+      }
+      
+      // Render hull lines as 0xFF for convex and 0x7F for concave
+      
+      binMat = Scalar(0);
+      
+      for ( TypedHullCoords &typedHullCoords : hullCoords ) {
+        uint8_t gray;
+        if (typedHullCoords.isConcave) {
+          gray = 0x7F;
+        } else {
+          gray = 0xFF;
+        }
+        
+        auto cv = convertCoordsToPoints(typedHullCoords.coords);
+        drawLine(binMat, cv, Scalar(gray), 1, 8);
+      }
+      
+      if (debugDumpImages) {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_hull_type" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, binMat);
+        cout << "wrote " << fname << endl;
+        cout << "" << endl;
+      }
+
+    }
+    
   }
   
-  // Filter the defect results obtained above to remove the detected defects that are
-  // actually not defects but are overdetected when the line slope changes only a tiny
-  // bit.
-
   // Dump skel generated from region bin Mat
   
   if ((1)) {

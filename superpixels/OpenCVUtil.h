@@ -181,4 +181,21 @@ void drawOneHull(
                  int thickness,
                  int lineType );
 
+void drawLine(
+              Mat & mat,
+              const vector<Point2i> &linePointsVec,
+              const Scalar& color,
+              int thickness,
+              int lineType );
+
+// Quickly convert vector of Coord to Point2i for passing to OpenCV functions
+
+vector<Point2i>
+convertCoordsToPoints(const vector<Coord> &coordsVec);
+
+// Quickly convert vector of Coord to Point2i for passing to OpenCV functions
+
+vector<Coord>
+convertPointsToCoords(const vector<Point2i> &pointsVec);
+
 #endif // OPENCV_UTIL_H
