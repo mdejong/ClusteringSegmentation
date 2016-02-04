@@ -5093,7 +5093,7 @@ clockwiseScanForShapeBounds(
     // Note that in cases of a tight angle, a certain coord can be
     // repeated in the generated contour.
     
-    findContours(binMat, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
+    findContours(binMat, contours, CV_RETR_LIST, CHAIN_APPROX_NONE);
     
     assert(contours.size() >= 1);
     vector<Point> contour = contours[0];
@@ -5174,42 +5174,15 @@ clockwiseScanForShapeBounds(
         printf("grayLevel[%5d] = %d\n", i, grayLevel[i]);
       }
       
-      vector<Point2i> connectedPoints;
-      
-      uint8_t lastGrayLevel = minLevel;
-
       int i = 0;
       for ( Point2i p : contour ) {
         uint8_t gray = grayLevel[i];
         
         printf("i is %d : grey is %d\n", i, gray);
         
-        if (lastGrayLevel == gray) {
-          connectedPoints.push_back(p);
-        } else {
-          // Gray level just changed
-          
-          if (debug) {
-            cout << "emit line as gray " << (int)gray << " with coords:" << endl;
-            
-            for ( Point2i p : contour ) {
-              cout << Coord(p.x, p.y) << " ";
-            }
-            cout << endl;
-          }
-          
-          drawLine(binMat, connectedPoints, Scalar(gray), 1, 8);
-          
-          connectedPoints.clear();
-          lastGrayLevel = gray;
-        }
+        binMat.at<uint8_t>(p.y, p.x) = gray;
         
         i++;
-      }
-      
-      if (connectedPoints.size() > 0) {
-        connectedPoints.push_back(contour[0]);
-        drawLine(binMat, connectedPoints, Scalar(lastGrayLevel), 1, 8);
       }
       
       std::stringstream fnameStream;
@@ -5364,8 +5337,6 @@ clockwiseScanForShapeBounds(
       
       vector<TypedHullCoords> hullCoords;
       
-      Point2i pt0;
-      
       // Determine hull point iteration order that is clockwise and
       // increases in terms of offsets as the iteration progresses.
       
@@ -5505,7 +5476,7 @@ clockwiseScanForShapeBounds(
           cout << "hull line between " << ct1 << " to " << ct2 << endl;
         }
         
-        // Gather all the coords from contour that in the set (pt0, pt)
+        // Gather all the coords from contour that in the set (pt1, pt2)
         
         hullCoords.push_back(TypedHullCoords());
         TypedHullCoords &typedHullCoords = hullCoords[hullCoords.size() - 1];
@@ -5622,8 +5593,9 @@ clockwiseScanForShapeBounds(
           gray = 0xFF;
         }
         
-        auto cv = convertCoordsToPoints(typedHullCoords.coords);
-        drawLine(binMat, cv, Scalar(gray), 1, 8);
+        for ( Coord c : typedHullCoords.coords ) {
+          binMat.at<uint8_t>(c.y, c.x) = gray;
+        }
       }
       
       if (debugDumpImages) {
