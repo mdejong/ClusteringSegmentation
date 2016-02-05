@@ -5371,6 +5371,9 @@ clockwiseScanForShapeBounds(
         printf("defect %8d = (%4d,%4d)\n", defectPtIdx, defectP.x, defectP.y);
         printf("depth  %0.3f\n", depth);
         
+        // FIXME: fast integer distance could filter out any points where
+        // start{ and defectP and within +-2 or is endP and defectP are close.
+        
         // Determine distance in pixels from the defect point to the midpoint of the
         // (startP, endP) hull line.
         
@@ -5414,7 +5417,7 @@ clockwiseScanForShapeBounds(
           printf("rad %0.3f : deg %3d \n", radAngleBetween, degrees );
           printf("\n");
         }
-                
+        
         // FIXME: depth must depend on relative size of contour
         
         float minDefectDepth = 2.0f; // Defect must be more than just a little bit
@@ -5503,6 +5506,7 @@ clockwiseScanForShapeBounds(
       
       typedef struct {
         bool isConcave; // Region curves in on itself at this segment
+        Coord defectPoint; // Set to interior defect point if concave
         vector<Coord> coords;
       } TypedHullCoords;
       
@@ -5657,6 +5661,11 @@ clockwiseScanForShapeBounds(
         if (defectStartOffsetMap.count(offset1) > 0) {
           // (start, end) indicates a concave range
           typedHullCoords.isConcave = true;
+          
+          assert(defectStartOffsetToTripleMap.count(offset1) > 0);
+          vector<Coord> &triple = defectStartOffsetToTripleMap[offset1];
+          Coord defectC = triple[2];
+          typedHullCoords.defectPoint = defectC;
         } else {
           typedHullCoords.isConcave = false;
         }
