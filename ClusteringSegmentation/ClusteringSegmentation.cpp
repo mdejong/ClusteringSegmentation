@@ -5047,6 +5047,50 @@ vector<Coord> genRectangleOutline(int regionWidth, int regionHeight)
   return outlineCoords;
 }
 
+// Get a range of contour values given a starting point and and ending point.
+// Note that in the case where the ending point wraps around are treated as
+// a continuation.
+
+void appendCoordsInRangeOnContour(int startIdx,
+                                  int endIdx,
+                                  const vector<Point2i> &contour,
+                                  vector<Coord> &outCoords)
+{
+  int maxOffset;
+  
+  bool wrapsAround = false;
+  
+  if (endIdx < startIdx) {
+    if (endIdx == 0) {
+      wrapsAround = false;
+    } else {
+      wrapsAround = true;
+    }
+    
+    maxOffset = (int)contour.size();
+  } else {
+    maxOffset = endIdx;
+  }
+  
+  for ( int contouri = startIdx; contouri < maxOffset; contouri++ ) {
+    Point2i p = contour[contouri];
+    Coord c(p.x, p.y);
+    outCoords.push_back(c);
+  }
+  
+  if (wrapsAround) {
+    maxOffset = endIdx;
+    
+    for ( int contouri = 0; contouri < maxOffset; contouri++ ) {
+      Point2i p = contour[contouri];
+      Coord c(p.x, p.y);
+      outCoords.push_back(c);
+    }
+  }
+  
+  return;
+}
+
 // Scan region given likely bounds and determine where most accurate region bounds are likely to be
 
 void
@@ -5431,6 +5475,10 @@ clockwiseScanForShapeBounds(
 //        cout << "pair 1 " << offsetA1 << " , " << offsetA2 << endl;
 //        cout << "pair 2 " << offsetB1 << " , " << offsetB2 << endl;
         
+        if (i > (iMax - 2)) {
+          assert(offsetA1 < offsetA2);
+        }
+        
         assert(offsetA2 == offsetB1);
       }
       
@@ -5441,15 +5489,6 @@ clockwiseScanForShapeBounds(
 
         int offset1 = pairRef.first;
         int offset2 = pairRef.second;
-        
-        if (i == (iMax - 1)) {
-          if (offset2 < offset1) {
-            // Wrap around by setting offset2 to last offset in contour
-            offset2 = (int) contour.size() - 1;
-          }
-        } else {
-          assert(offset1 < offset2);
-        }
         
         // Gather pair of points that indicate a hull line.
         
@@ -5470,31 +5509,7 @@ clockwiseScanForShapeBounds(
         TypedHullCoords &typedHullCoords = hullCoords[hullCoords.size() - 1];
         auto &coordsVec = typedHullCoords.coords;
         
-        for ( int contouri = offset1; contouri < offset2; contouri++ ) {
-          Point2i p = contour[contouri];
-          Coord c(p.x, p.y);
-          coordsVec.push_back(c);
-        }
-        
-        // In the case of the last hull line, append the final coordinate
-        
-        if (i == (iMax - 1)) {
-          // Last hull line
-          
-          if (debug) {
-            cout << "last hull line at " << i << endl;
-          }
-          
-          Point2i p = contour[offset2];
-          Coord c(p.x, p.y);
-          coordsVec.push_back(c);
-        } else {
-          // Not the last hull line
-          
-          if (debug && false) {
-            cout << "NOT last hull line at " << i << endl;
-          }
-        }
+        appendCoordsInRangeOnContour(offset1, offset2, contour, coordsVec);
         
         // Check hull segment start and end coords. A hull segment
         // should start at ct1 aka offset1. Note that since a coordinate
