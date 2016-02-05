@@ -2176,6 +2176,7 @@ captureRegion(SuperpixelImage &spImage,
       }
       if (largerSizes.size() == 0) {
         // Include just the first delta when all are the same
+        assert(floatSizes.size() > 0);
         largerSizes.push_back(floatSizes[0]);
       }
       
@@ -5350,6 +5351,10 @@ clockwiseScanForShapeBounds(
         colorMat = Scalar(0, 0, 0);
         drawContours(colorMat, contours, 0, Scalar(0xFF,0xFF,0xFF), CV_FILLED, 8); // Draw contour as white filled region
       }
+
+      if (debugDumpImages) {
+        binMat = Scalar(0);
+      }
       
       for (int cDefIt = 0; cDefIt < defectVec.size(); cDefIt++) {
         int startIdx = defectVec[cDefIt].val[0];
@@ -5366,11 +5371,68 @@ clockwiseScanForShapeBounds(
         printf("defect %8d = (%4d,%4d)\n", defectPtIdx, defectP.x, defectP.y);
         printf("depth  %0.3f\n", depth);
         
+        // Determine distance in pixels from the defect point to the midpoint of the
+        // (startP, endP) hull line.
+        
+        Point2f startF(startP.x, startP.y);
+        Point2f endF(endP.x, endP.y);
+        
+        Point2f midF = endF - startF;
+        midF = startF + (midF * 0.5);
+        
+        Point2f defectF(defectP.x, defectP.y);
+        
+        Point2f defectToMidF = midF - defectF;
+        
+        //int rX = round(defectToMidF.x);
+        //int rY = round(defectToMidF.y);
+        float rX = defectToMidF.x;
+        float rY = defectToMidF.y;
+        float defectDelta = sqrt(rX*rX + rY*rY);
+        
+        if (debug) {
+          printf("defectDelta %0.3f\n", defectDelta);
+        }
+        
+        if (debugDumpImages) {
+          Point2i midP(round(midF.x), round(midF.y));
+          line(binMat, defectP, midP, Scalar(0xFF), 1);
+        }
+        
+        // Get angle between midpoint and defect point
+        
+        Point2f midToDefect = defectF - midF;
+        Point2f midToStart = startF - midF;
+        
+        float radAngleBetween = angleBetween(midToDefect, midToStart);
+        int degrees = radAngleBetween * 180.0f / M_PI;
+        
+        if (debug) {
+          printf("midToDefect (%0.3f, %0.3f)\n", midToDefect.x, midToDefect.y );
+          printf("midToStart (%0.3f, %0.3f)\n", midToStart.x, midToStart.y );
+          
+          printf("rad %0.3f : deg %3d \n", radAngleBetween, degrees );
+          printf("\n");
+        }
+                
         // FIXME: depth must depend on relative size of contour
         
         float minDefectDepth = 2.0f; // Defect must be more than just a little bit
         
-        if (depth > minDefectDepth) {
+        bool isNear90 = false;
+        if (degrees > 80 && degrees < 100) {
+          isNear90 = true;
+        } else {
+          if (debug) {
+            printf("SKIP not near 90 degrees : %d\n", degrees);
+          }
+        }
+        
+        if ((defectDelta > minDefectDepth) && isNear90) {
+          if (debug) {
+            printf("KEEP defectDelta  %0.3f\n", defectDelta);
+          }
+          
           assert(defectStartOffsetMap.count(startIdx) == 0);
           defectStartOffsetMap[startIdx] = cDefIt;
           
@@ -5380,7 +5442,13 @@ clockwiseScanForShapeBounds(
           triple.push_back(Coord(defectP.x, defectP.y));
           
           defectStartOffsetToTripleMap[startIdx] = triple;
+        } else {
+          if (debug) {
+            printf("SKIP defectDelta  %0.3f\n", defectDelta);
+          }
         }
+        
+        printf("\n");
       }
       
       // Render contours points by looking up offsets in defectStartOffsetMap
@@ -5408,6 +5476,16 @@ clockwiseScanForShapeBounds(
             printf("SKIP depth  %0.3f\n", depth);
           }
         }
+      }
+      
+      if (debugDumpImages) {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_hull_defect_normals" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, binMat);
+        cout << "wrote " << fname << endl;
+        cout << "" << endl;
       }
       
       if (debugDumpImages) {
@@ -6304,7 +6382,7 @@ contractOrExpandRegion(const Mat & inputImg,
                        int numPixels,
                        vector<Coord> &outCoords)
 {
-  const bool debug = true;
+  const bool debug = false;
   const bool debugDumpImages = true;
   const bool debugDumpInputStateImages = true;
   

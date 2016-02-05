@@ -198,4 +198,22 @@ convertCoordsToPoints(const vector<Coord> &coordsVec);
 vector<Coord>
 convertPointsToCoords(const vector<Point2i> &pointsVec);
 
+static inline
+float angleBetween(const Point2f &v1, const Point2f &v2)
+{
+  float len1 = sqrt(v1.x * v1.x + v1.y * v1.y);
+  float len2 = sqrt(v2.x * v2.x + v2.y * v2.y);
+  
+  float dot = v1.x * v2.x + v1.y * v2.y;
+  
+  float a = dot / (len1 * len2);
+  
+  if (a >= 1.0)
+    return 0.0;
+  else if (a <= -1.0)
+    return M_PI;
+  else
+    return acos(a); // 0..PI
+}
+
 #endif // OPENCV_UTIL_H
