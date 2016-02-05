@@ -5469,17 +5469,43 @@ clockwiseScanForShapeBounds(
         
         // Get angle between midpoint and defect point
         
+        auto isSmallAngleFunc = [](Point2f v1, Point2f v2, int32_t &degrees)->bool {
+          float radAngleBetween = angleBetween(v1, v2);
+          degrees = radAngleBetween * 180.0f / M_PI;
+          
+          const int plusMinus = 80;
+          const int degreeLow = (90-plusMinus);
+          const int degreeHigh = (90+plusMinus);
+          
+          if (degrees < degreeLow || degrees > degreeHigh) {
+            return true;
+          } else {
+            return false;
+          }
+        };
+        
         Point2f midToDefect = defectF - midF;
         Point2f midToStart = startF - midF;
+        Point2f midToEnd = endF - midF;
         
-        float radAngleBetween = angleBetween(midToDefect, midToStart);
-        int degrees = radAngleBetween * 180.0f / M_PI;
+        int32_t angleBetweenStartAndDefectDegrees;
+        int32_t angleBetweenEndAndDefectDegrees = -1;
+        
+        bool isAngleBetweenStartAndDefectSmall = isSmallAngleFunc(midToDefect, midToStart, angleBetweenStartAndDefectDegrees);
+        bool isAngleBetweenEndAndDefectSmall = false;
+        
+        if (!isAngleBetweenStartAndDefectSmall) {
+          isAngleBetweenEndAndDefectSmall = isSmallAngleFunc(midToDefect, midToEnd, angleBetweenEndAndDefectDegrees);
+        }
         
         if (debug) {
           printf("midToDefect (%0.3f, %0.3f)\n", midToDefect.x, midToDefect.y );
           printf("midToStart (%0.3f, %0.3f)\n", midToStart.x, midToStart.y );
+          printf("midToEnd (%0.3f, %0.3f)\n", midToEnd.x, midToEnd.y );
           
-          printf("rad %0.3f : deg %3d \n", radAngleBetween, degrees );
+          printf("isAngleBetweenStartAndDefectSmall %s : angleBetweenStartAndDefectDegrees %3d \n", (isAngleBetweenStartAndDefectSmall ? "true" : "false"), angleBetweenStartAndDefectDegrees );
+          
+          printf("isAngleBetweenEndAndDefectSmall %s : angleBetweenStartAndDefectDegrees %3d \n", (isAngleBetweenEndAndDefectSmall ? "true" : "false"), angleBetweenEndAndDefectDegrees );
           printf("\n");
         }
         
@@ -5496,7 +5522,7 @@ clockwiseScanForShapeBounds(
 
           
           std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_hull_defect_" << cDefIt << "_angle_" << degrees << ".png";
+          fnameStream << "srm" << "_tag_" << tag << "_hull_defect_" << cDefIt << "_angle_" << angleBetweenStartAndDefectDegrees << "_and_" << angleBetweenEndAndDefectDegrees << ".png";
           string fname = fnameStream.str();
           
           imwrite(fname, colorMat2);
@@ -5504,42 +5530,43 @@ clockwiseScanForShapeBounds(
           cout << "" << endl;
         }
         
+        // If the angle between the line from (startP, midP) and (midP, defectP) is very
+        // small then consider this hull segment as convex.
+        
+        // FIXME: if the number of pixels inside the contour from (start, defect, end)
+        // polygon pixel inside the region is not small, then consider this region to
+        // be a reasonable size. But the size should be related to the size of the shape
+        // of the original shape.
+        
         // FIXME: depth must depend on relative size of contour
         
         float minDefectDepth = 2.0f; // Defect must be more than just a little bit
         
-        bool isNear90 = false;
-        int plusMinus = 45;
-        int low = (90-plusMinus);
-        int high = (90+plusMinus);
+        bool isVerySmallAngle;
         
-        if (degrees >= low && degrees <= high) {
-          isNear90 = true;
-        } else {
+        if (isAngleBetweenStartAndDefectSmall || isAngleBetweenEndAndDefectSmall) {
           if (debug) {
-            printf("SKIP not near 90 degrees : %d\n", degrees);
+            printf("SKIP very small angle in degrees : %d and %d\n", angleBetweenStartAndDefectDegrees, angleBetweenEndAndDefectDegrees);
           }
-        }
-        
-        bool nearRightAngleAndNotSmall = ((defectDelta > minDefectDepth) && isNear90);
-        
-        if (!isNear90) {
-          int plusMinus = 85;
-          int low = (90-plusMinus);
-          int high = (90+plusMinus);
           
-          if (degrees < low || degrees > high) {
-            // Way too small
-          } else {
-            if (defectDelta > (minDefectDepth * 3)) {
-              nearRightAngleAndNotSmall = true;
-            }
-          }
+          isVerySmallAngle = true;
+        } else {
+          isVerySmallAngle = false;
         }
         
-        if (nearRightAngleAndNotSmall) {
+        bool isHullConcaveDefect;
+        
+        if (defectDelta <= minDefectDepth) {
+          isHullConcaveDefect = false;
+        } else if (isVerySmallAngle) {
+          isHullConcaveDefect = false;
+        } else {
+          isHullConcaveDefect = true;
+        }
+        
+        if (isHullConcaveDefect) {
           if (debug) {
-            printf("KEEP defectDelta  %0.3f with degree %d\n", defectDelta, degrees);
+            printf("KEEP defectDelta  %0.3f\n", defectDelta);
           }
           
           assert(defectStartOffsetMap.count(startIdx) == 0);
@@ -5553,11 +5580,13 @@ clockwiseScanForShapeBounds(
           defectStartOffsetToTripleMap[startIdx] = triple;
         } else {
           if (debug) {
-            printf("SKIP defectDelta  %0.3f with degree %d\n", defectDelta, degrees);
+            printf("SKIP defectDelta  %0.3f\n", defectDelta);
           }
         }
         
+        if (debug) {
         printf("\n");
+        }
       }
       
       // Render contours points by looking up offsets in defectStartOffsetMap
@@ -5611,9 +5640,9 @@ clockwiseScanForShapeBounds(
       // is a convex region or a regular non-convex region.
       
       typedef struct {
-        bool isConcave; // Region curves in on itself at this segment
         Coord defectPoint; // Set to interior defect point if concave
         vector<Coord> coords;
+        bool isConcave; // Region curves in on itself at this segment
       } TypedHullCoords;
       
       vector<TypedHullCoords> hullCoords;
@@ -6828,7 +6857,7 @@ recurseSuperpixelContainment(SuperpixelImage &spImage,
                              const Mat &tagsImg,
                              unordered_map<int32_t, std::vector<int32_t> > &map)
 {
-  const bool debug = true;
+  const bool debug = false;
 
   set<int32_t> rootSet;
   vector<int32_t> rootTags;
