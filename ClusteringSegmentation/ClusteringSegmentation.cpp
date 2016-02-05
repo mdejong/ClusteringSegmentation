@@ -5510,7 +5510,10 @@ clockwiseScanForShapeBounds(
         
         bool isNear90 = false;
         int plusMinus = 45;
-        if (degrees >= (90-plusMinus) && degrees <= (90+plusMinus)) {
+        int low = (90-plusMinus);
+        int high = (90+plusMinus);
+        
+        if (degrees >= low && degrees <= high) {
           isNear90 = true;
         } else {
           if (debug) {
@@ -5518,9 +5521,25 @@ clockwiseScanForShapeBounds(
           }
         }
         
-        if ((defectDelta > minDefectDepth) && isNear90) {
+        bool nearRightAngleAndNotSmall = ((defectDelta > minDefectDepth) && isNear90);
+        
+        if (!isNear90) {
+          int plusMinus = 85;
+          int low = (90-plusMinus);
+          int high = (90+plusMinus);
+          
+          if (degrees < low || degrees > high) {
+            // Way too small
+          } else {
+            if (defectDelta > (minDefectDepth * 3)) {
+              nearRightAngleAndNotSmall = true;
+            }
+          }
+        }
+        
+        if (nearRightAngleAndNotSmall) {
           if (debug) {
-            printf("KEEP defectDelta  %0.3f\n", defectDelta);
+            printf("KEEP defectDelta  %0.3f with degree %d\n", defectDelta, degrees);
           }
           
           assert(defectStartOffsetMap.count(startIdx) == 0);
