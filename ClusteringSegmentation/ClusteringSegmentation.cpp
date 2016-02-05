@@ -5356,6 +5356,8 @@ clockwiseScanForShapeBounds(
         binMat = Scalar(0);
       }
       
+      Mat colorMat2;
+      
       for (int cDefIt = 0; cDefIt < defectVec.size(); cDefIt++) {
         int startIdx = defectVec[cDefIt].val[0];
         int endIdx = defectVec[cDefIt].val[1];
@@ -5418,12 +5420,34 @@ clockwiseScanForShapeBounds(
           printf("\n");
         }
         
+        if (debugDumpImages) {
+          colorMat2 = tagsImg.clone();
+          //colorMat2 = Scalar(0, 0, 0);
+          
+          Point2i midP(round(midF.x), round(midF.y));
+          
+          line(colorMat2, startP, midP, Scalar(0xFF,0,0), 1, 0); // blue
+          line(colorMat2, midP, endP, Scalar(0,0xFF,0), 1, 0); // green
+          
+          line(colorMat2, midP, defectP, Scalar(0,0,0xFF), 1, 0);
+
+          
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_hull_defect_" << cDefIt << "_angle_" << degrees << ".png";
+          string fname = fnameStream.str();
+          
+          imwrite(fname, colorMat2);
+          cout << "wrote " << fname << endl;
+          cout << "" << endl;
+        }
+        
         // FIXME: depth must depend on relative size of contour
         
         float minDefectDepth = 2.0f; // Defect must be more than just a little bit
         
         bool isNear90 = false;
-        if (degrees > 80 && degrees < 100) {
+        int plusMinus = 45;
+        if (degrees >= (90-plusMinus) && degrees <= (90+plusMinus)) {
           isNear90 = true;
         } else {
           if (debug) {
