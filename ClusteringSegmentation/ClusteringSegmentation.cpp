@@ -5340,6 +5340,17 @@ clockwiseScanForShapeBounds(
       
       unordered_map<int, int> defectStartOffsetMap;
       
+      // Map the contour offset to the 3 points that make up the defect
+      // so that the defect triangle can be rendered.
+      
+      unordered_map<int, vector<Coord>> defectStartOffsetToTripleMap;
+      
+      if (debugDumpImages) {
+        colorMat = tagsImg.clone();
+        colorMat = Scalar(0, 0, 0);
+        drawContours(colorMat, contours, 0, Scalar(0xFF,0xFF,0xFF), CV_FILLED, 8); // Draw contour as white filled region
+      }
+      
       for (int cDefIt = 0; cDefIt < defectVec.size(); cDefIt++) {
         int startIdx = defectVec[cDefIt].val[0];
         int endIdx = defectVec[cDefIt].val[1];
@@ -5355,8 +5366,58 @@ clockwiseScanForShapeBounds(
         printf("defect %8d = (%4d,%4d)\n", defectPtIdx, defectP.x, defectP.y);
         printf("depth  %0.3f\n", depth);
         
-        assert(defectStartOffsetMap.count(startIdx) == 0);
-        defectStartOffsetMap[startIdx] = cDefIt;
+        // FIXME: depth must depend on relative size of contour
+        
+        float minDefectDepth = 2.0f; // Defect must be more than just a little bit
+        
+        if (depth > minDefectDepth) {
+          assert(defectStartOffsetMap.count(startIdx) == 0);
+          defectStartOffsetMap[startIdx] = cDefIt;
+          
+          vector<Coord> triple;
+          triple.push_back(Coord(startP.x, startP.y));
+          triple.push_back(Coord(endP.x, endP.y));
+          triple.push_back(Coord(defectP.x, defectP.y));
+          
+          defectStartOffsetToTripleMap[startIdx] = triple;
+        }
+      }
+      
+      // Render contours points by looking up offsets in defectStartOffsetMap
+      
+      if (debugDumpImages) {
+        for (int cDefIt = 0; cDefIt < defectVec.size(); cDefIt++) {
+          int startIdx = defectVec[cDefIt].val[0];
+          int endIdx = defectVec[cDefIt].val[1];
+          int defectPtIdx = defectVec[cDefIt].val[2];
+          double depth = (double)defectVec[cDefIt].val[3]/256.0f;  // see documentation link below why this
+          
+          Point2i startP = contour[startIdx];
+          Point2i endP = contour[endIdx];
+          Point2i defectP = contour[defectPtIdx];
+          
+          if (defectStartOffsetMap.count(startIdx) > 0) {
+            printf("start  %8d = (%4d,%4d)\n", startIdx, startP.x, startP.y);
+            printf("end    %8d = (%4d,%4d)\n", endIdx, endP.x, endP.y);
+            printf("defect %8d = (%4d,%4d)\n", defectPtIdx, defectP.x, defectP.y);
+            printf("depth  %0.3f\n", depth);
+            
+            line(colorMat, startP, endP, Scalar(0xFF,0,0), 1, 0);
+            circle(colorMat, defectP, 4, Scalar(0,0,0xFF), 2);
+          } else {
+            printf("SKIP depth  %0.3f\n", depth);
+          }
+        }
+      }
+      
+      if (debugDumpImages) {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_hull_defect_filtered_render" << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, colorMat);
+        cout << "wrote " << fname << endl;
+        cout << "" << endl;
       }
       
       // Iterate over each coord in the contour and determine if the next N coords
