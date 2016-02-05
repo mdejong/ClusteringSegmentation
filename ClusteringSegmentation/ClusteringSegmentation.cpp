@@ -5373,6 +5373,69 @@ clockwiseScanForShapeBounds(
         printf("defect %8d = (%4d,%4d)\n", defectPtIdx, defectP.x, defectP.y);
         printf("depth  %0.3f\n", depth);
         
+        // The initial filtering checks abs(dx,dy) for the delta between
+        // startP and defectP. If these points are within 2 pixels of each
+        // other then short circult a "closeness" test since it is clear
+        // that the points are very near each other.
+        
+        Point2i startToDefectDelta = startP - defectP;
+        Point2i endToDefectDelta = endP - defectP;
+        
+        Point2i startToEndDelta = endP - startP;
+        startToEndDelta /= 2;
+        
+        Point2i midP = startP + startToEndDelta;
+        Point2i midToDefectDelta = midP - defectP;
+        
+        if (debugDumpImages) {
+          colorMat2 = tagsImg.clone();
+          
+          line(colorMat2, startP, midP, Scalar(0xFF,0,0), 1, 0); // blue
+          line(colorMat2, midP, endP, Scalar(0,0xFF,0), 1, 0); // green
+          
+          line(colorMat2, midP, defectP, Scalar(0,0,0xFF), 1, 0);
+          
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_hull_defect_" << cDefIt << ".png";
+          string fname = fnameStream.str();
+          
+          imwrite(fname, colorMat2);
+          cout << "wrote " << fname << endl;
+          cout << "" << endl;
+        }
+        
+        if (debug) {
+          printf("start -> defect  (%4d,%4d)\n", startToDefectDelta.x, startToDefectDelta.y);
+          printf("end   -> defect  (%4d,%4d)\n", endToDefectDelta.x, endToDefectDelta.y);
+          printf("mid   -> defect  (%4d,%4d)\n", midToDefectDelta.x, midToDefectDelta.y);
+        }
+        
+        const int minDistanceCutoff = 2;
+        
+        // Fast test to determine if a delta vector is small
+        
+        auto isCloseFunc = [](Point2i delta)->bool {
+          if ((abs(delta.x) <= minDistanceCutoff) && (abs(delta.y) <= minDistanceCutoff)) {
+            return true;
+          } else {
+            return false;
+          }
+        };
+        
+        bool startToDefectDeltaClose = isCloseFunc(startToDefectDelta);
+        bool endToDefectDeltaClose   = isCloseFunc(endToDefectDelta);
+        bool midToDefectDeltaClose   = isCloseFunc(midToDefectDelta);
+        
+        if (startToDefectDeltaClose) {
+          continue;
+        }
+        if (endToDefectDeltaClose) {
+          continue;
+        }
+        if (midToDefectDeltaClose) {
+          continue;
+        }
+        
         // FIXME: fast integer distance could filter out any points where
         // start{ and defectP and within +-2 or is endP and defectP are close.
         
@@ -5471,7 +5534,7 @@ clockwiseScanForShapeBounds(
           defectStartOffsetToTripleMap[startIdx] = triple;
         } else {
           if (debug) {
-            printf("SKIP defectDelta  %0.3f\n", defectDelta);
+            printf("SKIP defectDelta  %0.3f with degree %d\n", defectDelta, degrees);
           }
         }
         
