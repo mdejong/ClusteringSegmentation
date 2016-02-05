@@ -5292,11 +5292,9 @@ clockwiseScanForShapeBounds(
     // bit.
     
     if ((1)) {
-      // Map specific point to defect offset
+      // Map offset into contour to defect offset
       
-      unordered_map<Coord, int> defectStartMap;
-//      unordered_map<Coord, int> defectEndMap;
-//      unordered_map<Coord, int> defectTargetMap;
+      unordered_map<int, int> defectStartOffsetMap;
       
       for (int cDefIt = 0; cDefIt < defectVec.size(); cDefIt++) {
         int startIdx = defectVec[cDefIt].val[0];
@@ -5313,18 +5311,8 @@ clockwiseScanForShapeBounds(
         printf("defect %8d = (%4d,%4d)\n", defectPtIdx, defectP.x, defectP.y);
         printf("depth  %0.3f\n", depth);
         
-        Coord startC(startP.x, startP.y);
-        Coord endC(endP.x, endP.y);
-        Coord defectC(defectP.x, defectP.y);
-        
-        assert(defectStartMap.count(startC) == 0);
-        defectStartMap[startC] = cDefIt;
-
-//        assert(defectEndMap.count(endC) == 0);
-//        defectEndMap[endC] = cDefIt;
-
-//        assert(defectTargetMap.count(defectC) == 0);
-//        defectTargetMap[defectC] = cDefIt;
+        assert(defectStartOffsetMap.count(startIdx) == 0);
+        defectStartOffsetMap[startIdx] = cDefIt;
       }
       
       // Iterate over each coord in the contour and determine if the next N coords
@@ -5439,9 +5427,9 @@ clockwiseScanForShapeBounds(
         int offsetB1 = pairRef2.first;
         int offsetB2 = pairRef2.second;
 
-        cout << "" << endl;
-        cout << "pair 1 " << offsetA1 << " , " << offsetA2 << endl;
-        cout << "pair 2 " << offsetB1 << " , " << offsetB2 << endl;
+//        cout << "" << endl;
+//        cout << "pair 1 " << offsetA1 << " , " << offsetA2 << endl;
+//        cout << "pair 2 " << offsetB1 << " , " << offsetB2 << endl;
         
         assert(offsetA2 == offsetB1);
       }
@@ -5509,12 +5497,11 @@ clockwiseScanForShapeBounds(
         }
         
         // Check hull segment start and end coords. A hull segment
-        // should start at ct1.
+        // should start at ct1 aka offset1. Note that since a coordinate
+        // could be duplicated in the contour the offset must be used.
         
-        // FIXME: need to put defectStartMap with Point, as opposed to offset since points could be duplicated
-        
-        if (defectStartMap.count(ct1) > 0) {
-          // (start, end) indicates a convex range
+        if (defectStartOffsetMap.count(offset1) > 0) {
+          // (start, end) indicates a concave range
           typedHullCoords.isConcave = true;
         } else {
           typedHullCoords.isConcave = false;
