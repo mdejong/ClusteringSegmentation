@@ -192,4 +192,50 @@ void for_each_bgr (Mat & mat, F f) noexcept
   return;
 }
 
+// Double iterator that loops over a read/write bgr Mat and a second read only
+// byte Mat. The read only binMat is passed as a byte via the bVal argument.
+// The current mat value is passed as components (B G R) and then the result
+// Vec3b() returned by the functor is written back to mat foreach pixel.
+
+// F = std::function<Vec3b(uint8_t B, uint8_t G, uint8_t R, uint8_t bVal)>
+
+template <typename F>
+void for_each_bgr_const_byte (Mat & mat, const Mat & binMat, F f) noexcept
+{
+#if defined(DEBUG)
+  assert(mat.size() == binMat.size());
+  assert(mat.channels() == 3);
+  assert(binMat.channels() == 1);
+  assert(mat.isContinuous() == binMat.isContinuous());
+  std::function<Vec3b(uint8_t B, uint8_t G, uint8_t R, uint8_t bVal)> funcPtr = f;
+#endif // DEBUG
+  
+  int numRows = mat.rows;
+  int numCols = mat.cols;
+  
+  if (mat.isContinuous()) {
+    numCols *= numRows;
+    numRows = 1;
+  }
+  
+  for (int y = 0; y < numRows; y++) {
+    uint8_t *rowPtr = mat.ptr<uint8_t>(y);
+    const uint8_t * const rowMaxPtr = rowPtr + (3 * numCols);
+    const uint8_t *rowPtr2 = binMat.ptr<uint8_t>(y);
+    
+    for ( ; rowPtr < rowMaxPtr; rowPtr += 3, rowPtr2++) {
+      uint8_t B = rowPtr[0];
+      uint8_t G = rowPtr[1];
+      uint8_t R = rowPtr[2];
+      uint8_t gray = *rowPtr2;
+      Vec3b result = f(B, G, R, gray);
+      rowPtr[0] = result[0]; // B
+      rowPtr[1] = result[1]; // G
+      rowPtr[2] = result[2]; // R
+    }
+  }
+  
+  return;
+}
+
 #endif // OPENCV_MAT_ITER_H

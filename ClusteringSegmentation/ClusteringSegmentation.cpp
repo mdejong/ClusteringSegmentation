@@ -5119,7 +5119,6 @@ clockwiseScanOfHullCoords(
 {
   const bool debug = true;
   const bool debugDumpImages = true;
-  const bool debugDumpStepImages = false;
   
   if (debug) {
     cout << "clockwiseScanOfHullCoords " << tag << endl;
@@ -5154,10 +5153,12 @@ clockwiseScanOfHullCoords(
   // Note that in cases of a tight angle, a certain coord can be
   // repeated in the generated contour.
   
-  findContours(binMat, contours, CV_RETR_LIST, CHAIN_APPROX_NONE);
+  //findContours(binMat, contours, CV_RETR_LIST, CHAIN_APPROX_NONE);
+//  assert(contours.size() >= 1);
+//  vector<Point> contour = contours[0];
   
-  assert(contours.size() >= 1);
-  vector<Point> contour = contours[0];
+  vector<Point> contour;
+  findContourOutline(binMat, contour);
   
   // Invert the default counter clockwise contour orientation
   
@@ -6048,6 +6049,10 @@ clockwiseScanOfHullCoords(
     cout << "" << endl;
   }
   
+  if (debug) {
+    cout << "clockwiseScanOfHullCoords" << endl;
+  }
+  
   return hullCoords;
 }
 
@@ -6069,7 +6074,10 @@ clockwiseScanForShapeBounds(const Mat & tagsImg,
   // smallish straight lines so that perpendicular lines can be computed as compared
   // to each line segment in order to find the shape normals.
 
-  vector<TypedHullCoords> vec = clockwiseScanOfHullCoords(tagsImg, tag, regionCoords);
+  vector<TypedHullCoords> hullCoordsVec = clockwiseScanOfHullCoords(tagsImg, tag, regionCoords);
+  
+  // Simplifiy the complete contour so that lines with the same slope get combined into
+  // regions 
   
   // Dump skel generated from region bin Mat
   

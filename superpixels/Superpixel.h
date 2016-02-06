@@ -124,12 +124,12 @@ class Superpixel {
   bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &height, const vector<Coord> &coords);
   
   static
-  Rect bboxPlusN(const vector<Coord> &coords, CvSize imgSize, int numPixels) {
+  cv::Rect bboxPlusN(const vector<Coord> &coords, CvSize imgSize, int numPixels) {
     const bool debug = true;
     
     int32_t originX, originY, regionWidth, regionHeight;
     Superpixel::bbox(originX, originY, regionWidth, regionHeight, coords);
-    Rect roiRect(originX, originY, regionWidth, regionHeight);
+    cv::Rect roiRect(originX, originY, regionWidth, regionHeight);
     
     if (debug) {
       cout << "detected bbox " << originX << "," << originY << " with " << regionWidth << " x " << regionHeight << endl;
@@ -156,7 +156,7 @@ class Superpixel {
       cout << "expanded bbox " << originX << "," << originY << " with " << regionWidth << " x " << regionHeight << endl;
     }
     
-    Rect expandedRoi(originX, originY, regionWidth, regionHeight);
+    cv::Rect expandedRoi(originX, originY, regionWidth, regionHeight);
     return expandedRoi;
   }
   

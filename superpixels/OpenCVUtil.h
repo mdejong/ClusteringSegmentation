@@ -188,6 +188,27 @@ void drawLine(
               int thickness,
               int lineType );
 
+// Write image Mat and dump filename and dimensions to stdout
+
+static inline
+void writeWroteImg(string filename, cv::Mat mat) {
+  cv::imwrite(filename.c_str(), mat);
+  char buffer[1024];
+  snprintf(buffer, sizeof(buffer), "wrote %s : %d x %d\n", filename.c_str(), mat.cols, mat.rows);
+  std::cout << buffer << endl;
+}
+
+// This utility method does the nasty job of parsing a binary shape from an input Mat
+// where the non-zero pixels are treated as 0xFF. This logic is very tricky because
+// of the special case where the contour pixel is right up against the left/right/top/bottom
+// edge of the image. This logic must parse the shape as a contour with an extra pixel
+// of padding around the binary image data to account for this possible input. Then,
+// the coordinates of the resulting points are generated without considering the extra
+// padding pixels. If anything goes wrong, this method will just print an error msg
+// and exit.
+
+void findContourOutline(const cv::Mat &binMat, vector<Point2i> &contour);
+
 // Quickly convert vector of Coord to Point2i for passing to OpenCV functions
 
 vector<Point2i>

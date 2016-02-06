@@ -617,6 +617,189 @@ Coord findRegionCenter(Mat &binMat, cv::Rect roi, Mat &outDistMat, int tag)
   return centerPair;
 }
 
+// This utility method does the nasty job of parsing a binary shape from an input Mat
+// where the non-zero pixels are treated as 0xFF. This logic is very tricky because
+// of the special case where the contour pixel is right up against the left/right/top/bottom
+// edge of the image. This logic must parse the shape as a contour with an extra pixel
+// of padding around the binary image data to account for this possible input. Then,
+// the coordinates of the resulting points are generated without considering the extra
+// padding pixels. If anything goes wrong, this method will just print an error msg
+// and exit.
+
+void findContourOutline(const cv::Mat &binMat, vector<Point2i> &contour) {
+  const bool debug = true;
+  const bool debugDumpImages = true;
+  
+  if (debug) {
+    cout << "findContourOutline" << endl;
+  }
+  
+  vector<vector<Point2i> > contours;
+  vector<Vec4i> hierarchy;
+  
+  // FIXME: detect ROI+1 and use that rect as the ROI size for new detection Mat
+  
+  // The findContours() method returns funny results when an on pixel is on one
+  // of the edges of the Mat. So, allocate a Mat that has one additional pixel
+  // of spacing and then copy the existing pixels into the larger mat via a ROI
+  // copy.
+  
+  Mat largerMat(binMat.rows + 2, binMat.cols + 2, CV_8UC1, Scalar(0));
+  assert(largerMat.cols == binMat.cols+2);
+  assert(largerMat.rows == binMat.rows+2);
+  
+  Rect borderedROI(1, 1, binMat.cols, binMat.rows);
+  
+  Mat largerROIMat = largerMat(borderedROI);
+  
+  assert(largerROIMat.size() == binMat.size());
+  
+  binMat.copyTo(largerROIMat);
+  
+  if (debugDumpImages) {
+    writeWroteImg("find_contour_input.png", largerMat);
+  }
+  
+  // Extract contour from Mat with known 1 pixel padding on all sides w no simplification
+  
+  findContours( largerMat, contours, hierarchy, CV_RETR_CCOMP, CV_CHAIN_APPROX_NONE );
+  
+  // Contour detection logic will only be successful when 1 single connected regions is detected.
+  // Bomb out if the code detects more than 1 region.
+  
+  if (contours.size() == 0) {
+    // Did not detect any contour regions at all, could be all black input pixels.
+    
+    fprintf(stderr, "error: no contour could be parsed from in input image\n");
+    //exit(1);
+    assert(0);
+  }
+  
+  if (contours.size() > 1) {
+    // Multiple contour regions cannot be supported since only 1 single closed shape is
+    // supported as the input. Emit a visual representation of the input image with
+    // a bbox around each detected region to make it clear why the input failed.
+    
+    Mat imageWithBbox(binMat.size(), CV_8UC3);
+    
+    imageWithBbox = Scalar(0, 0, 0);
+    
+    for_each_bgr_const_byte(imageWithBbox, binMat, [](uint8_t B, uint8_t G, uint8_t R, uint8_t bVal)->Vec3b {
+      const Vec3b white3b(0xFF, 0xFF, 0xFF);
+      const Vec3b black3b(0, 0, 0);
+      
+      if (bVal != 0) {
+        return white3b;
+      } else {
+        return black3b;
+      }
+    });
+    
+    // Now draw detected contour bbox over input image to make it clear when the
+    // N > 1 detected regions are.
+    
+    for( int i = 0; i< contours.size(); i++ ) {
+      Rect rect = boundingRect(contours[i]); // Find the bounding rectangle for contour
+      rectangle(imageWithBbox, rect, CV_RGB(255,0,0));
+    }
+    
+    writeWroteImg("contour_failed_n_bbox.png", imageWithBbox);
+    
+    fprintf(stderr, "error: found %d distinct contour regions in input image\n", (int)contours.size());
+//    exit(1);
+    assert(0);
+  }
+  
+  // Copy contour points into ref passed in from caller scope
+  
+  contour = contours[0];
+  
+  if (debugDumpImages) {
+    // Zero out largerMat and render the contour outline
+    
+    largerMat = Scalar(0);
+    
+    int thickness = 1;
+    
+    Scalar color = Scalar(0xFF);
+    
+    //int lineType = 4; // 4 connected
+    int lineType = 8; // 8 connected
+    //int lineType = CV_AA; // antialiased line
+    
+    drawContours( largerMat, contours, 0, color, thickness, lineType );
+    
+    writeWroteImg("find_contour_output.png", largerMat);
+  }
+  
+  // The ROI region is defined such that (1,1) is actually (0,0) from the
+  // original image.
+  
+  // At this point the contour is a vector of points, but (1,1) must be subtracted
+  // from each point to account for the ROI region.
+  
+  const Point2i offset11(1, 1);
+  
+  if (debug) {
+    cout << "points before offset adjust:" << endl;
+    
+    for( int i = 0; i < contour.size(); i++ ) {
+      Point2i p = contour[i];
+      cout << p << ", ";
+    }
+    cout << endl;
+  }
+  
+  int contourMax = (int)contour.size();
+  for( int i = 0; i < contourMax; i++ ) {
+    Point2i p = contour[i];
+#if defined(DEBUG)
+    assert(p.x > 0);
+    assert(p.y > 0);
+#endif // DEBUG
+    p = p - offset11;
+    contour[i] = p;
+  }
+  
+  if (debug) {
+    cout << "points after offset adjust:" << endl;
+    
+    for( int i = 0; i < contour.size(); i++ ) {
+      Point2i p = contour[i];
+      cout << p << ", ";
+    }
+    cout << endl;
+  }
+  
+  if (debugDumpImages) {
+    // Rerender contour into original sized Mat after crop
+    
+    Mat croppedBinMat = binMat.clone();
+    croppedBinMat = Scalar(0);
+    
+    contours.clear();
+    contours.push_back(contour);
+    
+    int thickness = 1;
+    
+    Scalar color = Scalar(0xFF);
+    
+    //int lineType = 4; // 4 connected
+    int lineType = 8; // 8 connected
+    //int lineType = CV_AA; // antialiased line
+    
+    drawContours( croppedBinMat, contours, 0, color, thickness, lineType );
+    
+    writeWroteImg("find_contour_output_cropped.png", croppedBinMat);
+  }
+    
+  if (debug) {
+    cout << "findContourOutline returning " << contour.size() << " points" << endl;
+  }
+  
+  return;
+}
+
 // Given an input binary Mat (0x0 or 0xFF) perform a dilate() operation that will expand
 // the white region inside a black region. This makes use of a circular operator and
 // an expansion size indicated by the caller.
