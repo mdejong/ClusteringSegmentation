@@ -123,6 +123,43 @@ class Superpixel {
   static void
   bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &height, const vector<Coord> &coords);
   
+  static
+  Rect bboxPlusN(const vector<Coord> &coords, CvSize imgSize, int numPixels) {
+    const bool debug = true;
+    
+    int32_t originX, originY, regionWidth, regionHeight;
+    Superpixel::bbox(originX, originY, regionWidth, regionHeight, coords);
+    Rect roiRect(originX, originY, regionWidth, regionHeight);
+    
+    if (debug) {
+      cout << "detected bbox " << originX << "," << originY << " with " << regionWidth << " x " << regionHeight << endl;
+    }
+    
+    originX -= numPixels;
+    if (originX < 0) {
+      originX = 0;
+    }
+    originY -= numPixels;
+    if (originY < 0) {
+      originY = 0;
+    }
+    regionWidth += (numPixels * 2);
+    if (regionWidth > imgSize.width) {
+      regionWidth = imgSize.width;
+    }
+    regionHeight += (numPixels * 2);
+    if (regionHeight > imgSize.height) {
+      regionHeight = imgSize.height;
+    }
+    
+    if (debug) {
+      cout << "expanded bbox " << originX << "," << originY << " with " << regionWidth << " x " << regionHeight << endl;
+    }
+    
+    Rect expandedRoi(originX, originY, regionWidth, regionHeight);
+    return expandedRoi;
+  }
+  
   static void splitSplayPixels(Mat &inOutTagImg);
   
   bool shouldMergeEdge(float edgeWeight);

@@ -5503,9 +5503,9 @@ clockwiseScanForShapeBounds(
           printf("midToStart (%0.3f, %0.3f)\n", midToStart.x, midToStart.y );
           printf("midToEnd (%0.3f, %0.3f)\n", midToEnd.x, midToEnd.y );
           
-          printf("isAngleBetweenStartAndDefectSmall %s : angleBetweenStartAndDefectDegrees %3d \n", (isAngleBetweenStartAndDefectSmall ? "true" : "false"), angleBetweenStartAndDefectDegrees );
+          printf("isAngleBetweenStartAndDefectSmall %s : angleBetweenStartAndDefectDegrees %3d \n", (isAngleBetweenStartAndDefectSmall ? "true " : "false"), angleBetweenStartAndDefectDegrees );
           
-          printf("isAngleBetweenEndAndDefectSmall %s : angleBetweenStartAndDefectDegrees %3d \n", (isAngleBetweenEndAndDefectSmall ? "true" : "false"), angleBetweenEndAndDefectDegrees );
+          printf("isAngleBetweenEndAndDefectSmall   %s : angleBetweenStartAndDefectDegrees %3d \n", (isAngleBetweenEndAndDefectSmall ? "true " : "false"), angleBetweenEndAndDefectDegrees );
           printf("\n");
         }
         
@@ -5562,6 +5562,155 @@ clockwiseScanForShapeBounds(
           isHullConcaveDefect = false;
         } else {
           isHullConcaveDefect = true;
+        }
+        
+        // In the case where the detected angle is not super small, check the number of pixels that would be contained in
+        // the convex region that are not exactly on the hull line. This checks for odd cases like 15 degrees, but where
+        // the rounding to pixels means that just a few pixels are not actually on the hull line.
+        
+        if (isHullConcaveDefect && !isVerySmallAngle) {
+          vector<Coord> hullAndDefectCoords;
+          
+          Coord startC(startP.x, startP.y);
+          Coord endC(endP.x, endP.y);
+          Coord defectC(defectP.x, defectP.y);
+          
+          hullAndDefectCoords.push_back(startC);
+          hullAndDefectCoords.push_back(defectC);
+          hullAndDefectCoords.push_back(endC);
+          
+          Rect roiRect = Superpixel::bboxPlusN(hullAndDefectCoords, tagsImg.size(), 1);
+          
+          Mat roiMat(roiRect.size(), CV_8UC1);
+          
+          roiMat = Scalar(0);
+          
+          // Capture points on line between start and end
+          
+          Point2i originP(roiRect.x, roiRect.y);
+          
+          line(roiMat, startP - originP, endP - originP, Scalar(0xFF));
+          
+          if (debugDumpImages) {
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_hull_defect_" << cDefIt << "_only_line" << ".png";
+            string fname = fnameStream.str();
+            
+            imwrite(fname, roiMat);
+            cout << "wrote " << fname << endl;
+            cout << "" << endl;
+          }
+          
+          vector<Point2i> hullLinePoints;
+          findNonZero(roiMat, hullLinePoints);
+          unordered_map<Coord, bool> lineLookupTable;
+          
+          for ( Point2i p : hullLinePoints ) {
+            int x = p.x;
+            int y = p.y;
+            Coord c(x, y);
+            lineLookupTable[c] = true;
+          }
+          
+          // Capture filled contour points in the region
+          
+          roiMat = Scalar(0);
+          
+          vector<Point2i> contour;
+          
+          // (start, defect, end)
+          
+          for ( Coord c : hullAndDefectCoords ) {
+            Point2i p(c.x, c.y);
+            Point2i roiP = p - originP;
+            contour.push_back(roiP);
+          }
+          
+          vector<vector<Point2i> > contours;
+          contours.push_back(contour);
+          
+          drawContours(roiMat, contours, 0, Scalar(0xFF), CV_FILLED, 8);
+          
+          vector<Point2i> filledContourPoints;
+          findNonZero(roiMat, filledContourPoints);
+          
+          assert(filledContourPoints.size() > 0);
+
+          vector<Coord> nonHullLinePoints;
+          
+          for ( Point2i p : filledContourPoints ) {
+            int x = p.x;
+            int y = p.y;
+            Coord c(x, y);
+            
+            if (lineLookupTable.count(c) == 0) {
+              // Add coord if it was not on the line
+              nonHullLinePoints.push_back(c);
+            }
+          }
+          
+          // Render points that are not on the line
+          
+          if (debugDumpImages) {
+            binMat = Scalar(0);
+
+            Coord originC(roiRect.x, roiRect.y);
+            
+            for ( Coord c : nonHullLinePoints ) {
+              Coord gC = originC + c;
+              binMat.at<uint8_t>(gC.y, gC.x) = 0xFF;
+            }
+            
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_hull_defect_" << cDefIt << "_not_on_line" << ".png";
+            string fname = fnameStream.str();
+            
+            imwrite(fname, binMat);
+            cout << "wrote " << fname << endl;
+            cout << "" << endl;
+          }
+          
+          if (debugDumpImages) {
+            Mat colorMat = tagsImg.clone();
+            colorMat = Scalar(0, 0, 0);
+            
+            Vec3b greenVec(0x0, 0xFF, 0);
+            
+            for ( Point2i p : hullLinePoints ) {
+              Coord gC(originP.x + p.x, originP.y + p.y);
+              colorMat.at<Vec3b>(gC.y, gC.x) = greenVec;
+            }
+            
+            Vec3b whiteVec(0xFF, 0xFF, 0xFF);
+            
+            for ( Coord c : nonHullLinePoints ) {
+              Coord gC(originP.x + c.x, originP.y + c.y);
+              colorMat.at<Vec3b>(gC.y, gC.x) = whiteVec;
+            }
+            
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_hull_defect_" << cDefIt << "_combined_line_defect" << ".png";
+            string fname = fnameStream.str();
+            
+            imwrite(fname, colorMat);
+            cout << "wrote " << fname << endl;
+            cout << "" << endl;
+          }
+          
+          // Ifthere are more points on the line that points that are not on the
+          // line then skip this region.
+          
+          if (debug) {
+            printf("num line points %d : num region non-line points %d\n", (int) lineLookupTable.size(), (int) nonHullLinePoints.size());
+          }
+          
+          if (nonHullLinePoints.size() <= lineLookupTable.size()) {
+            if (debug) {
+              printf("setting isHullConcaveDefect to false since very few coords in region\n");
+            }
+            
+            isHullConcaveDefect = false;
+          }
         }
         
         if (isHullConcaveDefect) {
