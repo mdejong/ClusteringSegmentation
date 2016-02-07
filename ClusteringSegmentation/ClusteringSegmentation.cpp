@@ -5158,7 +5158,11 @@ clockwiseScanOfHullCoords(
 //  vector<Point> contour = contours[0];
   
   vector<Point> contour;
-  findContourOutline(binMat, contour);
+  findContourOutline(binMat, contour, false);
+  
+  assert(contour.size() > 0);
+
+  contours.push_back(contour);
   
   // Invert the default counter clockwise contour orientation
   
@@ -5175,8 +5179,6 @@ clockwiseScanOfHullCoords(
   }
   
   if (debug) {
-    cout << "contour simplified to " << contour.size() << " points" << endl;
-    
     int i = 0;
     for ( Point2i p : contour ) {
       cout << "contour[" << i << "] = " << "(" << p.x << "," << p.y << ")" << endl;
@@ -6077,7 +6079,152 @@ clockwiseScanForShapeBounds(const Mat & tagsImg,
   vector<TypedHullCoords> hullCoordsVec = clockwiseScanOfHullCoords(tagsImg, tag, regionCoords);
   
   // Simplifiy the complete contour so that lines with the same slope get combined into
-  // regions 
+  // lines of a known length.
+  
+  if (1) {
+    // Simplify coords of filled contour (the entire original region).
+    
+    vector<Coord> combinedCoords;
+    
+    for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+      vector<Coord> vec = typedHullCoords.coords;
+      append_to_vector(combinedCoords, vec);
+    }
+    
+    Mat binMat(tagsImg.size(), CV_8UC1, Scalar(0));
+    
+    for ( Coord c : regionCoords ) {
+      binMat.at<uint8_t>(c.y, c.x) = 0xFF;
+    }
+    
+    vector<Point> simplifiedContour;
+    findContourOutline(binMat, simplifiedContour, true);
+    
+    assert(simplifiedContour.size() > 0);
+    
+    // Iterate over endpoints for hull lines and gather a set of coords
+    // where the nearest coord on the contour will be near at the hull line
+    // end.
+    
+    vector<Coord> nearPoints;
+    
+    Coord firstPoint;
+    Coord lastPoint;
+    
+    assert(hullCoordsVec.size() > 0);
+    firstPoint = hullCoordsVec[0].coords[0];
+    
+    for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+      vector<Coord> &coordVec = typedHullCoords.coords;
+      
+      if (debug) {
+        cout << "coordVec points:" << endl;
+        for ( Coord c : coordVec ) {
+          cout << c << endl;
+        }
+        cout << "";
+      }
+      
+      int numCoords = (int) coordVec.size();
+      
+      assert(numCoords > 0);
+      if (numCoords == 1) {
+        // Ignore single hull sets
+        
+        if (debug) {
+          cout << "skip single coord hull entry" << endl;
+        }
+        
+        lastPoint = coordVec[0];
+        
+        continue;
+      }
+      
+      Coord cStart = coordVec[0];
+      Coord cEnd = coordVec[coordVec.size() - 1];
+      
+      nearPoints.push_back(cStart);
+      
+      float d = deltaDistance(cStart, cEnd);
+      
+      if (d >= 2) {
+        // Midpoint of line segment
+        int midIndex = (int) coordVec.size() / 2;
+        Coord midC = coordVec[midIndex];
+        nearPoints.push_back(midC);
+        
+        if (debug) {
+          cout << "append midpoint " << midC << " from offset " << midIndex << endl;
+        }
+      }
+      
+      lastPoint = cEnd;
+    }
+    if (hullCoordsVec.size() > 1) {
+      float d = deltaDistance(firstPoint, lastPoint);
+      
+      if (d >= 2.0) {
+        nearPoints.push_back(lastPoint);
+        
+        if (debug) {
+          cout << "append last point " << lastPoint << endl;
+        }
+      }
+    }
+
+    if (debug) {
+      cout << "near Points:" << endl;
+      for ( Coord c : nearPoints ) {
+        cout << c << endl;
+      }
+      cout << "";
+    }
+    
+    // Render near points as bin Mat
+    
+    if (debugDumpImages) {
+      binMat = Scalar(0);
+      
+      for ( Coord c : nearPoints ) {
+        binMat.at<uint8_t>(c.y, c.x) = 0xFF;
+      }
+    
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_hull_near_points" << ".png";
+      string fname = fnameStream.str();
+      
+      imwrite(fname, binMat);
+      cout << "wrote " << fname << endl;
+      cout << "" << endl;
+    }
+    
+    // Map near points to the closest points in a simplified
+    
+    /*
+    
+    // For each hull region, match the simplified coords
+    // to the closest hull segment points.
+    
+    for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+      vector<Coord> &coordVec = typedHullCoords.coords;
+      
+//      stack<Coord> simplifiedStack;
+//      
+//      for ( Coord c : coordVec ) {
+//        simplifiedStack.push_back(c);
+//      }
+      
+      int iMax = (int) coordVec.size();
+      for ( int i = 0; i < iMax; ) {
+        // Grab the next simplified contour coord and then find
+        // the next closest coord
+
+      }
+
+    }
+     
+     */
+  }
   
   // Dump skel generated from region bin Mat
   

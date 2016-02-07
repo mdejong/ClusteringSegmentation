@@ -626,7 +626,7 @@ Coord findRegionCenter(Mat &binMat, cv::Rect roi, Mat &outDistMat, int tag)
 // padding pixels. If anything goes wrong, this method will just print an error msg
 // and exit.
 
-void findContourOutline(const cv::Mat &binMat, vector<Point2i> &contour) {
+void findContourOutline(const cv::Mat &binMat, vector<Point2i> &contour, bool simplify) {
   const bool debug = true;
   const bool debugDumpImages = true;
   
@@ -634,8 +634,14 @@ void findContourOutline(const cv::Mat &binMat, vector<Point2i> &contour) {
     cout << "findContourOutline" << endl;
   }
   
+  assert(contour.size() == 0);
+  
   vector<vector<Point2i> > contours;
   vector<Vec4i> hierarchy;
+  
+  if (debugDumpImages) {
+    writeWroteImg("find_contour_input.png", binMat);
+  }
   
   // FIXME: detect ROI+1 and use that rect as the ROI size for new detection Mat
   
@@ -657,12 +663,18 @@ void findContourOutline(const cv::Mat &binMat, vector<Point2i> &contour) {
   binMat.copyTo(largerROIMat);
   
   if (debugDumpImages) {
-    writeWroteImg("find_contour_input.png", largerMat);
+    writeWroteImg("find_contour_uncropped_input.png", largerMat);
   }
   
   // Extract contour from Mat with known 1 pixel padding on all sides w no simplification
+
+  int flags = CV_CHAIN_APPROX_NONE;
   
-  findContours( largerMat, contours, hierarchy, CV_RETR_CCOMP, CV_CHAIN_APPROX_NONE );
+  if (simplify) {
+    flags = CV_CHAIN_APPROX_SIMPLE;
+  }
+  
+  findContours( largerMat, contours, hierarchy, CV_RETR_LIST, flags );
   
   // Contour detection logic will only be successful when 1 single connected regions is detected.
   // Bomb out if the code detects more than 1 region.
@@ -676,15 +688,32 @@ void findContourOutline(const cv::Mat &binMat, vector<Point2i> &contour) {
   }
   
   if (contours.size() > 1) {
+    // Emit contours as N outlines
+    
+    int ci = 0;
+    for ( auto contour : contours ) {
+      Mat outMat = largerMat.clone();
+      
+      drawContours( outMat, contours, ci, Scalar(0xFF), 1, 4, hierarchy );
+      
+      std::stringstream fnameStream;
+      fnameStream << "contour_failed" << ci << ".png";
+      string fname = fnameStream.str();
+      
+      writeWroteImg(fname, outMat);
+      
+      ci++;;
+    }
+    
     // Multiple contour regions cannot be supported since only 1 single closed shape is
     // supported as the input. Emit a visual representation of the input image with
     // a bbox around each detected region to make it clear why the input failed.
     
-    Mat imageWithBbox(binMat.size(), CV_8UC3);
+    Mat imageWithBbox(largerMat.size(), CV_8UC3);
     
     imageWithBbox = Scalar(0, 0, 0);
     
-    for_each_bgr_const_byte(imageWithBbox, binMat, [](uint8_t B, uint8_t G, uint8_t R, uint8_t bVal)->Vec3b {
+    for_each_bgr_const_byte(imageWithBbox, largerMat, [](uint8_t B, uint8_t G, uint8_t R, uint8_t bVal)->Vec3b {
       const Vec3b white3b(0xFF, 0xFF, 0xFF);
       const Vec3b black3b(0, 0, 0);
       
@@ -700,7 +729,7 @@ void findContourOutline(const cv::Mat &binMat, vector<Point2i> &contour) {
     
     for( int i = 0; i< contours.size(); i++ ) {
       Rect rect = boundingRect(contours[i]); // Find the bounding rectangle for contour
-      rectangle(imageWithBbox, rect, CV_RGB(255,0,0));
+      rectangle(imageWithBbox, rect, CV_RGB(255-(i*8),0,0));
     }
     
     writeWroteImg("contour_failed_n_bbox.png", imageWithBbox);

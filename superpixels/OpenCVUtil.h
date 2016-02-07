@@ -9,7 +9,7 @@
 using namespace std;
 using namespace cv;
 
-class Coord;
+#include "Coord.h"
 
 // Convert a vector of 3 bytes into a signed 32bit integer.
 // The values range for a 3 byte tag is 0 -> 0x00FFFFFF and
@@ -72,6 +72,33 @@ Vec3f xyzDeltaToUnitVec3f(int32_t &dR, int32_t &dG, int32_t &dB) {
     vec = vec / scale;
     return vec;
   }
+}
+
+// Simple distance between 2 points
+
+static inline
+float deltaDistance(Point2f p1, Point2f p2) {
+  Point2f delta = p1 - p2;
+  float dX = delta.x;
+  float dY = delta.y;
+  float deltaDist = sqrt(dX*dX + dY*dY);
+  return deltaDist;
+}
+
+static inline
+float deltaDistance(Point2i p1, Point2i p2) {
+  Point2i delta = p1 - p2;
+  int dX = delta.x;
+  int dY = delta.y;
+  float deltaDist = sqrt((float)(dX*dX + dY*dY));
+  return deltaDist;
+}
+
+static inline
+float deltaDistance(Coord c1, Coord c2) {
+  Point2i p1(c1.x, c1.y);
+  Point2i p2(c2.x, c2.y);
+  return deltaDistance(p1, p2);
 }
 
 // Logical not operation for byte matrix. If the value is 0x0 then
@@ -207,7 +234,7 @@ void writeWroteImg(string filename, cv::Mat mat) {
 // padding pixels. If anything goes wrong, this method will just print an error msg
 // and exit.
 
-void findContourOutline(const cv::Mat &binMat, vector<Point2i> &contour);
+void findContourOutline(const cv::Mat &binMat, vector<Point2i> &contour, bool simplify);
 
 // Quickly convert vector of Coord to Point2i for passing to OpenCV functions
 
