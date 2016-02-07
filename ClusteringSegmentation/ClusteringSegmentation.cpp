@@ -5281,8 +5281,7 @@ clockwiseScanOfHullCoords(
     fnameStream << "srm" << "_tag_" << tag << "_hull_lines" << ".png";
     string fname = fnameStream.str();
     
-    imwrite(fname, binMat);
-    cout << "wrote " << fname << endl;
+    writeWroteImg(fname, binMat);
     cout << "" << endl;
   }
   
@@ -6204,6 +6203,8 @@ clockwiseScanOfHullCoords(
         printf("\n");
       }
       
+      bool mergeLineSegments = (isNearStraight && (!currentIsConcave && !nextIsConcave));
+      
       if (debugDumpImages) {
         Mat colorMat(binMat.size(), CV_8UC3, Scalar(0,0,0));
         
@@ -6214,7 +6215,7 @@ clockwiseScanOfHullCoords(
         line(colorMat, anchorP, nextP, c2, 1, 8);
         
         std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_hull_lines_segment_" << i << "_angle_" << angleDeg << ".png";
+        fnameStream << "srm" << "_tag_" << tag << "_hull_lines_segment_" << i << "_angle_" << angleDeg << (mergeLineSegments ? "_merged" : "_notmerged" ) << ".png";
         string fname = fnameStream.str();
         
         imwrite(fname, colorMat);
@@ -6222,7 +6223,7 @@ clockwiseScanOfHullCoords(
         cout << "" << endl;
       }
       
-      if (isNearStraight && (!currentIsConcave && !nextIsConcave)) {
+      if (mergeLineSegments) {
         if (debug) {
           cout << "combine convex segments " << i << " and " << (i+1) << endl;
         }
@@ -6493,6 +6494,21 @@ clockwiseScanForShapeBounds(const Mat & tagsImg,
         }
         
         typedHullOffset++;
+      }
+      
+      if (debug) {
+        int numConcave = 0;
+        int numConvex = 0;
+        
+        for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+          if (typedHullCoords.isConcave) {
+            numConcave++;
+          } else {
+            numConvex++;
+          }
+        }
+        
+        cout << "numConcave " << numConcave << " and numConvex " << numConvex << endl;
       }
       
       std::stringstream fnameStream;
