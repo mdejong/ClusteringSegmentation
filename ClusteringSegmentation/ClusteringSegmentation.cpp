@@ -6251,10 +6251,26 @@ clockwiseScanOfHullCoords(
 
     vector<TypedHullCoords> combinedHullCoords;
     
+    int coordPairsOffset = 0;
+    int lastCoordPairsOffset = (int) vecOfHullCoordsPtrs.size() - 1;
+    
     for ( TypedHullCoords *typedHullCoordsPtr : vecOfHullCoordsPtrs ) {
-      if (typedHullCoordsPtr->coords.size() > 0) {
+      if (coordPairsOffset == lastCoordPairsOffset) {
+        if (debug) {
+          cout << "ignore repeated first combinedHullCoords at offset " << coordPairsOffset << endl;
+        }
+      } else if ((coordPairsOffset != lastCoordPairsOffset) && (typedHullCoordsPtr->coords.size() > 0)) {
+        if (debug) {
+          cout << "add to combinedHullCoords at offset " << coordPairsOffset << " N = " << typedHullCoordsPtr->coords.size() << endl;
+        }
+        
         combinedHullCoords.push_back(*typedHullCoordsPtr);
+      } else {
+        if (debug) {
+          cout << "ignore zero length combinedHullCoords at offset " << coordPairsOffset << endl;
+        }
       }
+      coordPairsOffset++;
     }
     
     cout << "filtered hull coords down to " << combinedHullCoords.size() << " elements" << endl;
@@ -6486,64 +6502,6 @@ clockwiseScanForShapeBounds(const Mat & tagsImg,
       writeWroteImg(fname, colorMat);
       cout << "" << endl;
     }
-    
-    /*
-     
-     if (debugDumpImages) {
-     Mat colorMat(binMat.size(), CV_8UC3, Scalar(0,0,0));
-     
-     for ( TypedHullCoords &typedHullCoords : hullCoords ) {
-     uint32_t pixel = 0;
-     pixel |= (rand() % 256);
-     pixel |= ((rand() % 256) << 8);
-     pixel |= ((rand() % 256) << 16);
-     pixel |= (0xFF << 24);
-     
-     Vec3b vec = PixelToVec3b(pixel);
-     
-     for ( Coord c : typedHullCoords.coords ) {
-     colorMat.at<Vec3b>(c.y, c.x) = vec;
-     }
-     }
-     
-     std::stringstream fnameStream;
-     fnameStream << "srm" << "_tag_" << tag << "_hull_segments" << ".png";
-     string fname = fnameStream.str();
-     
-     imwrite(fname, colorMat);
-     cout << "wrote " << fname << endl;
-     cout << "" << endl;
-     }
-
-     
-     */
-    
-    // Map near points to the closest points in a simplified
-    
-    /*
-    
-    // For each hull region, match the simplified coords
-    // to the closest hull segment points.
-    
-    for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
-      vector<Coord> &coordVec = typedHullCoords.coords;
-      
-//      stack<Coord> simplifiedStack;
-//      
-//      for ( Coord c : coordVec ) {
-//        simplifiedStack.push_back(c);
-//      }
-      
-      int iMax = (int) coordVec.size();
-      for ( int i = 0; i < iMax; ) {
-        // Grab the next simplified contour coord and then find
-        // the next closest coord
-
-      }
-
-    }
-     
-     */
   }
   
   // Dump skel generated from region bin Mat
