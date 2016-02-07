@@ -671,7 +671,11 @@ void findContourOutline(const cv::Mat &binMat, vector<Point2i> &contour, bool si
   int flags = CV_CHAIN_APPROX_NONE;
   
   if (simplify) {
-    flags = CV_CHAIN_APPROX_SIMPLE;
+//    flags = CV_CHAIN_APPROX_SIMPLE;
+    
+//    flags = CV_CHAIN_APPROX_TC89_L1;
+    
+    flags = CV_CHAIN_APPROX_TC89_KCOS;
   }
   
   findContours( largerMat, contours, hierarchy, CV_RETR_LIST, flags );

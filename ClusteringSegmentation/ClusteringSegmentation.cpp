@@ -5960,6 +5960,7 @@ clockwiseScanOfHullCoords(
       Coord defectC = triple[2];
       typedHullCoords.defectPoint = defectC;
     } else {
+      typedHullCoords.defectPoint = Coord(0xFFFF, 0xFFFF);
       typedHullCoords.isConcave = false;
     }
   }
@@ -6026,22 +6027,22 @@ clockwiseScanOfHullCoords(
   
   // Render hull lines as 0xFF for convex and 0x7F for concave
   
-  binMat = Scalar(0);
-  
-  for ( TypedHullCoords &typedHullCoords : hullCoords ) {
-    uint8_t gray;
-    if (typedHullCoords.isConcave) {
-      gray = 0x7F;
-    } else {
-      gray = 0xFF;
+  if (debugDumpImages) {
+    binMat = Scalar(0);
+    
+    for ( TypedHullCoords &typedHullCoords : hullCoords ) {
+      uint8_t gray;
+      if (typedHullCoords.isConcave) {
+        gray = 0x7F;
+      } else {
+        gray = 0xFF;
+      }
+      
+      for ( Coord c : typedHullCoords.coords ) {
+        binMat.at<uint8_t>(c.y, c.x) = gray;
+      }
     }
     
-    for ( Coord c : typedHullCoords.coords ) {
-      binMat.at<uint8_t>(c.y, c.x) = gray;
-    }
-  }
-  
-  if (debugDumpImages) {
     std::stringstream fnameStream;
     fnameStream << "srm" << "_tag_" << tag << "_hull_type" << ".png";
     string fname = fnameStream.str();
@@ -6049,6 +6050,126 @@ clockwiseScanOfHullCoords(
     imwrite(fname, binMat);
     cout << "wrote " << fname << endl;
     cout << "" << endl;
+  }
+  
+  // Render hull lines as increasing UID values so that the specific regions
+  // appear more clearly separated from the others. This makes the specific
+  // order of the hull segments more clear as color values.
+  
+  if (debugDumpImages) {
+    Mat colorMat(binMat.size(), CV_8UC3, Scalar(0,0,0));
+    
+    for ( TypedHullCoords &typedHullCoords : hullCoords ) {
+      uint32_t pixel = 0;
+      pixel |= (rand() % 256);
+      pixel |= ((rand() % 256) << 8);
+      pixel |= ((rand() % 256) << 16);
+      pixel |= (0xFF << 24);
+      
+      Vec3b vec = PixelToVec3b(pixel);
+      
+      for ( Coord c : typedHullCoords.coords ) {
+        colorMat.at<Vec3b>(c.y, c.x) = vec;
+      }
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_hull_segments" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, colorMat);
+    cout << "wrote " << fname << endl;
+    cout << "" << endl;
+  }
+  
+  // Render hull lines as filled contour and then parse the lines as
+  // simplified coords so that whole lines can be identified.
+  
+  if ((1)) {
+    binMat = Scalar(0);
+    
+    drawOneHull(binMat, hull, contour, Scalar(0xFF), CV_FILLED, 8 );
+    
+    vector<Point> simplifiedContour;
+    findContourOutline(binMat, simplifiedContour, true);
+    
+    assert(simplifiedContour.size() > 0);
+    
+    vector<pair<Point2i,Point2i>> longerLines;
+    
+    int iMax = (int) simplifiedContour.size();
+    
+    Point2i lastP;
+    
+    for ( int i = 0; i < iMax; i++ ) {
+      Point2i p1 = simplifiedContour[i];
+      Point2i p2;
+      
+      if (i == 0) {
+        lastP = simplifiedContour[simplifiedContour.size() - 1];
+      }
+      
+      if (i == (iMax - 1)) {
+        p2 = simplifiedContour[0];
+      } else {
+        p2 = simplifiedContour[i+1];
+      }
+      
+      float d = deltaDistance(p1, p2);
+      
+      Point2i d1 = p1 - lastP;
+      Point2i d2 = p2 - p1;
+      
+      float radAngleBetween = angleBetween(d1, d2);
+      int angleDeg = radAngleBetween * 180.0f / M_PI;
+      
+      if (debug) {
+        printf("lp (%3d, %3d)\n", lastP.x, lastP.y );
+        printf("p1 (%3d, %3d)\n", p1.x, p1.y );
+        printf("p2 (%3d, %3d)\n", p2.x, p2.y );
+        
+        printf("d1 (%3d, %3d)\n", d1.x, d1.y );
+        printf("d2 (%3d, %3d)\n", d2.x, d2.y );
+        
+        printf("angle %d\n", angleDeg);
+        printf("\n");
+      }
+      
+      lastP = p1;
+      
+      cout << "line from " << Coord(p1.x, p1.y) << " to " << Coord(p2.x, p2.y) << " with d = " << d << " and angle = " << angleDeg << endl;
+      
+      if (d >= 2.0 && angleDeg > 25) {
+        longerLines.push_back(make_pair(p1,p2));
+      }
+    }
+    
+    for ( pair<Point2i,Point2i> & pair : longerLines ) {
+      Point2i p1 = pair.first;
+      Point2i p2 = pair.second;
+      float d = deltaDistance(p1, p2);
+      cout << "longer line from " << Coord(p1.x, p1.y) << " to " << Coord(p2.x, p2.y) << " with d = " << d << endl;
+    }
+    
+    // Render line segments as diff colors
+    
+    Mat colorMat(binMat.size(), CV_8UC3, Scalar(0,0,0));
+   
+    for ( pair<Point2i,Point2i> & pair : longerLines ) {
+      Point2i p1 = pair.first;
+      Point2i p2 = pair.second;
+      
+      line(colorMat, p1, p2, Scalar((rand() % 256), (rand() % 256), (rand() % 256)), 1, 8);
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_simplified_hull_line_segments" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, colorMat);
+    cout << "wrote " << fname << endl;
+    cout << "" << endl;
+
   }
   
   if (debug) {
