@@ -6082,98 +6082,225 @@ clockwiseScanOfHullCoords(
     cout << "" << endl;
   }
   
-  // Render hull lines as filled contour and then parse the lines as
-  // simplified coords so that whole lines can be identified.
+  // Dump hull lines with diff colors for each segment render
   
-  if ((1)) {
-    binMat = Scalar(0);
-    
-    drawOneHull(binMat, hull, contour, Scalar(0xFF), CV_FILLED, 8 );
-    
-    vector<Point> simplifiedContour;
-    findContourOutline(binMat, simplifiedContour, true);
-    
-    assert(simplifiedContour.size() > 0);
-    
-    vector<pair<Point2i,Point2i>> longerLines;
-    
-    int iMax = (int) simplifiedContour.size();
-    
-    Point2i lastP;
-    
-    for ( int i = 0; i < iMax; i++ ) {
-      Point2i p1 = simplifiedContour[i];
-      Point2i p2;
-      
-      if (i == 0) {
-        lastP = simplifiedContour[simplifiedContour.size() - 1];
-      }
-      
-      if (i == (iMax - 1)) {
-        p2 = simplifiedContour[0];
-      } else {
-        p2 = simplifiedContour[i+1];
-      }
-      
-      float d = deltaDistance(p1, p2);
-      
-      Point2i d1 = p1 - lastP;
-      Point2i d2 = p2 - p1;
-      
-      float radAngleBetween = angleBetween(d1, d2);
-      int angleDeg = radAngleBetween * 180.0f / M_PI;
-      
-      if (debug) {
-        printf("lp (%3d, %3d)\n", lastP.x, lastP.y );
-        printf("p1 (%3d, %3d)\n", p1.x, p1.y );
-        printf("p2 (%3d, %3d)\n", p2.x, p2.y );
-        
-        printf("d1 (%3d, %3d)\n", d1.x, d1.y );
-        printf("d2 (%3d, %3d)\n", d2.x, d2.y );
-        
-        printf("angle %d\n", angleDeg);
-        printf("\n");
-      }
-      
-      lastP = p1;
-      
-      cout << "line from " << Coord(p1.x, p1.y) << " to " << Coord(p2.x, p2.y) << " with d = " << d << " and angle = " << angleDeg << endl;
-      
-      if (d >= 2.0 && angleDeg > 25) {
-        longerLines.push_back(make_pair(p1,p2));
-      }
-    }
-    
-    for ( pair<Point2i,Point2i> & pair : longerLines ) {
-      Point2i p1 = pair.first;
-      Point2i p2 = pair.second;
-      float d = deltaDistance(p1, p2);
-      cout << "longer line from " << Coord(p1.x, p1.y) << " to " << Coord(p2.x, p2.y) << " with d = " << d << endl;
-    }
-    
-    // Render line segments as diff colors
-    
+  if (debugDumpImages) {
     Mat colorMat(binMat.size(), CV_8UC3, Scalar(0,0,0));
-   
-    for ( pair<Point2i,Point2i> & pair : longerLines ) {
-      Point2i p1 = pair.first;
-      Point2i p2 = pair.second;
+    
+    for ( TypedHullCoords &typedHullCoords : hullCoords ) {
+      auto vecOfCoords = typedHullCoords.coords;
+      auto vecOfPoints = convertCoordsToPoints(vecOfCoords);
+      auto startP = vecOfPoints[0];
+      auto endP = vecOfPoints[vecOfPoints.size() - 1];
       
-      line(colorMat, p1, p2, Scalar((rand() % 256), (rand() % 256), (rand() % 256)), 1, 8);
+      Scalar color = Scalar((rand() % 256), (rand() % 256), (rand() % 256));
+      line(colorMat, startP, endP, color, 1, 8);
     }
     
     std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_simplified_hull_line_segments" << ".png";
+    fnameStream << "srm" << "_tag_" << tag << "_hull_lines_segments" << ".png";
     string fname = fnameStream.str();
     
     imwrite(fname, colorMat);
     cout << "wrote " << fname << endl;
     cout << "" << endl;
+  }
+  
+  // Implement merge of hull line segments to simplify the regions that were
+  // detected as concave segments but were actually just part of a regular
+  // convex region. These regions need to be joined together to simplify
+  // the shape and make the grouping into typed hull coords make more logical
+  // sense.
+  
+  if ((1)) {
+    vector<int> angles;
+    Point2i lastP;
+    
+    // Count number of coords before operations
+    
+    int coordCountBefore = 0;
+    
+    for ( TypedHullCoords &typedHullCoords : hullCoords ) {
+      auto vecOfCoords = typedHullCoords.coords;
+      coordCountBefore += (int) vecOfCoords.size();
+    }
+    
+    // In the first iteration, gather (start, end) coords for each hull line
+    // and make sure that there is one additional entry at the end of the
+    // set of pairs that corresponds to the first segment.
+    
+    vector<pair<Point2i,Point2i> > vecOfStartEndPointPairs;
+    vector<bool> vecOfIsConcave;
 
+    vector<TypedHullCoords*> vecOfHullCoordsPtrs;
+    
+    for ( TypedHullCoords &typedHullCoords : hullCoords ) {
+      auto vecOfCoords = typedHullCoords.coords;
+      Point2i startP = coordToPoint(vecOfCoords[0]);
+      Point2i endP = coordToPoint(vecOfCoords[vecOfCoords.size() - 1]);
+      vecOfStartEndPointPairs.push_back(make_pair(startP, endP));
+      
+      vecOfIsConcave.push_back(typedHullCoords.isConcave);
+      
+      vecOfHullCoordsPtrs.push_back(&typedHullCoords);
+    }
+    
+    {
+      TypedHullCoords &typedHullCoords = hullCoords[0];
+      auto vecOfCoords = typedHullCoords.coords;
+      Point2i firstStartP = coordToPoint(vecOfCoords[0]);
+      Point2i firstEndP = coordToPoint(vecOfCoords[vecOfCoords.size() - 1]);
+      
+      vecOfStartEndPointPairs.push_back(make_pair(firstStartP, firstEndP));
+      
+      vecOfIsConcave.push_back(typedHullCoords.isConcave);
+      
+      vecOfHullCoordsPtrs.push_back(&typedHullCoords);
+    }
+    
+    // Iterate from (1, end) knowing that each element will always have
+    
+    int iMax = (int) hullCoords.size();
+    
+    for ( int i = 0; i < iMax; i++ ) {
+      auto currentPair = vecOfStartEndPointPairs[i];
+      auto nextPair = vecOfStartEndPointPairs[i+1];
+      
+      bool currentIsConcave = vecOfIsConcave[i];
+      bool nextIsConcave = vecOfIsConcave[i+1];
+
+      cout << "(i, i+1): (" << i << ", " << i+1 << ")" << endl;
+      cout << "currentPair: " << pointToCoord(currentPair.first) << " " << pointToCoord(currentPair.second) << endl;
+      cout << "nextPair: " << pointToCoord(nextPair.first) << " " << pointToCoord(nextPair.second) << endl;
+      
+      // Use nextPair.first as anchor point and then calculate vectors to currentPair.first
+      // and to nextPair.second
+      
+      Point2i anchorP = nextPair.first;
+      Point2i prevP = currentPair.first;
+      Point2i nextP = nextPair.second;
+      
+      Point2i d1 = anchorP - prevP;
+      Point2i d2 = anchorP - nextP;
+      
+      // FIXME: id d < 3 then unlikely to be a big angle change, treat as part of same line?
+      
+      float radAngleBetween = angleBetween(d1, d2);
+      int angleDeg = radAngleBetween * 180.0f / M_PI;
+      
+      int angleMinus = 30;
+      bool isNearStraight = angleDeg > (180 - angleMinus);
+      
+      if (debug) {
+        printf("lp (%3d, %3d)\n", prevP.x, prevP.y );
+        printf("p1 (%3d, %3d)\n", anchorP.x, anchorP.y );
+        printf("p2 (%3d, %3d)\n", nextP.x, nextP.y );
+        
+        printf("d1 (%3d, %3d)\n", d1.x, d1.y );
+        printf("d2 (%3d, %3d)\n", d2.x, d2.y );
+        
+        printf("angle %d\n", angleDeg);
+        printf("angle isNearStraight %d\n", isNearStraight);
+        printf("\n");
+      }
+      
+      if (debugDumpImages) {
+        Mat colorMat(binMat.size(), CV_8UC3, Scalar(0,0,0));
+        
+        Scalar c1 = Scalar(0, 0xFF, 0);
+        line(colorMat, prevP, anchorP, c1, 1, 8);
+        
+        Scalar c2 = Scalar(0, 0, 0xFF);
+        line(colorMat, anchorP, nextP, c2, 1, 8);
+        
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_hull_lines_segment_" << i << "_angle_" << angleDeg << ".png";
+        string fname = fnameStream.str();
+        
+        imwrite(fname, colorMat);
+        cout << "wrote " << fname << endl;
+        cout << "" << endl;
+      }
+      
+      if (isNearStraight && (!currentIsConcave && !nextIsConcave)) {
+        if (debug) {
+          cout << "combine convex segments " << i << " and " << (i+1) << endl;
+        }
+        
+        // FIXME: what happens if join around 0 would combine non-concave regions?
+        
+        TypedHullCoords &typedHullCoords1 = *(vecOfHullCoordsPtrs[i]);
+        TypedHullCoords &typedHullCoords2 = *(vecOfHullCoordsPtrs[i+1]);
+        
+#if defined(DEBUG)
+        assert(typedHullCoords1.isConcave == false);
+        assert(typedHullCoords2.isConcave == false);
+        assert(typedHullCoords1.coords.size() > 0);
+#endif // DEBUG
+        
+        auto &coordsVecSrc = typedHullCoords1.coords;
+        auto &coordsVecDst = typedHullCoords2.coords;
+        
+        // Insert at front of coordsVecDst to maintain contour order
+        coordsVecDst.insert(begin(coordsVecDst), begin(coordsVecSrc), end(coordsVecSrc));
+        coordsVecSrc.clear();
+      }
+    }
+    
+    // After processing all hull line segments, filter out segments with zero coords.
+
+    vector<TypedHullCoords> combinedHullCoords;
+    
+    for ( TypedHullCoords *typedHullCoordsPtr : vecOfHullCoordsPtrs ) {
+      if (typedHullCoordsPtr->coords.size() > 0) {
+        combinedHullCoords.push_back(*typedHullCoordsPtr);
+      }
+    }
+    
+    cout << "filtered hull coords down to " << combinedHullCoords.size() << " elements" << endl;
+    
+    hullCoords = combinedHullCoords;
+    
+#if defined(DEBUG)
+    int coordCountAfter = 0;
+    
+    for ( TypedHullCoords &typedHullCoords : hullCoords ) {
+      auto vecOfCoords = typedHullCoords.coords;
+      coordCountAfter += (int) vecOfCoords.size();
+    }
+    
+    assert(coordCountAfter == coordCountBefore);
+#endif // DEBUG
+    
+    cout << "" << endl;
+  }
+  
+  // Dump hull lines with diff colors for each segment render
+  
+  if (debugDumpImages) {
+    Mat colorMat(binMat.size(), CV_8UC3, Scalar(0,0,0));
+    
+    for ( TypedHullCoords &typedHullCoords : hullCoords ) {
+      auto vecOfCoords = typedHullCoords.coords;
+      auto vecOfPoints = convertCoordsToPoints(vecOfCoords);
+      auto startP = vecOfPoints[0];
+      auto endP = vecOfPoints[vecOfPoints.size() - 1];
+      
+      Scalar color = Scalar((rand() % 256), (rand() % 256), (rand() % 256));
+      line(colorMat, startP, endP, color, 1, 8);
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_hull_lines_combined_segments" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, colorMat);
+    cout << "wrote " << fname << endl;
+    cout << "" << endl;
   }
   
   if (debug) {
-    cout << "clockwiseScanOfHullCoords" << endl;
+    cout << "clockwiseScanOfHullCoords return" << endl;
   }
   
   return hullCoords;
@@ -6199,35 +6326,16 @@ clockwiseScanForShapeBounds(const Mat & tagsImg,
 
   vector<TypedHullCoords> hullCoordsVec = clockwiseScanOfHullCoords(tagsImg, tag, regionCoords);
   
-  // Simplifiy the complete contour so that lines with the same slope get combined into
-  // lines of a known length.
+  // The hull lines should have already been simplified when possible, so determine the
+  // hulls by taking the first and last point in the coords vec and then find the midpoint.
   
   if (1) {
-    // Simplify coords of filled contour (the entire original region).
-    
-    vector<Coord> combinedCoords;
-    
-    for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
-      vector<Coord> vec = typedHullCoords.coords;
-      append_to_vector(combinedCoords, vec);
-    }
-    
-    Mat binMat(tagsImg.size(), CV_8UC1, Scalar(0));
-    
-    for ( Coord c : regionCoords ) {
-      binMat.at<uint8_t>(c.y, c.x) = 0xFF;
-    }
-    
-    vector<Point> simplifiedContour;
-    findContourOutline(binMat, simplifiedContour, true);
-    
-    assert(simplifiedContour.size() > 0);
-    
     // Iterate over endpoints for hull lines and gather a set of coords
     // where the nearest coord on the contour will be near at the hull line
     // end.
     
     vector<Coord> nearPoints;
+    unordered_map<Coord, int> isMidpointMap;
     
     Coord firstPoint;
     Coord lastPoint;
@@ -6235,6 +6343,9 @@ clockwiseScanForShapeBounds(const Mat & tagsImg,
     assert(hullCoordsVec.size() > 0);
     firstPoint = hullCoordsVec[0].coords[0];
     
+    const float minStartEndDist = 2.0f;
+    
+    int typedHullOffset = 0;
     for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
       vector<Coord> &coordVec = typedHullCoords.coords;
       
@@ -6257,34 +6368,43 @@ clockwiseScanForShapeBounds(const Mat & tagsImg,
         }
         
         lastPoint = coordVec[0];
-        
+        typedHullOffset++;
         continue;
       }
       
       Coord cStart = coordVec[0];
       Coord cEnd = coordVec[coordVec.size() - 1];
       
-      nearPoints.push_back(cStart);
-      
       float d = deltaDistance(cStart, cEnd);
-      
-      if (d >= 2) {
-        // Midpoint of line segment
-        int midIndex = (int) coordVec.size() / 2;
-        Coord midC = coordVec[midIndex];
-        nearPoints.push_back(midC);
+      if (d >= minStartEndDist) {
+        nearPoints.push_back(cStart);
         
-        if (debug) {
-          cout << "append midpoint " << midC << " from offset " << midIndex << endl;
+        if (coordVec.size() > 2) {
+          // Determine midpoint of hull line
+          
+          Point2i p1 = coordToPoint(cStart);
+          Point2i p2 = coordToPoint(cEnd);
+          Point2i d = (p2 - p1)  / 2;
+          Point2i midP = p2 - d;
+          Coord midC = pointToCoord(midP);
+          
+          nearPoints.push_back(midC);
+          
+          isMidpointMap[midC] = typedHullOffset;
+          
+          if (debug) {
+            cout << "append midpoint " << midC << " in between " << cStart << " to " << cEnd << endl;
+          }
         }
       }
       
       lastPoint = cEnd;
+      typedHullOffset++;
     }
     if (hullCoordsVec.size() > 1) {
       float d = deltaDistance(firstPoint, lastPoint);
       
-      if (d >= 2.0) {
+      if (d >= minStartEndDist) {
         nearPoints.push_back(lastPoint);
         
         if (debug) {
@@ -6304,7 +6424,7 @@ clockwiseScanForShapeBounds(const Mat & tagsImg,
     // Render near points as bin Mat
     
     if (debugDumpImages) {
-      binMat = Scalar(0);
+      Mat binMat(tagsImg.size(), CV_8UC1, Scalar(0));
       
       for ( Coord c : nearPoints ) {
         binMat.at<uint8_t>(c.y, c.x) = 0xFF;
@@ -6318,6 +6438,85 @@ clockwiseScanForShapeBounds(const Mat & tagsImg,
       cout << "wrote " << fname << endl;
       cout << "" << endl;
     }
+    
+    // Calculate the hull midpoint to nearest contour point map.
+    // In the case of a concave hull, circle the interior point
+    // otherwise circle the midpoint of the hull line.
+    
+    if (debugDumpImages) {
+      Mat colorMat(tagsImg.size(), CV_8UC3, Scalar(0, 0, 0));
+      
+      for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+        uint32_t pixel = 0;
+        pixel |= (rand() % 256);
+        pixel |= ((rand() % 256) << 8);
+        pixel |= ((rand() % 256) << 16);
+        pixel |= (0xFF << 24);
+        
+        Vec3b vec = PixelToVec3b(pixel);
+        
+        for ( Coord c : typedHullCoords.coords ) {
+          colorMat.at<Vec3b>(c.y, c.x) = vec;
+        }
+      }
+      
+      int typedHullOffset = 0;
+      for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+        if (typedHullCoords.isConcave) {
+          Point2i defectP = coordToPoint(typedHullCoords.defectPoint);
+          circle(colorMat, defectP, 4, Scalar(0,0,0xFF), 2);
+        } else {
+          for ( auto &pair : isMidpointMap ) {
+            if (pair.second == typedHullOffset) {
+              // Found midpoint that corresponds to this segment.
+              Point2i midP = coordToPoint(pair.first);
+              circle(colorMat, midP, 4, Scalar(0,0,0xFF), 2);
+              break;
+            }
+          }
+        }
+        
+        typedHullOffset++;
+      }
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_hull_mid_defect_segments" << ".png";
+      string fname = fnameStream.str();
+      
+      writeWroteImg(fname, colorMat);
+      cout << "" << endl;
+    }
+    
+    /*
+     
+     if (debugDumpImages) {
+     Mat colorMat(binMat.size(), CV_8UC3, Scalar(0,0,0));
+     
+     for ( TypedHullCoords &typedHullCoords : hullCoords ) {
+     uint32_t pixel = 0;
+     pixel |= (rand() % 256);
+     pixel |= ((rand() % 256) << 8);
+     pixel |= ((rand() % 256) << 16);
+     pixel |= (0xFF << 24);
+     
+     Vec3b vec = PixelToVec3b(pixel);
+     
+     for ( Coord c : typedHullCoords.coords ) {
+     colorMat.at<Vec3b>(c.y, c.x) = vec;
+     }
+     }
+     
+     std::stringstream fnameStream;
+     fnameStream << "srm" << "_tag_" << tag << "_hull_segments" << ".png";
+     string fname = fnameStream.str();
+     
+     imwrite(fname, colorMat);
+     cout << "wrote " << fname << endl;
+     cout << "" << endl;
+     }
+
+     
+     */
     
     // Map near points to the closest points in a simplified
     

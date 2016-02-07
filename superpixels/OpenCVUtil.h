@@ -101,6 +101,20 @@ float deltaDistance(Coord c1, Coord c2) {
   return deltaDistance(p1, p2);
 }
 
+// Point2i to Coord. Note that Coord is 1/2 the size of Point
+
+static inline
+Point2i coordToPoint(Coord c) {
+  Point2i p(c.x, c.y);
+  return p;
+}
+
+static inline
+Coord pointToCoord(Point2i p) {
+  Coord c(p.x, p.y);
+  return c;
+}
+
 // Logical not operation for byte matrix. If the value is 0x0 then
 // write 0xFF otherwise write 0x0.
 
