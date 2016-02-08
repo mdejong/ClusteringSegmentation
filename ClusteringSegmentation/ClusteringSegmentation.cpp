@@ -6709,6 +6709,80 @@ clockwiseScanForShapeBounds(const Mat & tagsImg,
         cout << "" << endl;
       }
       
+      // Define N steps where a normal to the point in question passes through
+      // the point and defines the vector away from the shape.
+
+      if (debugDumpImages) {
+        Mat binMat(tagsImg.size(), CV_8UC1, Scalar(0));
+        
+        // Return normal vector at indicated point
+        
+        auto normalAtOffset = [](const vector<Coord> &contourCoords, int32_t offset)->Point2f {
+          int32_t o1 = offset - 2;
+          int32_t o2 = offset + 2;
+          
+          int32_t act1 = vecOffsetAround((int32_t)contourCoords.size(), o1);
+          int32_t act2 = vecOffsetAround((int32_t)contourCoords.size(), o2);
+          
+#if defined(DEBUG)
+          assert(act1 >= 0 && act1 < contourCoords.size());
+          assert(act2 >= 0 && act2 < contourCoords.size());
+#endif // DEBUG
+          
+          Coord c1 = contourCoords[act1];
+          Coord c2 = contourCoords[act2];
+          
+          Point2f pF1(c1.x, c1.y);
+          Point2f pF2(c2.x, c2.y);
+          
+          // Get unit normalized vector from pF1 -> pF2
+          // pointing away from the contour center.
+          
+          Point2f deltaN = pF1 - pF2;
+          
+          printf("delta vector %0.3f %0.3f\n", deltaN.x, deltaN.y);
+          
+          normalUnitVector(deltaN);
+          
+          printf("normal unit vector %0.3f %0.3f\n", deltaN.x, deltaN.y);
+          
+          return deltaN;
+        };
+        
+        // Dump all normal vectors as bin Mat, note that this is a lot of images
+        
+        if ((0)) {
+        
+        for ( int32_t offset : contourIterOrder ) {
+          binMat = Scalar(0);
+          
+          for ( int32_t offset : contourIterOrder ) {
+            Coord c = contourCoords[offset];
+            binMat.at<uint8_t>(c.y, c.x) = 0x7F;
+          }
+          
+          Coord c = contourCoords[offset];
+          Point2f cF(c.x, c.y);
+          
+          Point2f normF = normalAtOffset(contourCoords, offset);
+          
+          Point2f normPoint = cF + (normF * 3);
+          
+          // Draw vector from cF to normPoint
+          
+          line(binMat, cF, normPoint, Scalar(0xFF), 1);
+          
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_normal_" << offset << ".png";
+          string fname = fnameStream.str();
+          
+          writeWroteImg(fname, binMat);
+          cout << "" << endl;
+        }
+          
+        }
+
+      }
     }
 
   }

@@ -327,4 +327,23 @@ void xyzDelta(uint32_t fromPixel, uint32_t toPixel, int32_t &dR, int32_t &dG, in
 
 void xyzDeltaToUnitVector(int32_t &dR, int32_t &dG, int32_t &dB);
 
+// Inline logic to determine the relative offset into a vector when
+// the indicated offset could be a negative number to wrap back
+// around the back of the vector
+
+template <typename T>
+static inline
+T vecOffsetAround(T vecSize, T offset)
+{
+  T actualOffset;
+  if (offset < 0) {
+    actualOffset = vecSize + offset;
+  } else if (offset >= vecSize) {
+    actualOffset = offset - vecSize;
+  } else {
+    actualOffset = offset;
+  }
+  return actualOffset;
+}
+
 #endif // SUPERPIXEL_UTIL_H

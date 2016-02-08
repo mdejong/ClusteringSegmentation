@@ -278,4 +278,25 @@ float angleBetween(const Point2f &v1, const Point2f &v2)
     return acos(a); // 0..PI
 }
 
+// To normalize a vector, assume it starts at (0.0,0.0)
+// so that the result is a unit vector in the same direction.
+
+static inline
+void
+normalUnitVector(Point2f &vec) {
+  float dx = vec.x;
+  float dy = vec.y;
+  float len = sqrt(dx * dx + dy * dy);
+  if (len == 0) {
+    vec.x = 0.0f;
+    vec.y = 0.0f;
+  } else {
+    vec /= len;
+  }
+  // Calculate normal vector
+  float tmp = vec.x;
+  vec.x = vec.y * -1;
+  vec.y = tmp;
+}
+
 #endif // OPENCV_UTIL_H
