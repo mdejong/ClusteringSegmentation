@@ -281,6 +281,8 @@ float angleBetween(const Point2f &v1, const Point2f &v2)
 // To normalize a vector, assume it starts at (0.0,0.0)
 // so that the result is a unit vector in the same direction.
 
+// http://geomalgorithms.com/a02-_lines.html
+
 static inline
 void
 normalUnitVector(Point2f &vec) {

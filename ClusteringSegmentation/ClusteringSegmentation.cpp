@@ -6784,6 +6784,13 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           
         }
         
+        // FIXME: real smoothing of the jagged contour shape should be used so that vectors
+        // along a line are all in the same direction, this ensures that the vector inward
+        // does not cross over others along the same direction. The really rought calculation
+        // of normals will take time and not help, if normals can be accounted for with a
+        // simplified set of coords then that is better for ranges with a common slope or
+        // a very near alike slope.
+        
         // Generate all normal vectors around the shape bounds and penetrating the region
         // by 1 pixel. After that point, the coordinate simply continue to the region center.
         
@@ -6801,7 +6808,9 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           vector<Coord> coords;
           Coord c1((uint16_t)round(normInside.x), (uint16_t)round(normInside.y));
           Coord c2((uint16_t)round(normOutside.x), (uint16_t)round(normOutside.y));
+          
           coords.push_back(c1);
+          coords.push_back(c);
           coords.push_back(c2);
           
           allNormalVectors.push_back(coords);
