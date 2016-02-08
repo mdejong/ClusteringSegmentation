@@ -6526,79 +6526,189 @@ clockwiseScanForShapeBounds(const Mat & tagsImg,
       cout << "" << endl;
     }
     
-    // Iterate from midpoints of the best line portions of each contour convex
-    // and from the defect points outward. This iteration consumes each contour
-    // pixel outward until all edge coordinates are consumed.
-    
-    vector<Coord> startingPoints;
+    // Generate an iteration order for each hull region. Regions are different sizes
+    // so these iteration orders are different lengths.
     
     {
+      int consumedLeft = 0;
+      int consumedRight = 0;
       int typedHullOffset = 0;
-      for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
-        if (typedHullCoords.isConcave) {
-          startingPoints.push_back(typedHullCoords.defectPoint);
-        } else {
-          for ( auto &pair : isMidpointMap ) {
-            if (pair.second == typedHullOffset) {
-              // Found midpoint that corresponds to this segment.
-              startingPoints.push_back(pair.first);
-              break;
-            }
-          }
-        }
-        
-        typedHullOffset++;
-      }
-    }
-    
-    // Map coordinate to int region number
-    
-    unordered_map<Coord, int32_t> coordToRegionMap;
-    
-    unordered_map<int32_t, pair<Coord,Coord> > consumedTable;
-    
-    {
-      int typedHullOffset = 0;
+      
+      vector<stack<int32_t> > coordsIterStackVec;
+      
+      typedHullOffset = 0;
       for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
         auto &coordVec = typedHullCoords.coords;
-        for ( Coord c : coordVec ) {
-          coordToRegionMap[c] = typedHullOffset;
+        
+        vector<int32_t> coordsIterOrder;
+
+        if (typedHullCoords.isConcave) {
+          Coord searchPoint = typedHullCoords.defectPoint;
+          // Find the offsets of c in coordVec
+          int offset = 0;
+          int foundOffset = -1;
+          for ( Coord c : coordVec ) {
+            if (c == searchPoint) {
+              foundOffset = offset;
+              break;
+            }
+            offset++;
+          }
+          assert(foundOffset != -1);
+          consumedLeft = foundOffset;
+          consumedRight = foundOffset;
+        } else {
+          // Choose the mid index in the convex list of points.
+          
+          int foundOffset = (int) coordVec.size() / 2;
+          consumedLeft = foundOffset;
+          consumedRight = foundOffset;
         }
         
-        if (typedHullCoords.isConcave) {
-          Coord c = typedHullCoords.defectPoint;
-          consumedTable[typedHullOffset] = make_pair(c, c);
-        } else {
-          for ( auto &pair : isMidpointMap ) {
-            if (pair.second == typedHullOffset) {
-              // Found midpoint that corresponds to this segment.
-              Coord midC = pair.first;
-              // FIXME: Find point on contour that is closest to midC.
-              consumedTable[typedHullOffset] = make_pair(midC, midC);
+        // Process all coordinates in coordVec
+        
+        while (1) {
+          if (debug) {
+            cout << "consumedLeft  " << consumedLeft << endl;
+            cout << "consumedRight " << consumedRight << endl;
+          }
+          
+          if (consumedLeft == consumedRight) {
+            // Starting point where 1 element is consumed
+            
+            coordsIterOrder.push_back(consumedLeft);
+            consumedLeft--;
+            consumedRight++;
+          } else {
+            if (consumedLeft > -1) {
+              // Still coordinates to consume on left side of contour segment
+              coordsIterOrder.push_back(consumedLeft);
+              consumedLeft--;
+            }
+            
+            if (consumedRight < coordVec.size()) {
+              // Still coordinates to consume on right side of contour segment
+              coordsIterOrder.push_back(consumedRight);
+              consumedRight++;
+            }
+            
+            if (consumedLeft == -1 && consumedRight == coordVec.size()) {
+              // out of while(1) loop
               break;
             }
           }
         }
         
+        assert(coordsIterOrder.size() == coordVec.size());
+        
+        if (debug) {
+          cout << "consumedLeft  " << consumedLeft << endl;
+          cout << "consumedRight " << consumedRight << endl;
+          
+          for ( int32_t offset : coordsIterOrder ) {
+            cout << "iter offset " << offset << endl;
+          }
+        }
+        
+        // Create stack and insert each iter offset into it
+        
+        stack<int32_t> iterStack;
+        
+        for ( auto it = coordsIterOrder.rbegin(); it != coordsIterOrder.rend(); it++) {
+          int32_t offset = *it;
+          iterStack.push(offset);
+        }
+        
+        coordsIterStackVec.push_back(iterStack);
+        
         typedHullOffset++;
       }
-    }
-    
-    while (coordToRegionMap.size() > 0) {
-      // Get next closest coordinate to the previous coordinate consumed
       
-      for ( auto &pair : consumedTable ) {
-        int typedHullOffset = pair.first;
-        auto &pairOfCoords = pair.second;
-        Coord c1 = pairOfCoords.first;
-        Coord c2 = pairOfCoords.second;
+      // Iterate over all sets of coords at the same time and determine
+      // the order that coordinates on the contour would be consumed.
+
+      vector<Coord> contourCoords;
+      
+      vector<int32_t> startOffsets;
+      
+      vector<int32_t> contourIterOrder;
+      
+      for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+        auto &coordVec = typedHullCoords.coords;
+        startOffsets.push_back((int32_t)contourCoords.size());
+        append_to_vector(contourCoords, coordVec);
+      }
+      
+      for ( int contourNumCoords = (int) contourCoords.size(); contourNumCoords > 0; contourNumCoords-- ) {
+        // Consume 1 coordinate from each regions if possible
         
-        if (c1 == c2) {
-          // Starting point, treat as 1 search
-        } else {
-          /// Dual expansion along the contour
+        if (debug) {
+          cout << "contourNumCoords  " << contourNumCoords << endl;
+        }
+        
+        for ( typedHullOffset = 0; typedHullOffset < hullCoordsVec.size(); typedHullOffset++ ) {
+          stack<int32_t> &iterStack = coordsIterStackVec[typedHullOffset];
+          
+          if (iterStack.size() > 0) {
+            int32_t offset = iterStack.top();
+            iterStack.pop();
+            
+            // Make offset into contourCoords and push onto contourIterOrder
+            int32_t contourOffset = startOffsets[typedHullOffset] + offset;
+            contourIterOrder.push_back(contourOffset);
+            
+            if (debug) {
+              cout << "popped  " << offset << " from typedHullOffset " << typedHullOffset << " which maps to contour offset " << contourOffset << endl;
+            }
+          }
         }
       }
+      
+      // contourIterOrder now contains contour iteration order
+
+      if (debug) {
+        for ( int32_t offset : contourIterOrder ) {
+          cout << "iter offset " << offset << endl;
+        }
+        cout << "";
+      }
+      
+#if defined(DEBUG)
+      {
+        set<int32_t> seen;
+        for ( int32_t offset : contourIterOrder ) {
+          if (seen.count(offset) > 0) {
+            assert(0);
+          }
+          seen.insert(offset);
+        }
+      }
+#endif // DEBUG
+      
+      // Dump grayscale pixels in iteration order
+      
+      if (debugDumpImages) {
+        Mat binMat(tagsImg.size(), CV_8UC1, Scalar(0));
+        
+        int bVal = 0xFF;
+        
+        for ( int32_t offset : contourIterOrder ) {
+          Coord c = contourCoords[offset];
+          binMat.at<uint8_t>(c.y, c.x) = bVal;
+          bVal -= 3;
+          if (bVal < 127) {
+            bVal = 0xFF;
+          }
+        }
+        
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_hull_iter_order" << ".png";
+        string fname = fnameStream.str();
+        
+        writeWroteImg(fname, binMat);
+        cout << "" << endl;
+      }
+      
     }
 
   }
