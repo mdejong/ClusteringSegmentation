@@ -6784,6 +6784,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           
         }
         
+        
         // FIXME: real smoothing of the jagged contour shape should be used so that vectors
         // along a line are all in the same direction, this ensures that the vector inward
         // does not cross over others along the same direction. The really rought calculation
@@ -6874,6 +6875,57 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           writeWroteImg(fname, colorMat);
           cout << "" << endl;
         }
+        
+        
+        // This dump image will enlarge the original image multiple times so that vectors
+        // with arrow directions can be seen clearly over the enlarged images.
+        
+        if (1) {
+          CvSize origSize = inputImg.size();
+          CvSize largerSize = origSize;
+          int multBy = 1;
+          
+          Vec3b grayVec(0x7F, 0x7F, 0x7F);
+          
+          while (largerSize.width < 1000 && largerSize.width < 1000) {
+            largerSize.width *= 2;
+            largerSize.height *= 2;
+            multBy *= 2;
+          }
+          
+          Mat smallColorMat(origSize, CV_8UC3, Scalar(0,0,0));
+          
+          Mat colorMat(largerSize, CV_8UC3, Scalar(0,0,0));
+          
+          for ( int32_t offset : contourIterOrder ) {
+            Coord c = contourCoords[offset];
+            smallColorMat.at<Vec3b>(c.y, c.x) = grayVec;
+          }
+          
+          resize(smallColorMat, colorMat, colorMat.size(), 0, 0, INTER_CUBIC);
+          
+          // Render each normal vector as line with arrow at end
+          
+          for ( int y = 0; y < allNormalVectors.size(); y++) {
+            auto &vec = allNormalVectors[y];
+
+            Point2i p1 = coordToPoint(vec[0]);
+            Point2i p2 = coordToPoint(vec[vec.size() - 1]);
+            
+            p1 *= multBy;
+            p2 *= multBy;
+            
+            arrowedLine(colorMat, p1, p2, Scalar(0, 0, 0xFF));
+          }
+          
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_hull_vecs_larger" << ".png";
+          string fname = fnameStream.str();
+          
+          writeWroteImg(fname, colorMat);
+          cout << "" << endl;
+        }
+
 
       }
     }
