@@ -80,6 +80,7 @@ getEdgesInRegion(SuperpixelImage &spImage,
 
 void
 clockwiseScanForShapeBounds(
+                            const Mat & inputImg,
                             const Mat & tagsImg,
                             int32_t tag,
                             const vector<Coord> &regionCoords);
@@ -1282,7 +1283,7 @@ captureRegion(SuperpixelImage &spImage,
   // but the contracted or expanded bounds are not known. Scan clockwise to determine likely bounds based
   // on the initial region shape.
   
-  clockwiseScanForShapeBounds(srmTags, tag, srmRegionCoords);
+  clockwiseScanForShapeBounds(inputImg, srmTags, tag, srmRegionCoords);
   
   vector<Coord> outCoords;
   
@@ -6333,7 +6334,8 @@ clockwiseScanOfHullCoords(
 // Scan region given likely bounds and determine where most accurate region bounds are likely to be
 
 void
-clockwiseScanForShapeBounds(const Mat & tagsImg,
+clockwiseScanForShapeBounds(const Mat & inputImg,
+                            const Mat & tagsImg,
                             int32_t tag,
                             const vector<Coord> &regionCoords)
 {
@@ -6780,6 +6782,88 @@ clockwiseScanForShapeBounds(const Mat & tagsImg,
           cout << "" << endl;
         }
           
+        }
+        
+        // Generate all normal vectors around the shape bounds and penetrating the region
+        // by 1 pixel. After that point, the coordinate simply continue to the region center.
+        
+        vector<vector<Coord> > allNormalVectors;
+        
+        for ( int32_t offset : contourIterOrder ) {
+          Coord c = contourCoords[offset];
+          Point2f cF(c.x, c.y);
+          
+          Point2f normF = normalAtOffset(contourCoords, offset);
+          
+          Point2f normOutside = cF + (normF * 1);
+          Point2f normInside = cF + (normF * -1);
+          
+          vector<Coord> coords;
+          Coord c1((uint16_t)round(normInside.x), (uint16_t)round(normInside.y));
+          Coord c2((uint16_t)round(normOutside.x), (uint16_t)round(normOutside.y));
+          coords.push_back(c1);
+          coords.push_back(c2);
+          
+          allNormalVectors.push_back(coords);
+        }
+        
+        // Dump the pixels contained in allNormalVectors as a massive image where the pixels
+        // from the original image are copied into rows of output.
+        
+        if ((1)) {
+          binMat = Scalar(0);
+          
+          for ( auto &vec : allNormalVectors ) {
+            for ( Coord c : vec ) {
+              binMat.at<uint8_t>(c.y, c.x) = 0xFF;
+            }
+          }
+          
+          for ( int32_t offset : contourIterOrder ) {
+            Coord c = contourCoords[offset];
+            binMat.at<uint8_t>(c.y, c.x) = 0x7F;
+          }
+          
+          
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_normal_over" << ".png";
+          string fname = fnameStream.str();
+            
+          writeWroteImg(fname, binMat);
+          cout << "" << endl;
+        }
+        
+        // Emit an image where each vector of pixels is a row
+        
+        if (1) {
+          int maxWidth = 0;
+          
+          for ( auto &vec : allNormalVectors ) {
+            int N = (int) vec.size();
+            if (N > maxWidth) {
+              maxWidth = N;
+            }
+          }
+          
+          Mat colorMat((int)allNormalVectors.size(), maxWidth, CV_8UC3, Scalar(0,0,0));
+          
+          for ( int y = 0; y < colorMat.rows; y++) {
+            auto &vec = allNormalVectors[y];
+            int numCols = (int) vec.size();
+            
+            for ( int x = 0; x < numCols; x++) {
+              Coord c = vec[x];
+              Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+              colorMat.at<Vec3b>(y, x) = vec;
+            }
+          }
+          
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_vec_pixels" << ".png";
+          string fname = fnameStream.str();
+          
+          writeWroteImg(fname, colorMat);
+          cout << "" << endl;
         }
 
       }
