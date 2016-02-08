@@ -6182,10 +6182,17 @@ clockwiseScanOfHullCoords(
       Point2i d1 = anchorP - prevP;
       Point2i d2 = anchorP - nextP;
       
-      // FIXME: id d < 3 then unlikely to be a big angle change, treat as part of same line?
+      int angleDeg;
       
-      float radAngleBetween = angleBetween(d1, d2);
-      int angleDeg = radAngleBetween * 180.0f / M_PI;
+      if ((d1.x == 0 && d1.y == 0) || (d2.x == 0 && d2.y == 0)) {
+        // Unlikely case where 2 points are identical, avoid angle calculation
+        angleDeg = 0;
+      } else {
+        float radAngleBetween = angleBetween(d1, d2);
+        angleDeg = radAngleBetween * 180.0f / M_PI;
+      }
+      
+      // FIXME: id d < 3 then unlikely to be a big angle change, treat as part of same line?
       
       int angleMinus = 30;
       bool isNearStraight = angleDeg > (180 - angleMinus);
@@ -6518,6 +6525,82 @@ clockwiseScanForShapeBounds(const Mat & tagsImg,
       writeWroteImg(fname, colorMat);
       cout << "" << endl;
     }
+    
+    // Iterate from midpoints of the best line portions of each contour convex
+    // and from the defect points outward. This iteration consumes each contour
+    // pixel outward until all edge coordinates are consumed.
+    
+    vector<Coord> startingPoints;
+    
+    {
+      int typedHullOffset = 0;
+      for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+        if (typedHullCoords.isConcave) {
+          startingPoints.push_back(typedHullCoords.defectPoint);
+        } else {
+          for ( auto &pair : isMidpointMap ) {
+            if (pair.second == typedHullOffset) {
+              // Found midpoint that corresponds to this segment.
+              startingPoints.push_back(pair.first);
+              break;
+            }
+          }
+        }
+        
+        typedHullOffset++;
+      }
+    }
+    
+    // Map coordinate to int region number
+    
+    unordered_map<Coord, int32_t> coordToRegionMap;
+    
+    unordered_map<int32_t, pair<Coord,Coord> > consumedTable;
+    
+    {
+      int typedHullOffset = 0;
+      for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+        auto &coordVec = typedHullCoords.coords;
+        for ( Coord c : coordVec ) {
+          coordToRegionMap[c] = typedHullOffset;
+        }
+        
+        if (typedHullCoords.isConcave) {
+          Coord c = typedHullCoords.defectPoint;
+          consumedTable[typedHullOffset] = make_pair(c, c);
+        } else {
+          for ( auto &pair : isMidpointMap ) {
+            if (pair.second == typedHullOffset) {
+              // Found midpoint that corresponds to this segment.
+              Coord midC = pair.first;
+              // FIXME: Find point on contour that is closest to midC.
+              consumedTable[typedHullOffset] = make_pair(midC, midC);
+              break;
+            }
+          }
+        }
+        
+        typedHullOffset++;
+      }
+    }
+    
+    while (coordToRegionMap.size() > 0) {
+      // Get next closest coordinate to the previous coordinate consumed
+      
+      for ( auto &pair : consumedTable ) {
+        int typedHullOffset = pair.first;
+        auto &pairOfCoords = pair.second;
+        Coord c1 = pairOfCoords.first;
+        Coord c2 = pairOfCoords.second;
+        
+        if (c1 == c2) {
+          // Starting point, treat as 1 search
+        } else {
+          /// Dual expansion along the contour
+        }
+      }
+    }
+
   }
   
   // Dump skel generated from region bin Mat
