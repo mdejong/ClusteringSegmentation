@@ -327,4 +327,44 @@ void round(Point2f &p) {
   p.y = round(p.y);
 }
 
+// This util class represents either a line segment or a curve segment. An instance of this class
+// would be used in a vector that could contain either line segments or curve segments. Also,
+// note that a segment best represented by a curve might be better represented by 2 lines
+// if it was split into 2.
+
+class LineOrCurveSegment {
+public:
+  bool isLine;
+  
+  // This points list is the raw points for a line segment. For a curve segment,
+  // this list contains the control points.
+  
+  std::vector<cv::Point2i> points;
+  
+  // Slope for known line segment
+  
+  cv::Point2f slope;
+  
+  // Generic cost value
+  
+  int32_t cost;
+  
+  LineOrCurveSegment() : isLine(false), slope(), cost(0)
+  {
+  }
+  
+  ~LineOrCurveSegment()
+  {
+  }
+  
+  friend std::ostream& operator<<(std::ostream& os, const LineOrCurveSegment& loc) {
+    os << "isLine=" << loc.isLine;
+    os << ",";
+    for ( auto it  = begin(loc.points); it != end(loc.points); it++) {
+      os << *it << ", ";
+    }
+    return os;
+  }
+};
+
 #endif // OPENCV_UTIL_H
