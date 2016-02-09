@@ -2393,7 +2393,7 @@
   contourCoords.push_back(Coord(0,0));
   
   vector<LineOrCurveSegment> results =
-  splitContourIntoLinesSegments(1, CvSize(1,1), CvRect(0,0,1,1), contourCoords);
+  splitContourIntoLinesSegments(1, CvSize(1,1), CvRect(0,0,1,1), contourCoords, 0.0);
   
   XCTAssert(results.size() == 1, @"results");
   
@@ -2412,7 +2412,7 @@
   contourCoords.push_back(Coord(0,1));
   
   vector<LineOrCurveSegment> results =
-  splitContourIntoLinesSegments(1, CvSize(2,2), CvRect(0,0,2,2), contourCoords);
+  splitContourIntoLinesSegments(1, CvSize(2,2), CvRect(0,0,2,2), contourCoords, 0.0);
   
   XCTAssert(results.size() == 1, @"results");
   
@@ -2433,43 +2433,24 @@
   
   vector<Coord> contourCoords;
   
-  int x = 0;
-  int y = 0;
+  contourCoords.push_back(Coord(0,0));
+  contourCoords.push_back(Coord(1,0));
+  contourCoords.push_back(Coord(2,0));
+  contourCoords.push_back(Coord(3,0));
   
-  contourCoords.push_back(Coord(x,y));
-  x++;
-  contourCoords.push_back(Coord(x,y));
-  x++;
-  contourCoords.push_back(Coord(x,y));
-  x++;
-  contourCoords.push_back(Coord(x,y));
+  contourCoords.push_back(Coord(3,1));
+  contourCoords.push_back(Coord(3,2));
+  contourCoords.push_back(Coord(3,3));
   
-  // (3, 0)
+  contourCoords.push_back(Coord(2,3));
+  contourCoords.push_back(Coord(1,3));
+  contourCoords.push_back(Coord(0,3));
   
-  y++;
-  contourCoords.push_back(Coord(x,y));
-  y++;
-  contourCoords.push_back(Coord(x,y));
-  y++;
-  contourCoords.push_back(Coord(x,y));
-  
-  // (3, 3)
-  
-  x--;
-  contourCoords.push_back(Coord(x,y));
-  x--;
-  contourCoords.push_back(Coord(x,y));
-  x--;
-  contourCoords.push_back(Coord(x,y));
-  
-  // (0, 3)
-  y--;
-  contourCoords.push_back(Coord(x,y));
-  y--;
-  contourCoords.push_back(Coord(x,y));
+  contourCoords.push_back(Coord(0,2));
+  contourCoords.push_back(Coord(0,1));
   
   vector<LineOrCurveSegment> results =
-  splitContourIntoLinesSegments(1, CvSize(4,4), CvRect(0,0,4,4), contourCoords);
+  splitContourIntoLinesSegments(1, CvSize(4,4), CvRect(0,0,4,4), contourCoords, 0.0);
   
   XCTAssert(results.size() == 4, @"results");
   
@@ -2477,6 +2458,23 @@
     XCTAssert(locSeg.isLine == true, @"result");
     XCTAssert(locSeg.points.size() >= 2, @"result");
   }
+  
+  LineOrCurveSegment *ptr;
+  
+  ptr = &results[0];
+  
+  XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->points[0] == Point2i(0,0), @"result");
+  XCTAssert(ptr->points[1] == Point2i(1,0), @"result");
+  XCTAssert(ptr->points[2] == Point2i(2,0), @"result");
+  
+  ptr = &results[1];
+  
+  XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->points[0] == Point2i(3,0), @"result");
+  XCTAssert(ptr->points[1] == Point2i(3,1), @"result");
+  XCTAssert(ptr->points[2] == Point2i(3,2), @"result");
+
 }
 
 - (void)testSplitContourIntoLinesAndCurves
@@ -2501,7 +2499,7 @@
   contourCoords.push_back(Coord(0, 1));
  
   vector<LineOrCurveSegment> results =
-  splitContourIntoLinesSegments(1, CvSize(4,4), CvRect(0,0,4,4), contourCoords);
+  splitContourIntoLinesSegments(1, CvSize(4,4), CvRect(0,0,4,4), contourCoords, 1.4);
   
   XCTAssert(results.size() == 3, @"results");
   

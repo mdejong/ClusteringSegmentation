@@ -6786,7 +6786,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         Rect roi(0,0,inputImg.size().width, inputImg.size().height);
         
-        vector<LineOrCurveSegment> vecOfSeg = splitContourIntoLinesSegments(tag, inputImg.size(), roi, contourCoords);
+        vector<LineOrCurveSegment> vecOfSeg = splitContourIntoLinesSegments(tag, inputImg.size(), roi, contourCoords, 1.4);
         
 //        MOMO
         
@@ -7725,7 +7725,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
 // as compared to the non-straight curves.
 
 vector<LineOrCurveSegment>
-splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector<Coord> &contourCoords)
+splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector<Coord> &contourCoords, double epsilon)
 {
   const bool debug = true;
   const bool debugDumpImages = true;
@@ -7784,7 +7784,7 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
   
   vector<Point2i> approxContour;
   
-  double epsilon = 1.4; // Max dist between original curve and approx
+//  double epsilon = 1.4; // Max dist between original curve and approx
       
   approxPolyDP(Mat(contour), approxContour, epsilon, true);
   
