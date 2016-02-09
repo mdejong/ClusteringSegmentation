@@ -6788,8 +6788,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         vector<LineOrCurveSegment> vecOfSeg = splitContourIntoLinesSegments(tag, inputImg.size(), roi, contourCoords, 1.4);
         
-//        MOMO
-        
         // While the original contour is useful to get the exact pixels where normals
         // should intersect with the shape bound, a simplified smoother shape should
         // be used to actually calculate the normal vector. A normal vector that is
@@ -7832,7 +7830,7 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
     Point2f vec = p2 - p1;
     
     if (debug) {
-      printf("i %d\n", i);
+      printf("i %d of %d\n", i, (int)approxContour.size());
       printf("line points (%5d, %5d) -> (%5d, %5d)\n", p1.x, p1.y, p2.x, p2.y);
       printf("line vector (%0.3f, %0.3f)\n", vec.x, vec.y);
     }
@@ -7860,7 +7858,9 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
       
 #if defined(DEBUG)
       assert(contour[contouri] == p1);
+      assert(consumedPointsVec.size() > 0);
 #endif // DEBUG
+
       contouri++;
     } else {
       // Consume contour points leading up to but not including p2 when a line is found
@@ -7883,10 +7883,19 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
       
       vector<Point2i> &consumedPointsVec = segments[segments.size() - 1].points;
       
-      while (true) {
-        Point2i contourP = contour[contouri];
+      int contouriMax = (int) contour.size();
+      
+      while (1) {
+        if (contouri == contouriMax) {
+          if (debug) {
+            printf("stop consume at last contouri %d\n", contouri);
+          }
+          break;
+        }
         
-        if (is8Connected(contourP, p2)) {
+        Point2i contourP = contour[contouri];
+
+        if (contourP == p2) {
           if (debug) {
             printf("stop consume at contouri %d = (%d, %d)\n", contouri, contourP.x, contourP.y);
           }
@@ -7899,6 +7908,11 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
           contouri++;
         }
       } // end while !is8Connected
+      
+#if defined(DEBUG)
+      assert(consumedPointsVec.size() > 0);
+#endif // DEBUG
+      
     } // end line block
   }
 
@@ -7919,9 +7933,11 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
     for ( auto &locSeg : segments ) {
       cout << "isLine " << locSeg.isLine << endl;
       cout << "slope " << locSeg.slope.x << "," << locSeg.slope.y << endl;
+
+      cout << "N coords = " << locSeg.points.size() << endl;
       
       for ( Point2i p : locSeg.points ) {
-        cout << pointToCoord(p) << endl;
+        cout << p.x << "," << p.y << endl;
       }
     }
   }
@@ -7932,6 +7948,7 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
   vector<Point2i> combinedSegmentPoints;
   
   for ( auto &locSeg : segments ) {
+    assert(locSeg.points.size() > 0);
     append_to_vector(combinedSegmentPoints, locSeg.points);
   }
   
@@ -7985,80 +8002,6 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
   }
   
   return segments;
-  
-  
-  /*
-  
-  // Render hits for known solid slope as Red pixel over original
-  
-  colorMat = Scalar(0,0,0);
-  
-  for ( int32_t offset : contourIterOrder ) {
-    Coord c = contourCoords[offset];
-    colorMat.at<Vec3b>(c.y, c.x) = Vec3b(0xFF, 0xFF, 0xFF);
-    
-    if (simplifiedCoordToSlopeVec.count(c) == 0) {
-      // Slope not known for this position
-    } else {
-      int simplifiedOffset = simplifiedCoordToSlopeVec[c];
-      Point2f slopeVec = slopesForApproxContour[simplifiedOffset];
-      
-      colorMat.at<Vec3b>(c.y, c.x) = Vec3b(0, 0, 0xFF);
-    }
-  }
-  
-  if ((1)) {
-    std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_hull_approx_color_slope_hits" << ".png";
-    string fname = fnameStream.str();
-    
-    writeWroteImg(fname, colorMat);
-    cout << "" << endl;
-  }
-  
-  // Calculate normals based on line simplification
-  
-  for ( int32_t offset : contourIterOrder ) {
-    Coord c = contourCoords[offset];
-    
-    Point2f cF(c.x, c.y);
-    
-    Point2f normF;
-    
-    if (simplifiedCoordToSlopeVec.count(c) == 0) {
-      // Slope not known for this position
-      normF = normalAtOffset(contourCoords, offset);
-    } else {
-      int simplifiedOffset = simplifiedCoordToSlopeVec[c];
-      Point2f slopeVec = slopesForApproxContour[simplifiedOffset];
-      
-      // Calculate normal vector
-      float tmp = slopeVec.x;
-      normF.x = slopeVec.y * -1;
-      normF.y = tmp;
-      normF *= -1; // invert
-    }
-    
-    Point2f normOutside = cF + (normF * 1);
-    Point2f normInside = cF + (normF * -1);
-    
-    vector<Point2f> vecPoints;
-    
-    const bool roundToPixels = false;
-    
-    if (roundToPixels) {
-      round(normInside);
-      round(normOutside);
-    }
-    
-    vecPoints.push_back(normInside);
-    vecPoints.push_back(cF);
-    vecPoints.push_back(normOutside);
-    
-    allNormalVectors.push_back(vecPoints);
-  }
- 
-  */
 }
 
 // This method accepts a region defined by coords and returns the edges between
