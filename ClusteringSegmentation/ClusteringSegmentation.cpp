@@ -6788,276 +6788,58 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         vector<LineOrCurveSegment> vecOfSeg = splitContourIntoLinesSegments(tag, inputImg.size(), roi, contourCoords, 1.4);
         
-        // While the original contour is useful to get the exact pixels where normals
-        // should intersect with the shape bound, a simplified smoother shape should
-        // be used to actually calculate the normal vector. A normal vector that is
-        // really jaggy would significantly complicate the iteration because the
-        // exact path would change a lot when passing through a hard edge.
-        
-        // FIXME: the line approx is very useful for portions that are actually the
-        // same slope. Consume most of the elements along each line, then use curves
-        // to determine a smooth curve filling between the staraight parts.
-        
-        vector<vector<Point2f> > allNormalVectors;
-        
-        if ((1)) {
-          binMat = Scalar(0);
-          vector<Point2i> contour = convertCoordsToPoints(contourCoords);
-          vector<vector<Point2i> > contours;
-          contours.push_back(contour);
-          drawContours(binMat, contours, 0, Scalar(0xFF), CV_FILLED); // Draw contour as white filled region
-          
-          if ((1)) {
-            std::stringstream fnameStream;
-            fnameStream << "srm" << "_tag_" << tag << "_hull_approx_contour_original" << ".png";
-            string fname = fnameStream.str();
-            
-            writeWroteImg(fname, binMat);
-            cout << "" << endl;
-          }
-          
-          vector<Point2i> approxContour;
-          
-          double epsilon = 1.4; // Max dist between original curve and approx
-          
-          approxPolyDP(Mat(contour), approxContour, epsilon, true);
-          
-          Mat colorMat(binMat.size(), CV_8UC3, Scalar(0,0,0));
-          
-          contours[0] = approxContour;
-          
-          drawContours(colorMat, contours, 0, Scalar(0xFF,0xFF,0xFF), CV_FILLED); // Draw contour as white filled region
-          
-          // Draw each contour line as a different color
-          
-          for ( int i = 0; i < approxContour.size(); i++ ) {
-            Point2i p1 = approxContour[i];
-            Point2i p2 = approxContour[vecOffsetAround((int)approxContour.size(), i+1)];
-            
-            Scalar color = Scalar((rand() % 256), (rand() % 256), (rand() % 256));
-            
-            line(colorMat, p1, p2, color, 2, 8);
-          }
-          
-          if ((1)) {
-            std::stringstream fnameStream;
-            fnameStream << "srm" << "_tag_" << tag << "_hull_approx_contour" << ".png";
-            string fname = fnameStream.str();
-            
-            writeWroteImg(fname, colorMat);
-            cout << "" << endl;
-          }
-          
-          // Generate mapping from original contour coordinate to unit vector for each
-          // approx line.
-          
-          vector<Point2f> slopesForApproxContour;
-          
-          colorMat = Scalar(0,0,0);
-          
-          for ( int i = 0; i < approxContour.size(); i++ ) {
-            Point2i p1 = approxContour[i];
-            Point2i p2 = approxContour[vecOffsetAround((int)approxContour.size(), i+1)];
-            
-            Point2f vec = p2 - p1;
-            
-            if ((1)) {
-              printf("line points (%5d, %5d) -> (%5d, %5d)\n", p1.x, p1.y, p2.x, p2.y);
-              printf("line vector (%0.3f, %0.3f)\n", vec.x, vec.y);
-            }
-            
-            float scale = makeUnitVector(vec);
-            
-            if ((1)) {
-              printf("scale %0.3f\n", scale);
-            }
-            
-            slopesForApproxContour.push_back(vec);
-            
-            uint32_t pixel = i + 1;
-            Scalar color = PixelToVec3b(pixel);
-            
-            // Note that this slope hit line should not include point right around
-            // the border between the end points.
-            
-            Point2f p1F = p1;
-            Point2f p2F = p2;
-            
-            float scaleTrim = int(scale); // chop
-            if (scaleTrim > 1.0) {
-              scaleTrim -= 1.0;
-            }
-            if (scaleTrim > 1.0) {
-              scaleTrim -= 1.0;
-            }
-            if (scaleTrim > 1.0) {
-              scaleTrim -= 1.0;
-            }
-            
-            if ((1)) {
-              printf("scaleTrim %0.3f\n", scaleTrim);
-            }
-            
-            Point2f notP1 = p2F - (vec * scaleTrim);
-            Point2f notP2 = p1F + (vec * scaleTrim);
-            
-            if ((1)) {
-              printf("notP1 vector (%0.3f, %0.3f) -> notP2 (%0.3f, %0.3f)\n", notP1.x, notP1.y, notP2.x, notP2.y);
-            }
-            
-            round(notP1);
-            round(notP2);
-            
-            if ((1)) {
-              printf("notP1 vector (%0.3f, %0.3f) -> notP2 (%0.3f, %0.3f)\n", notP1.x, notP1.y, notP2.x, notP2.y);
-            }
-            
-            line(colorMat, notP1, notP2, color, 2, 8); // 4 or 8 ?
-          }
-          
-          if ((1)) {
-            std::stringstream fnameStream;
-            fnameStream << "srm" << "_tag_" << tag << "_hull_approx_contour_line4" << ".png";
-            string fname = fnameStream.str();
-            
-            writeWroteImg(fname, colorMat);
-            cout << "" << endl;
-          }
-          
-          // Foreach rendered coordinate, map the coordinate to the slope offset
-          
-          unordered_map<Coord, int> simplifiedCoordToSlopeVec;
-          
-          for ( int y = 0; y < colorMat.rows; y++ ) {
-            for ( int x = 0; x < colorMat.cols; x++ ) {
-              Vec3b vec = colorMat.at<Vec3b>(y, x);
-              if (vec[0] == 0 && vec[1] == 0 && vec[2] == 0) {
-                continue;
-              }
-              uint32_t tag = Vec3BToUID(vec);
-              assert(tag > 0);
-              tag--;
-              
-              Coord c(x, y);
-              simplifiedCoordToSlopeVec[c] = tag;
-            }
-          }
-          
-          // Iterate over each original point in the contour and collect the known slope
-          // for each original contour pixel.
-          
-          binMat = Scalar(0);
-          
-          for ( int32_t offset : contourIterOrder ) {
-            Coord c = contourCoords[offset];
-            if (simplifiedCoordToSlopeVec.count(c) == 0) {
-              // Slope not known for this position
-            } else {
-              int simplifiedOffset = simplifiedCoordToSlopeVec[c];
-              Point2f slopeVec = slopesForApproxContour[simplifiedOffset];
-              binMat.at<uint8_t>(c.y, c.x) = 0xFF;
-            }
-          }
+        // Note that iteration order of coordinates in vecOfSeg may not start on contourCoords[0] so
+        // create a map from known line points to the common line slope.
 
-          if ((1)) {
-            std::stringstream fnameStream;
-            fnameStream << "srm" << "_tag_" << tag << "_hull_approx_slope_hits" << ".png";
-            string fname = fnameStream.str();
-            
-            writeWroteImg(fname, binMat);
-            cout << "" << endl;
-          }
-          
-          // Render hits for known solid slope as Red pixel over original
-          
-          colorMat = Scalar(0,0,0);
-          
-          for ( int32_t offset : contourIterOrder ) {
-            Coord c = contourCoords[offset];
-            colorMat.at<Vec3b>(c.y, c.x) = Vec3b(0xFF, 0xFF, 0xFF);
-            
-            if (simplifiedCoordToSlopeVec.count(c) == 0) {
-              // Slope not known for this position
-            } else {
-              int simplifiedOffset = simplifiedCoordToSlopeVec[c];
-              Point2f slopeVec = slopesForApproxContour[simplifiedOffset];
-              
-              colorMat.at<Vec3b>(c.y, c.x) = Vec3b(0, 0, 0xFF);
-            }
-          }
-          
-          if ((1)) {
-            std::stringstream fnameStream;
-            fnameStream << "srm" << "_tag_" << tag << "_hull_approx_color_slope_hits" << ".png";
-            string fname = fnameStream.str();
-            
-            writeWroteImg(fname, colorMat);
-            cout << "" << endl;
-          }
-          
-          // Calculate normals based on line simplification
-          
-          for ( int32_t offset : contourIterOrder ) {
-            Coord c = contourCoords[offset];
-            
-            Point2f cF(c.x, c.y);
-            
+        vector<Point2f> normalUnitVecTable;
+        
+        for ( LineOrCurveSegment & locSeg : vecOfSeg ) {
+          if (locSeg.isLine) {
+            Point2f slopeVec = locSeg.slope;
             Point2f normF;
             
-            if (simplifiedCoordToSlopeVec.count(c) == 0) {
-              // Slope not known for this position
-              normF = normalAtOffset(contourCoords, offset);
-            } else {
-              int simplifiedOffset = simplifiedCoordToSlopeVec[c];
-              Point2f slopeVec = slopesForApproxContour[simplifiedOffset];
-              
-              // Calculate normal vector
-              float tmp = slopeVec.x;
-              normF.x = slopeVec.y * -1;
-              normF.y = tmp;
-              normF *= -1; // invert
-            }
+            // Calculate normal vector
+            float tmp = slopeVec.x;
+            normF.x = slopeVec.y * -1;
+            normF.y = tmp;
+            normF *= -1; // invert
             
-            Point2f normOutside = cF + (normF * 1);
-            Point2f normInside = cF + (normF * -1);
-            
-            vector<Point2f> vecPoints;
-            
-            const bool roundToPixels = false;
-            
-            if (roundToPixels) {
-              round(normInside);
-              round(normOutside);
-            }
-            
-            vecPoints.push_back(normInside);
-            vecPoints.push_back(cF);
-            vecPoints.push_back(normOutside);
-            
-            allNormalVectors.push_back(vecPoints);
+            normalUnitVecTable.push_back(normF);
           }
-
         }
         
-        // FIXME: real smoothing of the jagged contour shape should be used so that vectors
-        // along a line are all in the same direction, this ensures that the vector inward
-        // does not cross over others along the same direction. The really rought calculation
-        // of normals will take time and not help, if normals can be accounted for with a
-        // simplified set of coords then that is better for ranges with a common slope or
-        // a very near alike slope.
+        unordered_map<Coord, Point2f> lineCoordToNormalMap;
         
-        // Generate all normal vectors around the shape bounds and penetrating the region
-        // by 1 pixel. After that point, the coordinate simply continue to the region center.
-        
-        /*
+        int locOffset = 0;
+        for ( LineOrCurveSegment & locSeg : vecOfSeg ) {
+          if (locSeg.isLine) {
+            for ( Point2i p : locSeg.points ) {
+              Point2f normal = normalUnitVecTable[locOffset];
+              Coord c = pointToCoord(p);
+              lineCoordToNormalMap[c] = normal;
+            }
+          } else {
+            // The slope of the normal should be an average of
+            // the points around the offset
+          }
+          locOffset++;
+        }
         
         vector<vector<Point2f> > allNormalVectors;
         
-        for ( int32_t offset : contourIterOrder ) {
-          Coord c = contourCoords[offset];
-          Point2f cF(c.x, c.y);
+        int offset = 0;
+        
+        for ( Coord c : contourCoords ) {
+          Point2f normF;
           
-          Point2f normF = normalAtOffset(contourCoords, offset);
+          if (lineCoordToNormalMap.count(c) == 0) {
+            // Slope not known for this position
+            normF = normalAtOffset(contourCoords, offset);
+          } else {
+            normF = lineCoordToNormalMap[c];
+          }
+          
+          Point2f cF(c.x, c.y);
           
           Point2f normOutside = cF + (normF * 1);
           Point2f normInside = cF + (normF * -1);
@@ -7076,9 +6858,9 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           vecPoints.push_back(normOutside);
           
           allNormalVectors.push_back(vecPoints);
+          
+          offset++;
         }
-         
-        */
         
         // Dump the pixels contained in allNormalVectors as a massive image where the pixels
         // from the original image are copied into rows of output.
@@ -7732,7 +7514,7 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
     cout << "splitContourIntoLinesSegments" << endl;
   }
 
-  vector<Point2i> contour = convertCoordsToPoints(contourCoords);
+  const vector<Point2i> contour = convertCoordsToPoints(contourCoords);
   
   if (debugDumpImages) {
     Mat binMat(size, CV_8UC1, Scalar(0));
@@ -7823,9 +7605,47 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
   
   int contouri = 0;
   
+  // This offset indicates where a forward iteration must stop, note that in
+  // the case where a line wraps around the end this max value can go past
+  // the end of the contours array and that will wrap around.
+  
+  int contouriMax = (int) contour.size();
+  
   for ( int i = 0; i < approxContour.size(); i++ ) {
     Point2i p1 = approxContour[i];
     Point2i p2 = approxContour[vecOffsetAround((int)approxContour.size(), i+1)];
+    
+    if (i == 0) {
+      // On the first iteration, check for the case where the very first coordinate
+      // in a line does not match the first coordinate in contour. In this case,
+      // the elements need to be read back from the front of the contour array
+      // an skipped here.
+      
+      while (1) {
+#if defined(DEBUG)
+        assert(contouri < contour.size());
+#endif // DEBUG
+        
+        if (contour[contouri] == p1) {
+          break;
+        } else {
+          if (debug) {
+            printf("advance starting point past (%5d, %5d)\n", contour[contouri].x, contour[contouri].y);
+          }
+          
+          contouri++;
+          contouriMax++;
+        }
+      }
+      
+#if defined(DEBUG)
+      assert(contour[contouri] == p1);
+#endif // DEBUG
+      
+      if (debug) {
+        printf("starting point (%5d, %5d)\n", contour[contouri].x, contour[contouri].y);
+      }
+    }
     
     Point2f vec = p2 - p1;
     
@@ -7883,7 +7703,12 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
       
       vector<Point2i> &consumedPointsVec = segments[segments.size() - 1].points;
       
-      int contouriMax = (int) contour.size();
+#if defined(DEBUG)
+      {
+        Point2i contourP = contour[vecOffsetAround((int)contour.size(), contouri)];
+        assert(contourP == p1);
+      }
+#endif // DEBUG
       
       while (1) {
         if (contouri == contouriMax) {
@@ -7893,7 +7718,10 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
           break;
         }
         
-        Point2i contourP = contour[contouri];
+        // FIXME: adjust ahead so that max is set to the number skipped over in iter1!
+        // Then wrap the array access around.
+        
+        Point2i contourP = contour[vecOffsetAround((int)contour.size(), contouri)];
 
         if (contourP == p2) {
           if (debug) {
@@ -7956,8 +7784,20 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
     combinedSegmentPoints.push_back(Point2i(-1, -1));
   }
   
+  // Note that before an element by element compare can be executed
+  // the coordinates in contour need to be rotated so that the
+  // very first element is the one at contouriMax (wraps around)
+  
+  vector<Point2i> inPoints = contour;
+  
+  if (contouriMax != contour.size()) {
+    auto midIt = begin(inPoints) + vecOffsetAround((int)contour.size(), contouriMax);
+    rotate(begin(inPoints), midIt, end(inPoints));
+    assert(inPoints.size() == contour.size());
+  }
+  
   for ( int i = 0; i < combinedSegmentPoints.size(); i++ ) {
-    Point2i pOrig = contour[i];
+    Point2i pOrig = inPoints[i];
     Point2i pOut = combinedSegmentPoints[i];
     if (pOrig != pOut) {
       assert(0);

@@ -2424,7 +2424,10 @@
   XCTAssert(locSeg.points[1] == Point2i(0,1), @"result");
 }
 
-- (void)testSplitContourIntoLinesSegmentsTwoCoords2
+// Lines around the outside of the box, note that the
+// contour starts in the upper left hand corner.
+
+- (void)testSplitContourIntoLinesSegmentsBox1
 {
   //  @(1), @(1), @(1), @(1),
   //  @(1), @(0), @(0), @(1),
@@ -2484,6 +2487,75 @@
   XCTAssert(ptr->points[1] == Point2i(0,2), @"result");
   XCTAssert(ptr->points[2] == Point2i(0,1), @"result");
 
+  return;
+}
+
+// In this box test case, the contour starts at
+// (2, 0) so as  a result the line at the top
+// of the box get processed at the end of the
+// simplified set of coordinates.
+
+- (void)testSplitContourIntoLinesSegmentsBox2
+{
+  //  @(1), @(1), @(1), @(1),
+  //  @(1), @(0), @(0), @(1),
+  //  @(1), @(0), @(0), @(1),
+  //  @(1), @(1), @(1), @(1),
+  
+  vector<Coord> contourCoords;
+  
+  contourCoords.push_back(Coord(2,0));
+  contourCoords.push_back(Coord(3,0));
+  
+  contourCoords.push_back(Coord(3,1));
+  contourCoords.push_back(Coord(3,2));
+  contourCoords.push_back(Coord(3,3));
+  
+  contourCoords.push_back(Coord(2,3));
+  contourCoords.push_back(Coord(1,3));
+  contourCoords.push_back(Coord(0,3));
+  
+  contourCoords.push_back(Coord(0,2));
+  contourCoords.push_back(Coord(0,1));
+  
+  contourCoords.push_back(Coord(0,0));
+  contourCoords.push_back(Coord(1,0));
+  
+  vector<LineOrCurveSegment> results =
+  splitContourIntoLinesSegments(1, CvSize(4,4), CvRect(0,0,4,4), contourCoords, 0.0);
+  
+  XCTAssert(results.size() == 4, @"results");
+  
+  LineOrCurveSegment *ptr;
+  
+  ptr = &results[0];
+  XCTAssert(ptr->isLine == true, @"result");
+  XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->points[0] == Point2i(3,0), @"result");
+  XCTAssert(ptr->points[1] == Point2i(3,1), @"result");
+  XCTAssert(ptr->points[2] == Point2i(3,2), @"result");
+  
+  ptr = &results[1];
+  XCTAssert(ptr->isLine == true, @"result");
+  XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->points[0] == Point2i(3,3), @"result");
+  XCTAssert(ptr->points[1] == Point2i(2,3), @"result");
+  XCTAssert(ptr->points[2] == Point2i(1,3), @"result");
+  
+  ptr = &results[2];
+  XCTAssert(ptr->isLine == true, @"result");
+  XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->points[0] == Point2i(0,3), @"result");
+  XCTAssert(ptr->points[1] == Point2i(0,2), @"result");
+  XCTAssert(ptr->points[2] == Point2i(0,1), @"result");
+  
+  ptr = &results[3];
+  XCTAssert(ptr->isLine == true, @"result");
+  XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->points[0] == Point2i(0,0), @"result");
+  XCTAssert(ptr->points[1] == Point2i(1,0), @"result");
+  XCTAssert(ptr->points[2] == Point2i(2,0), @"result");
+  
   return;
 }
 
