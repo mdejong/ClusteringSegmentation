@@ -6813,7 +6813,22 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         int locOffset = 0;
         for ( LineOrCurveSegment & locSeg : vecOfSeg ) {
           if (locSeg.isLine) {
-            for ( Point2i p : locSeg.points ) {
+            auto &pointsVec = locSeg.points;
+            int startEndN;
+
+            if (pointsVec.size() <= 3) {
+              startEndN = 0;
+            } else if (pointsVec.size() <= 5) {
+              startEndN = 1;
+            } else {
+              startEndN = 2;
+            }
+            
+            auto it = begin(pointsVec) + startEndN;
+            auto itEnd = end(pointsVec) - startEndN;
+            
+            for ( ; it != itEnd; ++it ) {
+              Point2i p = *it;
               Point2f normal = normalUnitVecTable[locOffset];
               Coord c = pointToCoord(p);
               lineCoordToNormalMap[c] = normal;
