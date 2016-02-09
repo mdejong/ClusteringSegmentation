@@ -6794,6 +6794,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         // same slope. Consume most of the elements along each line, then use curves
         // to determine a smooth curve filling between the staraight parts.
         
+        vector<vector<Point2f> > allNormalVectors;
+        
         if ((1)) {
           binMat = Scalar(0);
           vector<Point2i> contour = convertCoordsToPoints(contourCoords);
@@ -6988,6 +6990,49 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             writeWroteImg(fname, colorMat);
             cout << "" << endl;
           }
+          
+          // Calculate normals based on line simplification
+          
+          for ( int32_t offset : contourIterOrder ) {
+            Coord c = contourCoords[offset];
+            
+            Point2f cF(c.x, c.y);
+            
+            Point2f normF;
+            
+            if (simplifiedCoordToSlopeVec.count(c) == 0) {
+              // Slope not known for this position
+              normF = normalAtOffset(contourCoords, offset);
+            } else {
+              int simplifiedOffset = simplifiedCoordToSlopeVec[c];
+              Point2f slopeVec = slopesForApproxContour[simplifiedOffset];
+              
+              // Calculate normal vector
+              float tmp = slopeVec.x;
+              normF.x = slopeVec.y * -1;
+              normF.y = tmp;
+              normF *= -1; // invert
+            }
+            
+            Point2f normOutside = cF + (normF * 1);
+            Point2f normInside = cF + (normF * -1);
+            
+            vector<Point2f> vecPoints;
+            
+            const bool roundToPixels = false;
+            
+            if (roundToPixels) {
+              round(normInside);
+              round(normOutside);
+            }
+            
+            vecPoints.push_back(normInside);
+            vecPoints.push_back(cF);
+            vecPoints.push_back(normOutside);
+            
+            allNormalVectors.push_back(vecPoints);
+          }
+
         }
         
         // FIXME: real smoothing of the jagged contour shape should be used so that vectors
@@ -6999,6 +7044,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         // Generate all normal vectors around the shape bounds and penetrating the region
         // by 1 pixel. After that point, the coordinate simply continue to the region center.
+        
+        /*
         
         vector<vector<Point2f> > allNormalVectors;
         
@@ -7026,6 +7073,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           
           allNormalVectors.push_back(vecPoints);
         }
+         
+        */
         
         // Dump the pixels contained in allNormalVectors as a massive image where the pixels
         // from the original image are copied into rows of output.
@@ -7125,6 +7174,12 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
 
             Point2f p1 = vec[0];
             Point2f p2 = vec[vec.size() - 1];
+            
+            if ((1)) {
+              // Add a little more to the second vector
+              Point2f delta = p2 - p1;
+              p2 += delta;
+            }
             
             p1 *= multBy;
             p2 *= multBy;
