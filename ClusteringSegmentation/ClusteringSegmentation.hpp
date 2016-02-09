@@ -16,6 +16,7 @@
 
 class SuperpixelImage;
 class Coord;
+class LineOrCurveSegment;
 
 using cv::Mat;
 using std::string;
@@ -64,6 +65,12 @@ captureRegionMask(SuperpixelImage &spImage,
                   int superpixelDim,
                   Mat &mask,
                   const Mat &blockBasedQuantMat);
+
+// This method accepts a contour that is not simplified and detects straight lines
+// as compared to the non-straight curves.
+
+vector<LineOrCurveSegment>
+splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector<Coord> &contourCoords);
 
 // Foreach pixel in a colortable determine the "inside/outside" status of that
 // pixel based on a stats test as compared to the current known region.

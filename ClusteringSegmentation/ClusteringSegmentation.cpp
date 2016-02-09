@@ -139,12 +139,6 @@ contractOrExpandRegion(const Mat & inputImg,
 
 vector<Coord> genRectangleOutline(int regionWidth, int regionHeight);
 
-// This method accepts a contour that is not simplified and detects straight lines
-// as compared to the non-straight curves.
-
-vector<LineOrCurveSegment>
-splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector<Coord> &contourCoords);
-
 // Given an input image and a pixel buffer that is of the same dimensions
 // write the buffer of pixels out as an image in a file.
 
@@ -7781,7 +7775,7 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
       Point2i p2 = contour[i];
       
       if (is8Connected(p1, p2) == false) {
-        cout << "not 8 connected" << endl;
+        cout << "not 8 connected :" << pointToCoord(p1) << " " << pointToCoord(p2) << endl;
         assert(0);
       }
     }
@@ -7789,7 +7783,7 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
 #endif // DEBUG
   
   vector<Point2i> approxContour;
-      
+  
   double epsilon = 1.4; // Max dist between original curve and approx
       
   approxPolyDP(Mat(contour), approxContour, epsilon, true);
@@ -7850,7 +7844,7 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
       // Non line element, append points to current non-line segment or
       // create one if the last segment is a line.
       
-      if (lastSegmentIsLine) {
+      if (lastSegmentIsLine || (segments.size() == 0)) {
         LineOrCurveSegment locSeg;
         locSeg.isLine = false;
         segments.push_back(std::move(locSeg));
