@@ -6711,45 +6711,45 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         cout << "" << endl;
       }
       
+      // Return normal vector at indicated point
+      
+      auto normalAtOffset = [](const vector<Coord> &contourCoords, int32_t offset)->Point2f {
+        int32_t o1 = offset - 2;
+        int32_t o2 = offset + 2;
+        
+        int32_t act1 = vecOffsetAround((int32_t)contourCoords.size(), o1);
+        int32_t act2 = vecOffsetAround((int32_t)contourCoords.size(), o2);
+        
+#if defined(DEBUG)
+        assert(act1 >= 0 && act1 < contourCoords.size());
+        assert(act2 >= 0 && act2 < contourCoords.size());
+#endif // DEBUG
+        
+        Coord c1 = contourCoords[act1];
+        Coord c2 = contourCoords[act2];
+        
+        Point2f pF1(c1.x, c1.y);
+        Point2f pF2(c2.x, c2.y);
+        
+        // Get unit normalized vector from pF1 -> pF2
+        // pointing away from the contour center.
+        
+        Point2f deltaN = pF1 - pF2;
+        
+        printf("delta vector %0.3f %0.3f\n", deltaN.x, deltaN.y);
+        
+        normalUnitVector(deltaN);
+        
+        printf("normal unit vector %0.3f %0.3f\n", deltaN.x, deltaN.y);
+        
+        return deltaN;
+      };
+      
       // Define N steps where a normal to the point in question passes through
       // the point and defines the vector away from the shape.
 
       if (debugDumpImages) {
         Mat binMat(tagsImg.size(), CV_8UC1, Scalar(0));
-        
-        // Return normal vector at indicated point
-        
-        auto normalAtOffset = [](const vector<Coord> &contourCoords, int32_t offset)->Point2f {
-          int32_t o1 = offset - 2;
-          int32_t o2 = offset + 2;
-          
-          int32_t act1 = vecOffsetAround((int32_t)contourCoords.size(), o1);
-          int32_t act2 = vecOffsetAround((int32_t)contourCoords.size(), o2);
-          
-#if defined(DEBUG)
-          assert(act1 >= 0 && act1 < contourCoords.size());
-          assert(act2 >= 0 && act2 < contourCoords.size());
-#endif // DEBUG
-          
-          Coord c1 = contourCoords[act1];
-          Coord c2 = contourCoords[act2];
-          
-          Point2f pF1(c1.x, c1.y);
-          Point2f pF2(c2.x, c2.y);
-          
-          // Get unit normalized vector from pF1 -> pF2
-          // pointing away from the contour center.
-          
-          Point2f deltaN = pF1 - pF2;
-          
-          printf("delta vector %0.3f %0.3f\n", deltaN.x, deltaN.y);
-          
-          normalUnitVector(deltaN);
-          
-          printf("normal unit vector %0.3f %0.3f\n", deltaN.x, deltaN.y);
-          
-          return deltaN;
-        };
         
         // Dump all normal vectors as bin Mat, note that this is a lot of images
         
@@ -6849,7 +6849,82 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           
           if (lineCoordToNormalMap.count(c) == 0) {
             // Slope not known for this position
-            normF = normalAtOffset(contourCoords, offset);
+            //normF = normalAtOffset(contourCoords, offset);
+            
+            // Walk backwards until a normal is found
+            
+            int32_t offsetL = offset - 1;
+            int32_t offsetR = offset + 1;
+            
+            int32_t actualOffsetL;
+            int32_t actualOffsetR;
+            
+            Coord cL;
+            Coord cR;
+            
+            while (1) {
+              actualOffsetL = vecOffsetAround((int32_t)contourCoords.size(), offsetL);
+              
+              if (actualOffsetL == offset) {
+                break;
+              }
+              
+              cL = contourCoords[actualOffsetL];
+              
+              if (lineCoordToNormalMap.count(cL) > 0) {
+                break;
+              }
+              
+              offsetL--;
+            }
+            
+            while (1) {
+              actualOffsetR = vecOffsetAround((int32_t)contourCoords.size(), offsetR);
+              
+              if (actualOffsetR == offset) {
+                break;
+              }
+              
+              cR = contourCoords[actualOffsetR];
+              
+              if (lineCoordToNormalMap.count(cR) > 0) {
+                break;
+              }
+              
+              offsetR++;
+            }
+            
+            // Smooth out the difference between the two normal vectors
+            
+#if defined(DEBUG)
+            assert(lineCoordToNormalMap.count(cL) > 0);
+            assert(lineCoordToNormalMap.count(cR) > 0);
+#endif // DEBUG
+            
+            Point2f pF1 = lineCoordToNormalMap[cL];
+            Point2f pF2 = lineCoordToNormalMap[cR];
+            
+            if (debug) {
+              printf("Coord on Left  (%d,%d) from offset %d\n", cL.x, cL.y, actualOffsetL);
+              printf("Coord on Right (%d,%d) from offset %d\n", cR.x, cR.y, actualOffsetR);
+
+              printf("Norm on Left  (%0.3f,%0.3f)\n", pF1.x, pF1.y);
+              printf("Norm on Right (%0.3f,%0.3f)\n", pF2.x, pF2.y);
+            }
+            
+            Point2f sumF = pF1 + pF2;
+            
+            if (debug) {
+              printf("Sum of directional vectors (%0.3f,%0.3f)\n", sumF.x, sumF.y);
+            }
+            
+            makeUnitVector(sumF);
+            
+            if (debug) {
+              printf("normal unit vector (%0.3f,%0.3f)\n", sumF.x, sumF.y);
+            }
+            
+            normF = sumF;
           } else {
             normF = lineCoordToNormalMap[c];
           }
