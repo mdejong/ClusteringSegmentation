@@ -301,4 +301,12 @@ normalUnitVector(Point2f &vec) {
   vec.y = tmp;
 }
 
+// Apply round() to both the x and y values in a Point2f
+
+static inline
+void round(Point2f p) {
+  p.x = round(p.x);
+  p.y = round(p.y);
+}
+
 #endif // OPENCV_UTIL_H

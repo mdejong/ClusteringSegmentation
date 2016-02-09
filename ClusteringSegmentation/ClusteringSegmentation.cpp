@@ -6795,7 +6795,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         // Generate all normal vectors around the shape bounds and penetrating the region
         // by 1 pixel. After that point, the coordinate simply continue to the region center.
         
-        vector<vector<Coord> > allNormalVectors;
+        vector<vector<Point2f> > allNormalVectors;
         
         for ( int32_t offset : contourIterOrder ) {
           Coord c = contourCoords[offset];
@@ -6806,15 +6806,20 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           Point2f normOutside = cF + (normF * 1);
           Point2f normInside = cF + (normF * -1);
           
-          vector<Coord> coords;
-          Coord c1((uint16_t)round(normInside.x), (uint16_t)round(normInside.y));
-          Coord c2((uint16_t)round(normOutside.x), (uint16_t)round(normOutside.y));
+          vector<Point2f> vecPoints;
           
-          coords.push_back(c1);
-          coords.push_back(c);
-          coords.push_back(c2);
+          const bool roundToPixels = false;
           
-          allNormalVectors.push_back(coords);
+          if (roundToPixels) {
+            round(normInside);
+            round(normOutside);
+          }
+          
+          vecPoints.push_back(normInside);
+          vecPoints.push_back(cF);
+          vecPoints.push_back(normOutside);
+          
+          allNormalVectors.push_back(vecPoints);
         }
         
         // Dump the pixels contained in allNormalVectors as a massive image where the pixels
@@ -6824,8 +6829,10 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           binMat = Scalar(0);
           
           for ( auto &vec : allNormalVectors ) {
-            for ( Coord c : vec ) {
-              binMat.at<uint8_t>(c.y, c.x) = 0xFF;
+            for ( Point2f p : vec ) {
+              round(p);
+              Point2i pi = p;
+              binMat.at<uint8_t>(pi.y, pi.x) = 0xFF;
             }
           }
           
@@ -6862,7 +6869,9 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             int numCols = (int) vec.size();
             
             for ( int x = 0; x < numCols; x++) {
-              Coord c = vec[x];
+              Point2f p = vec[x];
+              round(p);
+              Point2i c = p;
               Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
               colorMat.at<Vec3b>(y, x) = vec;
             }
@@ -6909,13 +6918,21 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           for ( int y = 0; y < allNormalVectors.size(); y++) {
             auto &vec = allNormalVectors[y];
 
-            Point2i p1 = coordToPoint(vec[0]);
-            Point2i p2 = coordToPoint(vec[vec.size() - 1]);
+            Point2f p1 = vec[0];
+            Point2f p2 = vec[vec.size() - 1];
             
             p1 *= multBy;
             p2 *= multBy;
             
-            arrowedLine(colorMat, p1, p2, Scalar(0, 0, 0xFF));
+            round(p1);
+            round(p2);
+            
+            Point2i rp1 = p1;
+            Point2i rp2 = p2;
+            
+            double tipLength = 0.2;
+            
+            arrowedLine(colorMat, rp1, rp2, Scalar(0, 0, 0xFF), 1, 8, 0, tipLength);
           }
           
           std::stringstream fnameStream;
