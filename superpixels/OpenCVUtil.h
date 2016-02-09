@@ -301,10 +301,28 @@ normalUnitVector(Point2f &vec) {
   vec.y = tmp;
 }
 
+// Convert the given vector into a normalized
+// unit vector pointing in the same direction.
+
+static inline
+float
+makeUnitVector(Point2f &vec) {
+  float dx = vec.x;
+  float dy = vec.y;
+  float len = sqrt(dx * dx + dy * dy);
+  if (len == 0) {
+    vec.x = 0.0f;
+    vec.y = 0.0f;
+  } else {
+    vec /= len;
+  }
+  return len;
+}
+
 // Apply round() to both the x and y values in a Point2f
 
 static inline
-void round(Point2f p) {
+void round(Point2f &p) {
   p.x = round(p.x);
   p.y = round(p.y);
 }

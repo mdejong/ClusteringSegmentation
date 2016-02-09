@@ -6784,6 +6784,211 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           
         }
         
+        // While the original contour is useful to get the exact pixels where normals
+        // should intersect with the shape bound, a simplified smoother shape should
+        // be used to actually calculate the normal vector. A normal vector that is
+        // really jaggy would significantly complicate the iteration because the
+        // exact path would change a lot when passing through a hard edge.
+        
+        // FIXME: the line approx is very useful for portions that are actually the
+        // same slope. Consume most of the elements along each line, then use curves
+        // to determine a smooth curve filling between the staraight parts.
+        
+        if ((1)) {
+          binMat = Scalar(0);
+          vector<Point2i> contour = convertCoordsToPoints(contourCoords);
+          vector<vector<Point2i> > contours;
+          contours.push_back(contour);
+          drawContours(binMat, contours, 0, Scalar(0xFF), CV_FILLED); // Draw contour as white filled region
+          
+          if ((1)) {
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_hull_approx_contour_original" << ".png";
+            string fname = fnameStream.str();
+            
+            writeWroteImg(fname, binMat);
+            cout << "" << endl;
+          }
+          
+          vector<Point2i> approxContour;
+          
+          double epsilon = 1.4; // Max dist between original curve and approx
+          
+          approxPolyDP(Mat(contour), approxContour, epsilon, true);
+          
+          Mat colorMat(binMat.size(), CV_8UC3, Scalar(0,0,0));
+          
+          contours[0] = approxContour;
+          
+          drawContours(colorMat, contours, 0, Scalar(0xFF,0xFF,0xFF), CV_FILLED); // Draw contour as white filled region
+          
+          // Draw each contour line as a different color
+          
+          for ( int i = 0; i < approxContour.size(); i++ ) {
+            Point2i p1 = approxContour[i];
+            Point2i p2 = approxContour[vecOffsetAround((int)approxContour.size(), i+1)];
+            
+            Scalar color = Scalar((rand() % 256), (rand() % 256), (rand() % 256));
+            
+            line(colorMat, p1, p2, color, 2, 8);
+          }
+          
+          if ((1)) {
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_hull_approx_contour" << ".png";
+            string fname = fnameStream.str();
+            
+            writeWroteImg(fname, colorMat);
+            cout << "" << endl;
+          }
+          
+          // Generate mapping from original contour coordinate to unit vector for each
+          // approx line.
+          
+          vector<Point2f> slopesForApproxContour;
+          
+          colorMat = Scalar(0,0,0);
+          
+          for ( int i = 0; i < approxContour.size(); i++ ) {
+            Point2i p1 = approxContour[i];
+            Point2i p2 = approxContour[vecOffsetAround((int)approxContour.size(), i+1)];
+            
+            Point2f vec = p2 - p1;
+            
+            if ((1)) {
+              printf("line points (%5d, %5d) -> (%5d, %5d)\n", p1.x, p1.y, p2.x, p2.y);
+              printf("line vector (%0.3f, %0.3f)\n", vec.x, vec.y);
+            }
+            
+            float scale = makeUnitVector(vec);
+            
+            if ((1)) {
+              printf("scale %0.3f\n", scale);
+            }
+            
+            slopesForApproxContour.push_back(vec);
+            
+            uint32_t pixel = i + 1;
+            Scalar color = PixelToVec3b(pixel);
+            
+            // Note that this slope hit line should not include point right around
+            // the border between the end points.
+            
+            Point2f p1F = p1;
+            Point2f p2F = p2;
+            
+            float scaleTrim = int(scale); // chop
+            if (scaleTrim > 1.0) {
+              scaleTrim -= 1.0;
+            }
+            if (scaleTrim > 1.0) {
+              scaleTrim -= 1.0;
+            }
+            if (scaleTrim > 1.0) {
+              scaleTrim -= 1.0;
+            }
+            
+            if ((1)) {
+              printf("scaleTrim %0.3f\n", scaleTrim);
+            }
+            
+            Point2f notP1 = p2F - (vec * scaleTrim);
+            Point2f notP2 = p1F + (vec * scaleTrim);
+            
+            if ((1)) {
+              printf("notP1 vector (%0.3f, %0.3f) -> notP2 (%0.3f, %0.3f)\n", notP1.x, notP1.y, notP2.x, notP2.y);
+            }
+            
+            round(notP1);
+            round(notP2);
+            
+            if ((1)) {
+              printf("notP1 vector (%0.3f, %0.3f) -> notP2 (%0.3f, %0.3f)\n", notP1.x, notP1.y, notP2.x, notP2.y);
+            }
+            
+            line(colorMat, notP1, notP2, color, 2, 8); // 4 or 8 ?
+          }
+          
+          if ((1)) {
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_hull_approx_contour_line4" << ".png";
+            string fname = fnameStream.str();
+            
+            writeWroteImg(fname, colorMat);
+            cout << "" << endl;
+          }
+          
+          // Foreach rendered coordinate, map the coordinate to the slope offset
+          
+          unordered_map<Coord, int> simplifiedCoordToSlopeVec;
+          
+          for ( int y = 0; y < colorMat.rows; y++ ) {
+            for ( int x = 0; x < colorMat.cols; x++ ) {
+              Vec3b vec = colorMat.at<Vec3b>(y, x);
+              if (vec[0] == 0 && vec[1] == 0 && vec[2] == 0) {
+                continue;
+              }
+              uint32_t tag = Vec3BToUID(vec);
+              assert(tag > 0);
+              tag--;
+              
+              Coord c(x, y);
+              simplifiedCoordToSlopeVec[c] = tag;
+            }
+          }
+          
+          // Iterate over each original point in the contour and collect the known slope
+          // for each original contour pixel.
+          
+          binMat = Scalar(0);
+          
+          for ( int32_t offset : contourIterOrder ) {
+            Coord c = contourCoords[offset];
+            if (simplifiedCoordToSlopeVec.count(c) == 0) {
+              // Slope not known for this position
+            } else {
+              int simplifiedOffset = simplifiedCoordToSlopeVec[c];
+              Point2f slopeVec = slopesForApproxContour[simplifiedOffset];
+              binMat.at<uint8_t>(c.y, c.x) = 0xFF;
+            }
+          }
+
+          if ((1)) {
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_hull_approx_slope_hits" << ".png";
+            string fname = fnameStream.str();
+            
+            writeWroteImg(fname, binMat);
+            cout << "" << endl;
+          }
+          
+          // Render hits for known solid slope as Red pixel over original
+          
+          colorMat = Scalar(0,0,0);
+          
+          for ( int32_t offset : contourIterOrder ) {
+            Coord c = contourCoords[offset];
+            colorMat.at<Vec3b>(c.y, c.x) = Vec3b(0xFF, 0xFF, 0xFF);
+            
+            if (simplifiedCoordToSlopeVec.count(c) == 0) {
+              // Slope not known for this position
+            } else {
+              int simplifiedOffset = simplifiedCoordToSlopeVec[c];
+              Point2f slopeVec = slopesForApproxContour[simplifiedOffset];
+              
+              colorMat.at<Vec3b>(c.y, c.x) = Vec3b(0, 0, 0xFF);
+            }
+          }
+          
+          if ((1)) {
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_hull_approx_color_slope_hits" << ".png";
+            string fname = fnameStream.str();
+            
+            writeWroteImg(fname, colorMat);
+            cout << "" << endl;
+          }
+        }
         
         // FIXME: real smoothing of the jagged contour shape should be used so that vectors
         // along a line are all in the same direction, this ensures that the vector inward
