@@ -312,8 +312,6 @@ clockwiseScanOfHullCoords(
   
   // Convert point into a simplified contour of straight lines
   
-  vector<vector<Point> > contours;
-  
   // CHAIN_APPROX_NONE or CV_CHAIN_APPROX_SIMPLE
   
   // Note that in cases of a tight angle, a certain coord can be
@@ -328,8 +326,6 @@ clockwiseScanOfHullCoords(
   
   assert(contour.size() > 0);
   
-  contours.push_back(contour);
-  
   // Invert the default counter clockwise contour orientation
   
   vector<Point2i> tmp = contour;
@@ -339,10 +335,6 @@ clockwiseScanOfHullCoords(
     contour.push_back(p);
   }
   tmp.clear();
-  
-  if (debug) {
-    cout << "num contour(s) detected " << contours.size() << endl;
-  }
   
   if (debug) {
     int i = 0;
@@ -363,6 +355,25 @@ clockwiseScanOfHullCoords(
       i++;
     }
   }
+ 
+  return clockwiseScanOfHullContour(tagsImg, tag, contour);
+}
+
+// Given a contour that is already parsed into a clockwise set points, split
+// the split up into convex vs
+// concave parts.
+
+vector<TypedHullCoords>
+clockwiseScanOfHullContour(const Mat & tagsImg,
+                           int32_t tag,
+                           const vector<Point2i> &contour)
+{
+  const bool debug = true;
+  const bool debugDumpImages = true;
+
+  vector<vector<Point> > contours;
+  
+  Mat binMat(tagsImg.size(), CV_8UC1, Scalar(0));
   
   // Render as contour
   

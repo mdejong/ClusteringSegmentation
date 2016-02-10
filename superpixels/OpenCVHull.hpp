@@ -37,6 +37,15 @@ clockwiseScanOfHullCoords(
                           int32_t tag,
                           const vector<Coord> &regionCoords);
 
+// Given a contour that is already parsed into a clockwise set points, split
+// the split up into convex vs
+// concave parts.
+
+vector<TypedHullCoords>
+clockwiseScanOfHullContour(const Mat & tagsImg,
+                           int32_t tag,
+                           const vector<Point2i> &contour);
+
 // This util class represents either a line segment or a curve segment. An instance of this class
 // would be used in a vector that could contain either line segments or curve segments. Also,
 // note that a segment best represented by a curve might be better represented by 2 lines
