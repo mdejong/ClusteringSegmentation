@@ -1543,14 +1543,12 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
     contours.push_back(contour);
     drawContours(binMat, contours, 0, Scalar(0xFF), CV_FILLED); // Draw contour as white filled region
     
-    if (debugDumpImages) {
-      std::stringstream fnameStream;
-      fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_approx_contour_original" << ".png";
-      string fname = fnameStream.str();
-      
-      writeWroteImg(fname, binMat);
-      cout << "" << endl;
-    }
+    std::stringstream fnameStream;
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_approx_contour_original" << ".png";
+    string fname = fnameStream.str();
+    
+    writeWroteImg(fname, binMat);
+    cout << "" << endl;
   }
   
   // Verify that points on contour are 8 connected and not simplified.
@@ -1607,14 +1605,12 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
       line(colorMat, p1, p2, color, 2, 8);
     }
     
-    if ((1)) {
-      std::stringstream fnameStream;
-      fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_approx_contour" << ".png";
-      string fname = fnameStream.str();
-      
-      writeWroteImg(fname, colorMat);
-      cout << "" << endl;
-    }
+    std::stringstream fnameStream;
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_approx_contour" << ".png";
+    string fname = fnameStream.str();
+    
+    writeWroteImg(fname, colorMat);
+    cout << "" << endl;
   }
   
   // Iterate over contour points and determine which ones are inside the approx
@@ -1647,6 +1643,10 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
 #endif // DEBUG
         
         if (contour[contouri] == p1) {
+          if (debug) {
+            printf("stop advance past at initial contouri %d (%5d, %5d)\n", contouri, contour[contouri].x, contour[contouri].y);
+          }
+          
           break;
         } else {
           if (debug) {
@@ -1663,7 +1663,7 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
 #endif // DEBUG
       
       if (debug) {
-        printf("starting point (%5d, %5d)\n", contour[contouri].x, contour[contouri].y);
+        printf("starting point at initial contouri %d (%5d, %5d)\n", contouri, contour[contouri].x, contour[contouri].y);
       }
     }
     
@@ -1689,6 +1689,14 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
         lastSegmentIsLine = false;
       }
       
+#if defined(DEBUG)
+      {
+        assert(contouri < contouriMax);
+        Point2i contourP = contour[vecOffsetAround((int)contour.size(), contouri)];
+        assert(contourP == p1);
+      }
+#endif // DEBUG
+      
       vector<Point2i> &consumedPointsVec = segments[segments.size() - 1].points;
       consumedPointsVec.push_back(p1);
       
@@ -1697,7 +1705,6 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
       }
       
 #if defined(DEBUG)
-      assert(contour[contouri] == p1);
       assert(consumedPointsVec.size() > 0);
 #endif // DEBUG
       
@@ -1725,6 +1732,7 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
       
 #if defined(DEBUG)
       {
+        assert(contouri < contouriMax);
         Point2i contourP = contour[vecOffsetAround((int)contour.size(), contouri)];
         assert(contourP == p1);
       }
@@ -1854,14 +1862,12 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
       }
     }
     
-    if ((1)) {
-      std::stringstream fnameStream;
-      fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_approx_line_or_curve_type" << ".png";
-      string fname = fnameStream.str();
-      
-      writeWroteImg(fname, colorMat);
-      cout << "" << endl;
-    }
+    std::stringstream fnameStream;
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_approx_line_or_curve_type" << ".png";
+    string fname = fnameStream.str();
+    
+    writeWroteImg(fname, colorMat);
+    cout << "" << endl;
   }
   
   // Render each line as a different color with width 1
@@ -1877,14 +1883,12 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
       }
     }
     
-    if ((1)) {
-      std::stringstream fnameStream;
-      fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_approx_line_or_curve" << ".png";
-      string fname = fnameStream.str();
-      
-      writeWroteImg(fname, colorMat);
-      cout << "" << endl;
-    }
+    std::stringstream fnameStream;
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_approx_line_or_curve" << ".png";
+    string fname = fnameStream.str();
+    
+    writeWroteImg(fname, colorMat);
+    cout << "" << endl;
   }
   
   return segments;

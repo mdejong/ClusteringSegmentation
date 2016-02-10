@@ -5511,7 +5511,10 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         // small this logic ends up finding really small lines of length 2 or 3 which are really
         // part of curves.
         
-        vector<HullLineOrCurveSegment> vecOfSeg = splitContourIntoLinesSegments(tag, inputImg.size(), roi, contourCoords, 1.4);
+//        double epsilon = 0.0;
+        double epsilon = 1.4;
+        
+        vector<HullLineOrCurveSegment> vecOfSeg = splitContourIntoLinesSegments(tag, inputImg.size(), roi, contourCoords, epsilon);
         
         // Note that iteration order of coordinates in vecOfSeg may not start on contourCoords[0] so
         // create a map from known line points to the common line slope.
