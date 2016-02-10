@@ -5265,7 +5265,7 @@ clockwiseScanOfHullCoords(
   
   vector<int> hull;
   
-  convexHull(contourMat, hull, false);
+  convexHull(contourMat, hull, false, false);
   
   int hullCount = (int)hull.size();
   
@@ -5273,11 +5273,11 @@ clockwiseScanOfHullCoords(
     cout << "hullCount " << hullCount << endl;
   }
   
-  binMat = Scalar(0);
-  
-  drawOneHull(binMat, hull, contour, Scalar(0xFF), 1, 8 );
-  
   if (debugDumpImages) {
+    binMat = Scalar(0);
+    
+    drawOneHull(binMat, hull, contour, Scalar(0xFF), 1, 8 );
+    
     std::stringstream fnameStream;
     fnameStream << "srm" << "_tag_" << tag << "_hull_lines" << ".png";
     string fname = fnameStream.str();
@@ -5302,7 +5302,7 @@ clockwiseScanOfHullCoords(
   if (debugDumpImages) {
     colorMat = tagsImg.clone();
     colorMat = Scalar(0, 0, 0);
-    drawContours(colorMat, contours, 0, Scalar(0xFF,0xFF,0xFF), CV_FILLED, 8); // Draw contour as white filled region
+    drawContours(colorMat, contours, 0, Scalar(0xFF,0xFF,0xFF), CV_FILLED); // Draw contour as white filled region
   }
   
   for (int cDefIt = 0; cDefIt < defectVec.size(); cDefIt++) {
@@ -5367,7 +5367,7 @@ clockwiseScanOfHullCoords(
   if (debugDumpImages) {
     colorMat = tagsImg.clone();
     colorMat = Scalar(0, 0, 0);
-    drawContours(colorMat, contours, 0, Scalar(0xFF,0xFF,0xFF), CV_FILLED, 8); // Draw contour as white filled region
+    drawContours(colorMat, contours, 0, Scalar(0xFF,0xFF,0xFF), CV_FILLED); // Draw contour as white filled region
   }
   
   if (debugDumpImages) {
