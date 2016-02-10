@@ -10,6 +10,7 @@
 
 #include "Util.h"
 #include "OpenCVUtil.h"
+#include "OpenCVHull.hpp"
 
 #include "Coord.h"
 #include "Superpixel.h"
