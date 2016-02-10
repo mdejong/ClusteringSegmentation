@@ -6,11 +6,11 @@
 
 #include "Superpixel.h"
 
-//#include "vf_DistanceTransform.h"
-
 #include "OpenCVIter.hpp"
 
 #include "Util.h"
+
+#define HULL_DUMP_IMAGE_PREFIX "srm_tag_"
 
 // Get a range of contour values given a starting point and and ending point.
 // Note that in the case where the ending point wraps around are treated as
@@ -302,7 +302,7 @@ clockwiseScanOfHullCoords(
   
   if (debugDumpImages) {
     std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_contour_detect" << ".png";
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_contour_detect" << ".png";
     string fname = fnameStream.str();
     
     imwrite(fname, binMat);
@@ -383,7 +383,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
     drawContours(binMat, contours, 0, Scalar(0xFF));
     
     std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_contour" << ".png";
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_contour" << ".png";
     string fname = fnameStream.str();
     
     imwrite(fname, binMat);
@@ -427,7 +427,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
     }
     
     std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_contour_order" << ".png";
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_contour_order" << ".png";
     string fname = fnameStream.str();
     
     imwrite(fname, binMat);
@@ -462,7 +462,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
     drawContours(binMat, contours, 0, Scalar(0xFF), 1, 8 );
     
     std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_hull_lines" << ".png";
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_lines" << ".png";
     string fname = fnameStream.str();
     
     writeWroteImg(fname, binMat);
@@ -518,7 +518,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
   
   if (debugDumpImages) {
     std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_hull_defectpoints" << ".png";
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_defectpoints" << ".png";
     string fname = fnameStream.str();
     
     imwrite(fname, binMat);
@@ -528,7 +528,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
   
   if (debugDumpImages) {
     std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_hull_defect_render" << ".png";
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_defect_render" << ".png";
     string fname = fnameStream.str();
     
     imwrite(fname, colorMat);
@@ -601,7 +601,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
       line(colorMat2, midP, defectP, Scalar(0,0,0xFF), 1, 0);
       
       std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_hull_defect_" << cDefIt << ".png";
+      fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_defect_" << cDefIt << ".png";
       string fname = fnameStream.str();
       
       imwrite(fname, colorMat2);
@@ -727,7 +727,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
       
       
       std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_hull_defect_" << cDefIt << "_angle_" << angleBetweenStartAndDefectDegrees << "_and_" << angleBetweenEndAndDefectDegrees << ".png";
+      fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_defect_" << cDefIt << "_angle_" << angleBetweenStartAndDefectDegrees << "_and_" << angleBetweenEndAndDefectDegrees << ".png";
       string fname = fnameStream.str();
       
       imwrite(fname, colorMat2);
@@ -798,7 +798,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
       
       if (debugDumpImages) {
         std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_hull_defect_" << cDefIt << "_only_line" << ".png";
+        fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_defect_" << cDefIt << "_only_line" << ".png";
         string fname = fnameStream.str();
         
         imwrite(fname, roiMat);
@@ -867,7 +867,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
         }
         
         std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_hull_defect_" << cDefIt << "_not_on_line" << ".png";
+        fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_defect_" << cDefIt << "_not_on_line" << ".png";
         string fname = fnameStream.str();
         
         imwrite(fname, binMat);
@@ -894,7 +894,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
         }
         
         std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_hull_defect_" << cDefIt << "_combined_line_defect" << ".png";
+        fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_defect_" << cDefIt << "_combined_line_defect" << ".png";
         string fname = fnameStream.str();
         
         imwrite(fname, colorMat);
@@ -972,7 +972,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
   
   if (debugDumpImages) {
     std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_hull_defect_normals" << ".png";
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_defect_normals" << ".png";
     string fname = fnameStream.str();
     
     imwrite(fname, binMat);
@@ -982,7 +982,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
   
   if (debugDumpImages) {
     std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_hull_defect_filtered_render" << ".png";
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_defect_filtered_render" << ".png";
     string fname = fnameStream.str();
     
     imwrite(fname, colorMat);
@@ -1231,7 +1231,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
     }
     
     std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_hull_type" << ".png";
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_type" << ".png";
     string fname = fnameStream.str();
     
     imwrite(fname, binMat);
@@ -1261,7 +1261,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
     }
     
     std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_hull_segments" << ".png";
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_segments" << ".png";
     string fname = fnameStream.str();
     
     imwrite(fname, colorMat);
@@ -1285,7 +1285,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
     }
     
     std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_hull_lines_segments" << ".png";
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_lines_segments" << ".png";
     string fname = fnameStream.str();
     
     imwrite(fname, colorMat);
@@ -1410,7 +1410,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
         line(colorMat, anchorP, nextP, c2, 1, 8);
         
         std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_hull_lines_segment_" << i << "_angle_" << angleDeg << (mergeLineSegments ? "_merged" : "_notmerged" ) << ".png";
+        fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_lines_segment_" << i << "_angle_" << angleDeg << (mergeLineSegments ? "_merged" : "_notmerged" ) << ".png";
         string fname = fnameStream.str();
         
         imwrite(fname, colorMat);
@@ -1503,7 +1503,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
     }
     
     std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_hull_lines_combined_segments" << ".png";
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_lines_combined_segments" << ".png";
     string fname = fnameStream.str();
     
     imwrite(fname, colorMat);
@@ -1542,7 +1542,7 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
     
     if (debugDumpImages) {
       std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_hull_approx_contour_original" << ".png";
+      fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_approx_contour_original" << ".png";
       string fname = fnameStream.str();
       
       writeWroteImg(fname, binMat);
@@ -1606,7 +1606,7 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
     
     if ((1)) {
       std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_hull_approx_contour" << ".png";
+      fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_approx_contour" << ".png";
       string fname = fnameStream.str();
       
       writeWroteImg(fname, colorMat);
@@ -1850,7 +1850,7 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
     
     if ((1)) {
       std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_hull_approx_color_slope_hits" << ".png";
+      fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_approx_color_slope_hits" << ".png";
       string fname = fnameStream.str();
       
       writeWroteImg(fname, colorMat);
