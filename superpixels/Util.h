@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include <iostream>
 
 #include "Coord.h"
 
@@ -344,6 +345,64 @@ T vecOffsetAround(T vecSize, T offset)
     actualOffset = offset;
   }
   return actualOffset;
+}
+
+// Iterate a vector inside out, so that the (1 2 3) is iterated as (2 1 3)
+// and (0 1 2 3) is iterated as (1 2 0 3).
+
+template <typename T>
+static inline
+vector<T> iterInsideOut(const vector<T> &vec)
+{
+  const bool debug = true;
+  vector<T> results;
+  
+  bool isEven = ((vec.size() % 2) == 0);
+  
+  int lefti;
+  int righti;
+
+  if (isEven) {
+    righti = (int)vec.size() / 2;
+    lefti = righti - 1;
+  } else {
+    int midi = (int)vec.size() / 2;
+    T midVal = vec[midi];
+    results.push_back(midVal);
+    
+    if (debug) {
+      std::cout << "append " << midVal << std::endl;
+    }
+
+    lefti = midi - 1;
+    righti = midi + 1;
+  }
+  
+  for ( ; lefti >= 0 ; lefti--, righti++ ) {
+    assert(lefti != righti);
+    T leftVal = vec[lefti];
+    results.push_back(leftVal);
+    
+    if (debug) {
+      std::cout << "append L " << leftVal << " at offset " << lefti << std::endl;
+    }
+    
+    T rightVal = vec[righti];
+    results.push_back(rightVal);
+    
+    if (debug) {
+      std::cout << "append R " << rightVal << " at offset " << righti << std::endl;
+    }
+  }
+
+  if (debug) {
+    cout << "return ordered " << endl;
+    for ( auto val : results ) {
+      std::cout << val << std::endl;
+    }
+  }
+  
+  return results;
 }
 
 #endif // SUPERPIXEL_UTIL_H

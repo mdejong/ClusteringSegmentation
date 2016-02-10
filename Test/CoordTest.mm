@@ -2616,5 +2616,77 @@
   XCTAssert(ptr->points[2] == Point2i(0,1), @"result");
 }
 
+
+- (void)testIterInsideOut1
+{
+  vector<int> vals;
+  vals.push_back(1);
+  vector<int> ordered = iterInsideOut(vals);
+  XCTAssert(ordered.size() == vals.size(), @"result");
+  
+  XCTAssert(ordered[0] == 1, @"result");
+}
+
+- (void)testIterInsideOut2
+{
+  vector<int> vals;
+  vals.push_back(1);
+  vals.push_back(2);
+  vector<int> ordered = iterInsideOut(vals);
+  XCTAssert(ordered.size() == vals.size(), @"result");
+  
+  XCTAssert(ordered[0] == 1, @"result");
+  XCTAssert(ordered[1] == 2, @"result");
+}
+
+- (void)testIterInsideOut3
+{
+  vector<int> vals;
+  vals.push_back(1);
+  vals.push_back(2);
+  vals.push_back(3);
+  vector<int> ordered = iterInsideOut(vals);
+  XCTAssert(ordered.size() == vals.size(), @"result");
+  
+  XCTAssert(ordered[0] == 2, @"result");
+  XCTAssert(ordered[1] == 1, @"result");
+  XCTAssert(ordered[2] == 3, @"result");
+}
+
+- (void)testIterInsideOut4
+{
+  vector<int> vals;
+  vals.push_back(1);
+  vals.push_back(2);
+  vals.push_back(3);
+  vals.push_back(4);
+  vector<int> ordered = iterInsideOut(vals);
+  XCTAssert(ordered.size() == vals.size(), @"result");
+  
+  XCTAssert(ordered[0] == 2, @"result");
+  XCTAssert(ordered[1] == 3, @"result");
+  XCTAssert(ordered[2] == 1, @"result");
+  XCTAssert(ordered[3] == 4, @"result");
+}
+
+- (void)testIterInsideOut5
+{
+  vector<int> vals;
+  vals.push_back(1);
+  vals.push_back(2);
+  vals.push_back(3);
+  vals.push_back(4);
+  vals.push_back(5);
+  vector<int> ordered = iterInsideOut(vals);
+  XCTAssert(ordered.size() == vals.size(), @"result");
+  
+  XCTAssert(ordered[0] == 3, @"result");
+  XCTAssert(ordered[1] == 2, @"result");
+  XCTAssert(ordered[2] == 4, @"result");
+  XCTAssert(ordered[3] == 1, @"result");
+  XCTAssert(ordered[4] == 5, @"result");
+}
+
 @end
 
+  
