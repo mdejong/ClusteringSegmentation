@@ -6908,9 +6908,9 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             auto insideOutVec = iterInsideOut(pointsVec);
 
             if (pointsVec.size() <= 3) {
-              startEndN = 0;
+              startEndN = 2;
             } else if (pointsVec.size() <= 5) {
-              startEndN = 1;
+              startEndN = 2;
             } else {
               startEndN = 2;
 //              startEndN = 1;
@@ -6931,50 +6931,54 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
                 lineCoordToNormalMap[c] = normal;
               }
             }
-            
-            // Average pending points in backward order so that the points
-            // farthest from the line center are processed first.
-            
-            for ( auto it = pendingLineEdges.rbegin(); it != pendingLineEdges.rend(); it++ ) {
-              Coord c = *it;
-              cout << c << endl;
-              
-              // FIXME: linear search needed to discover original offset in contourCoords ?
-              
-              int searchOffset = -1;
-              
-              for (int i = 0; i < contourCoords.size(); i++ ) {
-                Coord cC = contourCoords[i];
-                if ( c == cC ) {
-                  searchOffset = i;
-                  break;
-                }
-              }
-              assert(searchOffset != -1);
-              
-              Point2f normF = aveSlope(searchOffset);
-              
-              lineCoordToNormalMap[c] = normF;
-            }
-            
           } else {
-            // The slope of the normal should be an average of
-            // the points around the offset
+            // All points on curves treated as average between line slopes.
+            
+            // FIXME: should curve points be added inside out, so that ave at
+            // edges is done before other points?
+            
+            vector<Coord> vec = convertPointsToCoords(locSeg.points);
+            append_to_vector(pendingLineEdges, vec);
           }
-          locOffset++;
-        }
-        
-        // Iterate over any points that are at the edges of the lines
-        
-        locOffset = 0;
-        for ( LineOrCurveSegment & locSeg : vecOfSeg ) {
           
           locOffset++;
         }
         
-        vector<vector<Point2f> > allNormalVectors;
+        // Iterate over original contour points and determine if any points
+        // still need to have normals calculated.
         
-        int offset = 0;
+        unordered_map<Coord, int> contourCoordsToFirstOffsetMap;
+        
+        int contourOffset = 0;
+        
+        for ( Coord c : contourCoords ) {
+          if (contourCoordsToFirstOffsetMap.count(c) == 0) {
+            contourCoordsToFirstOffsetMap[c] = contourOffset;
+          }
+          contourOffset++;
+        }
+        
+        // Average pending points in backward order so that the points
+        // farthest from the line center are processed first.
+        
+        for ( auto it = pendingLineEdges.begin(); it != pendingLineEdges.end(); it++ ) {
+          Coord c = *it;
+          cout << c << endl;
+          
+#if defined(DEBUG)
+          assert(contourCoordsToFirstOffsetMap.count(c) > 0);
+#endif // DEBUG
+          
+          int contourOffset = contourCoordsToFirstOffsetMap[c];
+          
+          Point2f normF = aveSlope(contourOffset);
+          
+          lineCoordToNormalMap[c] = normF;
+        }
+        
+        // Calculate all normals
+        
+        vector<vector<Point2f> > allNormalVectors;
         
         for ( Coord c : contourCoords ) {
           Point2f normF;
@@ -6984,85 +6988,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
 #endif // DEBUG
           
           if (lineCoordToNormalMap.count(c) == 0) {
-            /*
-            // Slope not known for this position
-            //normF = normalAtOffset(contourCoords, offset);
-            
-            // Walk backwards until a normal is found
-            
-            int32_t offsetL = offset - 1;
-            int32_t offsetR = offset + 1;
-            
-            int32_t actualOffsetL;
-            int32_t actualOffsetR;
-            
-            Coord cL;
-            Coord cR;
-            
-            while (1) {
-              actualOffsetL = vecOffsetAround((int32_t)contourCoords.size(), offsetL);
-              
-              if (actualOffsetL == offset) {
-                break;
-              }
-              
-              cL = contourCoords[actualOffsetL];
-              
-              if (lineCoordToNormalMap.count(cL) > 0) {
-                break;
-              }
-              
-              offsetL--;
-            }
-            
-            while (1) {
-              actualOffsetR = vecOffsetAround((int32_t)contourCoords.size(), offsetR);
-              
-              if (actualOffsetR == offset) {
-                break;
-              }
-              
-              cR = contourCoords[actualOffsetR];
-              
-              if (lineCoordToNormalMap.count(cR) > 0) {
-                break;
-              }
-              
-              offsetR++;
-            }
-            
-            // Smooth out the difference between the two normal vectors
-            
-#if defined(DEBUG)
-            assert(lineCoordToNormalMap.count(cL) > 0);
-            assert(lineCoordToNormalMap.count(cR) > 0);
-#endif // DEBUG
-            
-            Point2f pF1 = lineCoordToNormalMap[cL];
-            Point2f pF2 = lineCoordToNormalMap[cR];
-            
-            if (debug) {
-              printf("Coord on Left  (%d,%d) from offset %d\n", cL.x, cL.y, actualOffsetL);
-              printf("Coord on Right (%d,%d) from offset %d\n", cR.x, cR.y, actualOffsetR);
-
-              printf("Norm on Left  (%0.3f,%0.3f)\n", pF1.x, pF1.y);
-              printf("Norm on Right (%0.3f,%0.3f)\n", pF2.x, pF2.y);
-            }
-            
-            Point2f sumF = pF1 + pF2;
-            
-            if (debug) {
-              printf("Sum of directional vectors (%0.3f,%0.3f)\n", sumF.x, sumF.y);
-            }
-            
-            makeUnitVector(sumF);
-            
-            if (debug) {
-              printf("normal unit vector (%0.3f,%0.3f)\n", sumF.x, sumF.y);
-            }
-            
-            normF = sumF;
-            */
+            assert(0);
           } else {
             normF = lineCoordToNormalMap[c];
           }
@@ -7086,8 +7012,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           vecPoints.push_back(normOutside);
           
           allNormalVectors.push_back(vecPoints);
-          
-          offset++;
         }
         
         // Dump the pixels contained in allNormalVectors as a massive image where the pixels
