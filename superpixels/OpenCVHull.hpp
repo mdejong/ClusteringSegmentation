@@ -42,7 +42,7 @@ clockwiseScanOfHullCoords(
 // concave parts.
 
 vector<TypedHullCoords>
-clockwiseScanOfHullContour(const Mat & tagsImg,
+clockwiseScanOfHullContour(CvSize size,
                            int32_t tag,
                            const vector<Point2i> &contour);
 

@@ -356,7 +356,7 @@ clockwiseScanOfHullCoords(
     }
   }
  
-  return clockwiseScanOfHullContour(tagsImg, tag, contour);
+  return clockwiseScanOfHullContour(tagsImg.size(), tag, contour);
 }
 
 // Given a contour that is already parsed into a clockwise set points, split
@@ -364,7 +364,7 @@ clockwiseScanOfHullCoords(
 // concave parts.
 
 vector<TypedHullCoords>
-clockwiseScanOfHullContour(const Mat & tagsImg,
+clockwiseScanOfHullContour(CvSize size,
                            int32_t tag,
                            const vector<Point2i> &contour)
 {
@@ -373,7 +373,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
 
   vector<vector<Point> > contours;
   
-  Mat binMat(tagsImg.size(), CV_8UC1, Scalar(0));
+  Mat binMat(size, CV_8UC1, Scalar(0));
   
   // Render as contour
   
@@ -483,7 +483,10 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
   Mat colorMat;
   
   if (debugDumpImages) {
-    colorMat = tagsImg.clone();
+    colorMat = Mat(size, CV_8UC3);
+  }
+  
+  if (debugDumpImages) {
     colorMat = Scalar(0, 0, 0);
     drawContours(colorMat, contours, 0, Scalar(0xFF,0xFF,0xFF), CV_FILLED); // Draw contour as white filled region
   }
@@ -550,7 +553,6 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
   unordered_map<int, vector<Coord>> defectStartOffsetToTripleMap;
   
   if (debugDumpImages) {
-    colorMat = tagsImg.clone();
     colorMat = Scalar(0, 0, 0);
     drawContours(colorMat, contours, 0, Scalar(0xFF,0xFF,0xFF), CV_FILLED); // Draw contour as white filled region
   }
@@ -560,6 +562,10 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
   }
   
   Mat colorMat2;
+  
+  if (debugDumpImages) {
+    colorMat2 = Mat(size, CV_8UC3);
+  }
   
   for (int cDefIt = 0; cDefIt < defectVec.size(); cDefIt++) {
     int startIdx = defectVec[cDefIt].val[0];
@@ -593,7 +599,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
     Point2i midToDefectDelta = midP - defectP;
     
     if (debugDumpImages) {
-      colorMat2 = tagsImg.clone();
+      colorMat2 = Scalar(0,0,0);
       
       line(colorMat2, startP, midP, Scalar(0xFF,0,0), 1, 0); // blue
       line(colorMat2, midP, endP, Scalar(0,0xFF,0), 1, 0); // green
@@ -715,8 +721,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
     }
     
     if (debugDumpImages) {
-      colorMat2 = tagsImg.clone();
-      //colorMat2 = Scalar(0, 0, 0);
+      colorMat2 = Scalar(0, 0, 0);
       
       Point2i midP(round(midF.x), round(midF.y));
       
@@ -784,7 +789,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
       hullAndDefectCoords.push_back(defectC);
       hullAndDefectCoords.push_back(endC);
       
-      Rect roiRect = bboxPlusN(hullAndDefectCoords, tagsImg.size(), 1);
+      Rect roiRect = bboxPlusN(hullAndDefectCoords, size, 1);
       
       Mat roiMat(roiRect.size(), CV_8UC1);
       
@@ -876,7 +881,6 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
       }
       
       if (debugDumpImages) {
-        Mat colorMat = tagsImg.clone();
         colorMat = Scalar(0, 0, 0);
         
         Vec3b greenVec(0x0, 0xFF, 0);
@@ -985,8 +989,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
     fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_defect_filtered_render" << ".png";
     string fname = fnameStream.str();
     
-    imwrite(fname, colorMat);
-    cout << "wrote " << fname << endl;
+    writeWroteImg(fname, colorMat);
     cout << "" << endl;
   }
   
@@ -1831,6 +1834,9 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
   assert(contour.size() == totalNumPointsOut);
 #endif // DEBUG
   
+  // Each line segment is represented as a different color and
+  // each curve segment is represented as a different color.
+  
   if (debugDumpImages) {
     Mat colorMat(size, CV_8UC3, Scalar(0,0,0));
     
@@ -1838,9 +1844,9 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
       Vec3b color;
       
       if (locSeg.isLine) {
-        color = Vec3b(0,0,0xFF);
+        color = Vec3b(0,0,0xFF); // Red for line
       } else {
-        color = Vec3b(0x7F,0x7F,0x7F);
+        color = Vec3b(0x7F,0x7F,0x7F); // Gray for curve pixels
       }
       
       for ( Point2i p : locSeg.points ) {
@@ -1850,7 +1856,30 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
     
     if ((1)) {
       std::stringstream fnameStream;
-      fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_approx_color_slope_hits" << ".png";
+      fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_approx_line_or_curve_type" << ".png";
+      string fname = fnameStream.str();
+      
+      writeWroteImg(fname, colorMat);
+      cout << "" << endl;
+    }
+  }
+  
+  // Render each line as a different color with width 1
+  
+  if (debugDumpImages) {
+    Mat colorMat(size, CV_8UC3, Scalar(0,0,0));
+    
+    for ( auto &locSeg : segments ) {
+      Vec3b color((rand() % 256), (rand() % 256), (rand() % 256));
+      
+      for ( Point2i p : locSeg.points ) {
+        colorMat.at<Vec3b>(p.y, p.x) = color;
+      }
+    }
+    
+    if ((1)) {
+      std::stringstream fnameStream;
+      fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_approx_line_or_curve" << ".png";
       string fname = fnameStream.str();
       
       writeWroteImg(fname, colorMat);

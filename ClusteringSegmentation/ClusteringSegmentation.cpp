@@ -5505,6 +5505,12 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         Rect roi(0,0,inputImg.size().width, inputImg.size().height);
         
+        // FIXME: should attempt to invoke splitContourIntoLinesSegments() with episilon = 0.0
+        // to determine simplified set of points that combine into lines without any approx.
+        // When the approx is then applied it can find longer lines. But, when the approx is
+        // small this logic ends up finding really small lines of length 2 or 3 which are really
+        // part of curves.
+        
         vector<HullLineOrCurveSegment> vecOfSeg = splitContourIntoLinesSegments(tag, inputImg.size(), roi, contourCoords, 1.4);
         
         // Note that iteration order of coordinates in vecOfSeg may not start on contourCoords[0] so
