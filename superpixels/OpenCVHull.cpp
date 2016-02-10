@@ -480,10 +480,12 @@ clockwiseScanOfHullCoords(
     Point2i endP = contour[endIdx];
     Point2i defectP = contour[defectPtIdx];
     
+    if (debug) {
     printf("start  %8d = (%4d,%4d)\n", startIdx, startP.x, startP.y);
     printf("end    %8d = (%4d,%4d)\n", endIdx, endP.x, endP.y);
     printf("defect %8d = (%4d,%4d)\n", defectPtIdx, defectP.x, defectP.y);
     printf("depth  %0.3f\n", depth);
+    }
     
     if (debugDumpImages) {
       line(binMat, startP, defectP, Scalar(255), 1, 0);
@@ -551,10 +553,12 @@ clockwiseScanOfHullCoords(
     Point2i endP = contour[endIdx];
     Point2i defectP = contour[defectPtIdx];
     
+    if (debug) {
     printf("start  %8d = (%4d,%4d)\n", startIdx, startP.x, startP.y);
     printf("end    %8d = (%4d,%4d)\n", endIdx, endP.x, endP.y);
     printf("defect %8d = (%4d,%4d)\n", defectPtIdx, defectP.x, defectP.y);
     printf("depth  %0.3f\n", depth);
+    }
     
     // The initial filtering checks abs(dx,dy) for the delta between
     // startP and defectP. If these points are within 2 pixels of each
