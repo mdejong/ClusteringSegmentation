@@ -316,4 +316,13 @@ void round(Point2f &p) {
   p.y = round(p.y);
 }
 
+// Calculate bbox
+
+void
+bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &height, const vector<Coord> &coords);
+
+// bbox with optional +-N around the bbox
+
+cv::Rect bboxPlusN(const vector<Coord> &coords, CvSize imgSize, int numPixels);
+
 #endif // OPENCV_UTIL_H

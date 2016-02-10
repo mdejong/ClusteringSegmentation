@@ -398,7 +398,7 @@ Coord findRegionCenter(Mat &binMat, cv::Rect roi, Mat &outDistMat, int tag)
     
     int32_t originX, originY, width, height;
     
-    Superpixel::bbox(originX, originY, width, height, coords);
+    bbox(originX, originY, width, height, coords);
     
     // Calculate bbox center coordinate
     
@@ -1650,4 +1650,125 @@ convertPointsToCoords(const vector<Point2i> &pointsVec)
   }
   
   return coords;
+}
+
+void
+bbox(int32_t &originX, int32_t &originY, int32_t &width, int32_t &height, const vector<Coord> &coords)
+{
+  const bool debug = false;
+  
+  if (debug) {
+    int numCoords = (int) coords.size();
+    
+    cout << "entry coords: count " << numCoords << endl;
+    
+    for (auto coordsIter = coords.begin()+1; coordsIter != coords.end(); ++coordsIter) {
+      Coord coord = *coordsIter;
+      
+      if (debug) {
+        cout << "coord " << coord.x << "," << coord.y << endl;
+      }
+    }
+  }
+  
+#if DEBUG
+  int numCoords = (int) coords.size();
+  assert(numCoords > 0);
+#endif
+  
+  // Examine first coordinate
+  
+  auto &coord = coords[0];
+  
+  int32_t minX = coord.x;
+  int32_t minY = coord.y;
+  int32_t maxX = minX;
+  int32_t maxY = minY;
+  
+  if (debug) {
+    cout << "first coord " << coord.x << "," << coord.y << endl;
+  }
+  
+  // Compare to all other coordinates
+  
+  for (auto coordsIter = coords.begin()+1; coordsIter != coords.end(); ++coordsIter) {
+    Coord coord = *coordsIter;
+    
+    if (debug) {
+      cout << "coord " << coord.x << "," << coord.y << endl;
+    }
+    
+    int32_t X = coord.x;
+    int32_t Y = coord.y;
+    
+    minX = mini(minX, X);
+    minY = mini(minY, Y);
+    maxX = maxi(maxX, X);
+    maxY = maxi(maxY, Y);
+  }
+  
+  // Write contents of registers back to passed in memory
+  
+  originX = minX;
+  originY = minY;
+  width  = (maxX - minX) + 1;
+  height = (maxY - minY) + 1;
+  
+  if (debug) {
+    cout << "returning bbox " << originX << "," << originY << " " << width << " x " << height << endl;
+  }
+  
+  if (debug) {
+    int numCoords = (int) coords.size();
+    
+    cout << "exit coords: count " << numCoords << endl;
+    
+    for (int i = 0; i < numCoords; i++) {
+      const Coord c = coords[i];
+      
+      if (debug) {
+        cout << "coord " << c.x << "," << c.y << endl;
+      }
+    }
+  }
+  
+  return;
+}
+
+// bbox with optional +-N around the bbox
+
+cv::Rect bboxPlusN(const vector<Coord> &coords, CvSize imgSize, int numPixels) {
+  const bool debug = true;
+  
+  int32_t originX, originY, regionWidth, regionHeight;
+  bbox(originX, originY, regionWidth, regionHeight, coords);
+  cv::Rect roiRect(originX, originY, regionWidth, regionHeight);
+  
+  if (debug) {
+    cout << "detected bbox " << originX << "," << originY << " with " << regionWidth << " x " << regionHeight << endl;
+  }
+  
+  originX -= numPixels;
+  if (originX < 0) {
+    originX = 0;
+  }
+  originY -= numPixels;
+  if (originY < 0) {
+    originY = 0;
+  }
+  regionWidth += (numPixels * 2);
+  if (regionWidth > imgSize.width) {
+    regionWidth = imgSize.width;
+  }
+  regionHeight += (numPixels * 2);
+  if (regionHeight > imgSize.height) {
+    regionHeight = imgSize.height;
+  }
+  
+  if (debug) {
+    cout << "expanded bbox " << originX << "," << originY << " with " << regionWidth << " x " << regionHeight << endl;
+  }
+  
+  cv::Rect expandedRoi(originX, originY, regionWidth, regionHeight);
+  return expandedRoi;
 }

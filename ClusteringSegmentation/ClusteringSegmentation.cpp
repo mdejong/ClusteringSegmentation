@@ -887,7 +887,7 @@ morphRegionMask(const Mat & inputImg,
   }
   
   int32_t originX, originY, width, height;
-  Superpixel::bbox(originX, originY, width, height, minMaxCoords);
+  bbox(originX, originY, width, height, minMaxCoords);
   Rect expandedRoi(originX, originY, width, height);
   
   if (debugDumpImages) {
@@ -2517,7 +2517,7 @@ captureRegion(SuperpixelImage &spImage,
     }
     
     int32_t originX, originY, regionWidth, regionHeight;
-    Superpixel::bbox(originX, originY, regionWidth, regionHeight, coords);
+    bbox(originX, originY, regionWidth, regionHeight, coords);
     Rect roiRect(originX, originY, regionWidth, regionHeight);
 
     Mat outDistMat;
@@ -4506,7 +4506,7 @@ clockwiseScanForTagsAroundShape(
   // of rotation and determine which tags the line pixels hit.
   
   int32_t originX, originY, regionWidth, regionHeight;
-  Superpixel::bbox(originX, originY, regionWidth, regionHeight, regionCoords);
+  bbox(originX, originY, regionWidth, regionHeight, regionCoords);
   Rect roiRect(originX, originY, regionWidth, regionHeight);
   
   Coord originCoord(originX, originY);
@@ -5892,7 +5892,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
   // of rotation and determine which tags the line pixels hit.
   
   int32_t originX, originY, regionWidth, regionHeight;
-  Superpixel::bbox(originX, originY, regionWidth, regionHeight, regionCoords);
+  bbox(originX, originY, regionWidth, regionHeight, regionCoords);
   Rect roiRect(originX, originY, regionWidth, regionHeight);
   
   Coord originCoord(originX, originY);
@@ -6506,7 +6506,7 @@ contractOrExpandRegion(const Mat & inputImg,
   outCoords.clear();
   
   int32_t originX, originY, regionWidth, regionHeight;
-  Superpixel::bbox(originX, originY, regionWidth, regionHeight, coords);
+  bbox(originX, originY, regionWidth, regionHeight, coords);
   
   if (debug) {
     cout << "bbox " << originX << "," << originY << " with " << regionWidth << " x " << regionHeight << endl;
@@ -7006,7 +7006,7 @@ bool srmMultiSegment(const Mat & inputImg, Mat & tagsMat) {
     Superpixel *spPtr = spImage2.getSuperpixelPtr(tag);
     
     int32_t originX, originY, regionWidth, regionHeight;
-    Superpixel::bbox(originX, originY, regionWidth, regionHeight, spPtr->coords);
+    bbox(originX, originY, regionWidth, regionHeight, spPtr->coords);
     Rect roiRect(originX, originY, regionWidth, regionHeight);
     
     if (false && (originX == 0 && originY == 0 && regionWidth == inputImg.cols && regionHeight == inputImg.rows)) {

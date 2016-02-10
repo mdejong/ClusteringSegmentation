@@ -445,14 +445,21 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
   
   int hullCount = (int)hull.size();
   
-  if (debug) {
-    cout << "hullCount " << hullCount << endl;
-  }
-  
   if (debugDumpImages) {
     binMat = Scalar(0);
     
-    drawOneHull(binMat, hull, contour, Scalar(0xFF), 1, 8 );
+    vector<Point2i> hullPoints;
+    
+    for ( int offset : hull ) {
+      Point2i p = contour[offset];
+      hullPoints.push_back(p);
+    }
+    
+    vector<vector<Point2i> > contours;
+    
+    contours.push_back(hullPoints);
+    
+    drawContours(binMat, contours, 0, Scalar(0xFF), 1, 8 );
     
     std::stringstream fnameStream;
     fnameStream << "srm" << "_tag_" << tag << "_hull_lines" << ".png";
@@ -777,7 +784,7 @@ clockwiseScanOfHullContour(const Mat & tagsImg,
       hullAndDefectCoords.push_back(defectC);
       hullAndDefectCoords.push_back(endC);
       
-      Rect roiRect = Superpixel::bboxPlusN(hullAndDefectCoords, tagsImg.size(), 1);
+      Rect roiRect = bboxPlusN(hullAndDefectCoords, tagsImg.size(), 1);
       
       Mat roiMat(roiRect.size(), CV_8UC1);
       
