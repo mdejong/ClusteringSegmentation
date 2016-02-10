@@ -1495,3 +1495,346 @@ clockwiseScanOfHullCoords(
   
   return hullCoords;
 }
+
+// This method accepts a contour that is not simplified and detects straight lines
+// as compared to the non-straight curves.
+
+vector<HullLineOrCurveSegment>
+splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector<Coord> &contourCoords, double epsilon)
+{
+  const bool debug = true;
+  const bool debugDumpImages = true;
+  
+  if (debug) {
+    cout << "splitContourIntoLinesSegments" << endl;
+  }
+  
+  const vector<Point2i> contour = convertCoordsToPoints(contourCoords);
+  
+  if (debugDumpImages) {
+    Mat binMat(size, CV_8UC1, Scalar(0));
+    
+    vector<vector<Point2i> > contours;
+    contours.push_back(contour);
+    drawContours(binMat, contours, 0, Scalar(0xFF), CV_FILLED); // Draw contour as white filled region
+    
+    if (debugDumpImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_hull_approx_contour_original" << ".png";
+      string fname = fnameStream.str();
+      
+      writeWroteImg(fname, binMat);
+      cout << "" << endl;
+    }
+  }
+  
+  // Verify that points on contour are 8 connected and not simplified.
+  
+  auto is8Connected = [](const Point2i &p1, const Point2i &p2)->bool {
+    Point2i delta = p2 - p1;
+    int dx = abs(delta.x);
+    int dy = abs(delta.y);
+    
+    if ((dx < 2) && (dy < 2)) {
+      // 0 or +-1 means next point is 8 connected
+      return true;
+    } else {
+      return false;
+    }
+  };
+  
+#if defined(DEBUG)
+  if (1) {
+    for ( int i = 0; i < contour.size(); i++ ) {
+      Point2i p1 = contour[vecOffsetAround((int)contour.size(), i-1)];
+      Point2i p2 = contour[i];
+      
+      if (is8Connected(p1, p2) == false) {
+        cout << "not 8 connected :" << pointToCoord(p1) << " " << pointToCoord(p2) << endl;
+        assert(0);
+      }
+    }
+  }
+#endif // DEBUG
+  
+  vector<Point2i> approxContour;
+  
+  //  double epsilon = 1.4; // Max dist between original curve and approx
+  
+  approxPolyDP(Mat(contour), approxContour, epsilon, true);
+  
+  if (debugDumpImages) {
+    Mat colorMat(size, CV_8UC3, Scalar(0,0,0));
+    
+    vector<vector<Point2i> > contours;
+    contours.push_back(approxContour);
+    
+    drawContours(colorMat, contours, 0, Scalar(0xFF,0xFF,0xFF), CV_FILLED); // Draw contour as white filled region
+    
+    // Draw each contour line as a different color
+    
+    for ( int i = 0; i < approxContour.size(); i++ ) {
+      Point2i p1 = approxContour[i];
+      Point2i p2 = approxContour[vecOffsetAround((int)approxContour.size(), i+1)];
+      
+      Scalar color = Scalar((rand() % 256), (rand() % 256), (rand() % 256));
+      
+      line(colorMat, p1, p2, color, 2, 8);
+    }
+    
+    if ((1)) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_hull_approx_contour" << ".png";
+      string fname = fnameStream.str();
+      
+      writeWroteImg(fname, colorMat);
+      cout << "" << endl;
+    }
+  }
+  
+  // Iterate over contour points and determine which ones are inside the approx
+  // simplified lines represented by approxContour.
+  
+  vector<HullLineOrCurveSegment> segments;
+  bool lastSegmentIsLine = false;
+  
+  int contouri = 0;
+  
+  // This offset indicates where a forward iteration must stop, note that in
+  // the case where a line wraps around the end this max value can go past
+  // the end of the contours array and that will wrap around.
+  
+  int contouriMax = (int) contour.size();
+  
+  for ( int i = 0; i < approxContour.size(); i++ ) {
+    Point2i p1 = approxContour[i];
+    Point2i p2 = approxContour[vecOffsetAround((int)approxContour.size(), i+1)];
+    
+    if (i == 0) {
+      // On the first iteration, check for the case where the very first coordinate
+      // in a line does not match the first coordinate in contour. In this case,
+      // the elements need to be read back from the front of the contour array
+      // an skipped here.
+      
+      while (1) {
+#if defined(DEBUG)
+        assert(contouri < contour.size());
+#endif // DEBUG
+        
+        if (contour[contouri] == p1) {
+          break;
+        } else {
+          if (debug) {
+            printf("advance starting point past (%5d, %5d)\n", contour[contouri].x, contour[contouri].y);
+          }
+          
+          contouri++;
+          contouriMax++;
+        }
+      }
+      
+#if defined(DEBUG)
+      assert(contour[contouri] == p1);
+#endif // DEBUG
+      
+      if (debug) {
+        printf("starting point (%5d, %5d)\n", contour[contouri].x, contour[contouri].y);
+      }
+    }
+    
+    Point2f vec = p2 - p1;
+    
+    if (debug) {
+      printf("i %d of %d\n", i, (int)approxContour.size());
+      printf("line points (%5d, %5d) -> (%5d, %5d)\n", p1.x, p1.y, p2.x, p2.y);
+      printf("line vector (%0.3f, %0.3f)\n", vec.x, vec.y);
+    }
+    
+    // If the points are not 8 connected then this indicates the start of a new
+    // line segment that will consume N points from the original contour.
+    
+    if (is8Connected(p1, p2)) {
+      // Non line element, append points to current non-line segment or
+      // create one if the last segment is a line.
+      
+      if (lastSegmentIsLine || (segments.size() == 0)) {
+        HullLineOrCurveSegment locSeg;
+        locSeg.isLine = false;
+        segments.push_back(std::move(locSeg));
+        lastSegmentIsLine = false;
+      }
+      
+      vector<Point2i> &consumedPointsVec = segments[segments.size() - 1].points;
+      consumedPointsVec.push_back(p1);
+      
+      if (debug) {
+        printf("consume contouri %d = (%d, %d)\n", contouri, p1.x, p1.y);
+      }
+      
+#if defined(DEBUG)
+      assert(contour[contouri] == p1);
+      assert(consumedPointsVec.size() > 0);
+#endif // DEBUG
+      
+      contouri++;
+    } else {
+      // Consume contour points leading up to but not including p2 when a line is found
+      
+      // Note that multiple lines are not combined since they would not
+      // have the same common slope.
+      
+      HullLineOrCurveSegment locSeg;
+      locSeg.isLine = true;
+      
+      // Determine common slope for the whole line
+      
+      float scale = makeUnitVector(vec);
+      scale = scale;
+      
+      locSeg.slope = vec;
+      
+      segments.push_back(locSeg);
+      lastSegmentIsLine = true;
+      
+      vector<Point2i> &consumedPointsVec = segments[segments.size() - 1].points;
+      
+#if defined(DEBUG)
+      {
+        Point2i contourP = contour[vecOffsetAround((int)contour.size(), contouri)];
+        assert(contourP == p1);
+      }
+#endif // DEBUG
+      
+      while (1) {
+        if (contouri == contouriMax) {
+          if (debug) {
+            printf("stop consume at last contouri %d\n", contouri);
+          }
+          break;
+        }
+        
+        // FIXME: adjust ahead so that max is set to the number skipped over in iter1!
+        // Then wrap the array access around.
+        
+        Point2i contourP = contour[vecOffsetAround((int)contour.size(), contouri)];
+        
+        if (contourP == p2) {
+          if (debug) {
+            printf("stop consume at contouri %d = (%d, %d)\n", contouri, contourP.x, contourP.y);
+          }
+          break;
+        } else {
+          if (debug) {
+            printf("consume contouri %d = (%d, %d)\n", contouri, contourP.x, contourP.y);
+          }
+          consumedPointsVec.push_back(contourP);
+          contouri++;
+        }
+      } // end while !is8Connected
+      
+#if defined(DEBUG)
+      assert(consumedPointsVec.size() > 0);
+#endif // DEBUG
+      
+    } // end line block
+  }
+  
+  // Make sure final point gets added
+  assert(approxContour.size() > 0);
+  if (contouri == (contour.size() - 1)) {
+    Point2i lastPoint = contour[contour.size() - 1];
+    segments[segments.size() - 1].points.push_back(lastPoint);
+    
+    if (debug) {
+      cout << "append lastPoint " << pointToCoord(lastPoint) << endl;
+    }
+  }
+  
+  if (debug) {
+    cout << "splitContourIntoLinesSegments return " << segments.size() << " segments" << endl;
+    
+    for ( auto &locSeg : segments ) {
+      cout << "isLine " << locSeg.isLine << endl;
+      cout << "slope " << locSeg.slope.x << "," << locSeg.slope.y << endl;
+      
+      cout << "N coords = " << locSeg.points.size() << endl;
+      
+      for ( Point2i p : locSeg.points ) {
+        cout << p.x << "," << p.y << endl;
+      }
+    }
+  }
+  
+#if defined(DEBUG)
+  // Each point in contour should appear in the segments in order
+  
+  vector<Point2i> combinedSegmentPoints;
+  
+  for ( auto &locSeg : segments ) {
+    assert(locSeg.points.size() > 0);
+    append_to_vector(combinedSegmentPoints, locSeg.points);
+  }
+  
+  while (combinedSegmentPoints.size() < contour.size()) {
+    combinedSegmentPoints.push_back(Point2i(-1, -1));
+  }
+  
+  // Note that before an element by element compare can be executed
+  // the coordinates in contour need to be rotated so that the
+  // very first element is the one at contouriMax (wraps around)
+  
+  vector<Point2i> inPoints = contour;
+  
+  if (contouriMax != contour.size()) {
+    auto midIt = begin(inPoints) + vecOffsetAround((int)contour.size(), contouriMax);
+    rotate(begin(inPoints), midIt, end(inPoints));
+    assert(inPoints.size() == contour.size());
+  }
+  
+  for ( int i = 0; i < combinedSegmentPoints.size(); i++ ) {
+    Point2i pOrig = inPoints[i];
+    Point2i pOut = combinedSegmentPoints[i];
+    if (pOrig != pOut) {
+      assert(0);
+    }
+  }
+  
+  // Totals
+  int totalNumPointsOut = 0;
+  
+  for ( auto &locSeg : segments ) {
+    totalNumPointsOut += locSeg.points.size();
+  }
+  
+  assert(contour.size() == totalNumPointsOut);
+#endif // DEBUG
+  
+  if (debugDumpImages) {
+    Mat colorMat(size, CV_8UC3, Scalar(0,0,0));
+    
+    for ( auto &locSeg : segments ) {
+      Vec3b color;
+      
+      if (locSeg.isLine) {
+        color = Vec3b(0,0,0xFF);
+      } else {
+        color = Vec3b(0x7F,0x7F,0x7F);
+      }
+      
+      for ( Point2i p : locSeg.points ) {
+        colorMat.at<Vec3b>(p.y, p.x) = color;
+      }
+    }
+    
+    if ((1)) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_hull_approx_color_slope_hits" << ".png";
+      string fname = fnameStream.str();
+      
+      writeWroteImg(fname, colorMat);
+      cout << "" << endl;
+    }
+  }
+  
+  return segments;
+}

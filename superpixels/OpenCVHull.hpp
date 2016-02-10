@@ -42,7 +42,7 @@ clockwiseScanOfHullCoords(
 // note that a segment best represented by a curve might be better represented by 2 lines
 // if it was split into 2.
 
-class LineOrCurveSegment {
+class HullLineOrCurveSegment {
 public:
   bool isLine;
   
@@ -59,15 +59,15 @@ public:
   
   int32_t cost;
   
-  LineOrCurveSegment() : isLine(false), slope(), cost(0)
+  HullLineOrCurveSegment() : isLine(false), slope(), cost(0)
   {
   }
   
-  ~LineOrCurveSegment()
+  ~HullLineOrCurveSegment()
   {
   }
   
-  friend std::ostream& operator<<(std::ostream& os, const LineOrCurveSegment& loc) {
+  friend std::ostream& operator<<(std::ostream& os, const HullLineOrCurveSegment& loc) {
     os << "isLine=" << loc.isLine;
     os << ",";
     for ( auto it  = begin(loc.points); it != end(loc.points); it++) {
@@ -76,5 +76,11 @@ public:
     return os;
   }
 };
+
+// This method accepts a contour that is not simplified and detects straight lines
+// as compared to the non-straight curves.
+
+vector<HullLineOrCurveSegment>
+splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector<Coord> &contourCoords, double epsilon);
 
 #endif // OPENCV_HULL_H

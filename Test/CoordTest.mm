@@ -2393,12 +2393,12 @@
   
   contourCoords.push_back(Coord(0,0));
   
-  vector<LineOrCurveSegment> results =
+  vector<HullLineOrCurveSegment> results =
   splitContourIntoLinesSegments(1, CvSize(1,1), CvRect(0,0,1,1), contourCoords, 0.0);
   
   XCTAssert(results.size() == 1, @"results");
   
-  LineOrCurveSegment &locSeg = results[0];
+  HullLineOrCurveSegment &locSeg = results[0];
   
   XCTAssert(locSeg.isLine == false, @"result");
   XCTAssert(locSeg.points.size() == 1, @"result");
@@ -2412,12 +2412,12 @@
   contourCoords.push_back(Coord(0,0));
   contourCoords.push_back(Coord(0,1));
   
-  vector<LineOrCurveSegment> results =
+  vector<HullLineOrCurveSegment> results =
   splitContourIntoLinesSegments(1, CvSize(2,2), CvRect(0,0,2,2), contourCoords, 0.0);
   
   XCTAssert(results.size() == 1, @"results");
   
-  LineOrCurveSegment &locSeg = results[0];
+  HullLineOrCurveSegment &locSeg = results[0];
   
   XCTAssert(locSeg.isLine == false, @"result");
   XCTAssert(locSeg.points.size() == 2, @"result");
@@ -2453,12 +2453,12 @@
   contourCoords.push_back(Coord(0,2));
   contourCoords.push_back(Coord(0,1));
   
-  vector<LineOrCurveSegment> results =
+  vector<HullLineOrCurveSegment> results =
   splitContourIntoLinesSegments(1, CvSize(4,4), CvRect(0,0,4,4), contourCoords, 0.0);
   
   XCTAssert(results.size() == 4, @"results");
   
-  LineOrCurveSegment *ptr;
+  HullLineOrCurveSegment *ptr;
   
   ptr = &results[0];
   XCTAssert(ptr->isLine == true, @"result");
@@ -2522,12 +2522,12 @@
   contourCoords.push_back(Coord(0,0));
   contourCoords.push_back(Coord(1,0));
   
-  vector<LineOrCurveSegment> results =
+  vector<HullLineOrCurveSegment> results =
   splitContourIntoLinesSegments(1, CvSize(4,4), CvRect(0,0,4,4), contourCoords, 0.0);
   
   XCTAssert(results.size() == 4, @"results");
   
-  LineOrCurveSegment *ptr;
+  HullLineOrCurveSegment *ptr;
   
   ptr = &results[0];
   XCTAssert(ptr->isLine == true, @"result");
@@ -2583,12 +2583,12 @@
   contourCoords.push_back(Coord(0, 2));
   contourCoords.push_back(Coord(0, 1));
  
-  vector<LineOrCurveSegment> results =
+  vector<HullLineOrCurveSegment> results =
   splitContourIntoLinesSegments(1, CvSize(4,4), CvRect(0,0,4,4), contourCoords, 0.0);
   
   XCTAssert(results.size() == 4, @"results");
 
-  LineOrCurveSegment *ptr;
+  HullLineOrCurveSegment *ptr;
   
   ptr = &results[0];
   XCTAssert(ptr->isLine == true, @"result");
