@@ -5080,6 +5080,360 @@ vector<Coord> genRectangleOutline(int regionWidth, int regionHeight)
   return outlineCoords;
 }
 
+// This method accepts an unsimplified contour of points and returns the approx normal vector for
+// each point on the contour.
+
+vector<vector<Point2f> > calcNormalsOnContour(CvSize size, int32_t tag, const vector<Point2i> &contour)
+{
+  const bool debug = true;
+  const bool debugDumpImages = true;
+  
+  if (debug) {
+    cout << "calcNormalsOnContour " << tag << endl;
+  }
+  
+  // Calculate normal vector that corresponds to each original contour coordinate.
+  
+  vector<vector<Point2f> > allNormalVectors;
+  
+  Rect roi(0,0,size.width, size.height);
+  
+  // FIXME: should attempt to invoke splitContourIntoLinesSegments() with episilon = 0.0
+  // to determine simplified set of points that combine into lines without any approx.
+  // When the approx is then applied it can find longer lines. But, when the approx is
+  // small this logic ends up finding really small lines of length 2 or 3 which are really
+  // part of curves.
+  
+  //        double epsilon = 0.0;
+  double epsilon = 1.4;
+  
+  vector<HullLineOrCurveSegment> vecOfSeg = splitContourIntoLinesSegments(tag, size, roi, contour, epsilon);
+  
+  // Note that iteration order of coordinates in vecOfSeg may not start on contourCoords[0] so
+  // create a map from known line points to the common line slope.
+  
+  vector<Point2f> normalUnitVecTable;
+  
+  for ( HullLineOrCurveSegment & locSeg : vecOfSeg ) {
+    if (locSeg.isLine) {
+      Point2f slopeVec = locSeg.slope;
+      Point2f normF;
+      
+      // Calculate normal vector
+      float tmp = slopeVec.x;
+      normF.x = slopeVec.y * -1;
+      normF.y = tmp;
+      normF *= -1; // invert
+      
+      normalUnitVecTable.push_back(normF);
+    }
+  }
+  
+  unordered_map<Coord, Point2f> lineCoordToNormalMap;
+  
+  const vector<Coord> contourCoords = convertPointsToCoords(contour);
+  
+  // Util lambda that will determine the slope for a position by ave of L and R slopes
+  
+  auto aveSlope = [&normalUnitVecTable, &contourCoords, &lineCoordToNormalMap](int offset)->Point2f {
+    const bool debug = true;
+    
+    if (debug) {
+      cout << "aveSlope starting at offset " << offset << endl;
+    }
+    
+    // Walk backwards until a normal is found
+    
+    int32_t offsetL = offset - 1;
+    int32_t offsetR = offset + 1;
+    
+    int32_t actualOffsetL;
+    int32_t actualOffsetR;
+    
+    Coord cL;
+    Coord cR;
+    
+    while (1) {
+      actualOffsetL = vecOffsetAround((int32_t)contourCoords.size(), offsetL);
+      
+      if (actualOffsetL == offset) {
+        break;
+      }
+      
+      cL = contourCoords[actualOffsetL];
+      
+      if (lineCoordToNormalMap.count(cL) > 0) {
+        break;
+      }
+      
+      offsetL--;
+    }
+    
+    while (1) {
+      actualOffsetR = vecOffsetAround((int32_t)contourCoords.size(), offsetR);
+      
+      if (actualOffsetR == offset) {
+        break;
+      }
+      
+      cR = contourCoords[actualOffsetR];
+      
+      if (lineCoordToNormalMap.count(cR) > 0) {
+        break;
+      }
+      
+      offsetR++;
+    }
+    
+    // Smooth out the difference between the two normal vectors
+    
+#if defined(DEBUG)
+    assert(lineCoordToNormalMap.count(cL) > 0);
+    assert(lineCoordToNormalMap.count(cR) > 0);
+#endif // DEBUG
+    
+    Point2f pF1 = lineCoordToNormalMap[cL];
+    Point2f pF2 = lineCoordToNormalMap[cR];
+    
+    if (debug) {
+      printf("Coord on Left  (%d,%d) from offset %d\n", cL.x, cL.y, actualOffsetL);
+      printf("Coord on Right (%d,%d) from offset %d\n", cR.x, cR.y, actualOffsetR);
+      
+      printf("Norm on Left  (%0.3f,%0.3f)\n", pF1.x, pF1.y);
+      printf("Norm on Right (%0.3f,%0.3f)\n", pF2.x, pF2.y);
+    }
+    
+    Point2f sumF = pF1 + pF2;
+    
+    if (debug) {
+      printf("Sum of directional vectors (%0.3f,%0.3f)\n", sumF.x, sumF.y);
+    }
+    
+    makeUnitVector(sumF);
+    
+    if (debug) {
+      printf("normal unit vector (%0.3f,%0.3f)\n", sumF.x, sumF.y);
+    }
+    
+    return sumF;
+  };
+  
+  vector<Coord> pendingLineEdges;
+  
+  int locOffset;
+  
+  locOffset = 0;
+  for ( HullLineOrCurveSegment & locSeg : vecOfSeg ) {
+    if (locSeg.isLine) {
+      auto &pointsVec = locSeg.points;
+      int startEndN;
+      
+      auto insideOutVec = iterInsideOut(pointsVec);
+      
+      if (pointsVec.size() <= 3) {
+        startEndN = 2;
+      } else if (pointsVec.size() <= 5) {
+        startEndN = 2;
+      } else {
+        startEndN = 2;
+        //              startEndN = 1;
+      }
+      
+      int maxOffset = (int) insideOutVec.size();
+      
+      for ( int i = 0; i < maxOffset; i++ ) {
+        Point2i p = insideOutVec[i];
+        
+        if (i >= (maxOffset - startEndN)) {
+          // Append rest of values
+          Coord c = pointToCoord(p);
+          pendingLineEdges.push_back(c);
+        } else {
+          Point2f normal = normalUnitVecTable[locOffset];
+          Coord c = pointToCoord(p);
+          lineCoordToNormalMap[c] = normal;
+        }
+      }
+    } else {
+      // All points on curves treated as average between line slopes.
+      
+      // FIXME: should curve points be added inside out, so that ave at
+      // edges is done before other points?
+      
+      vector<Coord> vec = convertPointsToCoords(locSeg.points);
+      append_to_vector(pendingLineEdges, vec);
+    }
+    
+    locOffset++;
+  }
+  
+  // Iterate over original contour points and determine if any points
+  // still need to have normals calculated.
+  
+  unordered_map<Coord, int> contourCoordsToFirstOffsetMap;
+  
+  int contourOffset = 0;
+  
+  for ( Coord c : contourCoords ) {
+    if (contourCoordsToFirstOffsetMap.count(c) == 0) {
+      contourCoordsToFirstOffsetMap[c] = contourOffset;
+    }
+    contourOffset++;
+  }
+  
+  // Average pending points in backward order so that the points
+  // farthest from the line center are processed first.
+  
+  for ( auto it = pendingLineEdges.begin(); it != pendingLineEdges.end(); it++ ) {
+    Coord c = *it;
+    cout << c << endl;
+    
+#if defined(DEBUG)
+    assert(contourCoordsToFirstOffsetMap.count(c) > 0);
+#endif // DEBUG
+    
+    int contourOffset = contourCoordsToFirstOffsetMap[c];
+    
+    Point2f normF = aveSlope(contourOffset);
+    
+    lineCoordToNormalMap[c] = normF;
+  }
+  
+  for ( Coord c : contourCoords ) {
+    Point2f normF;
+    
+#if defined(DEBUG)
+    assert(lineCoordToNormalMap.count(c) > 0);
+#endif // DEBUG
+    
+    if (lineCoordToNormalMap.count(c) == 0) {
+      assert(0);
+    } else {
+      normF = lineCoordToNormalMap[c];
+    }
+    
+    Point2f cF(c.x, c.y);
+    
+    Point2f normOutside = cF + (normF * 1);
+    Point2f normInside = cF + (normF * -1);
+    
+    vector<Point2f> vecPoints;
+    
+    const bool roundToPixels = false;
+    
+    if (roundToPixels) {
+      round(normInside);
+      round(normOutside);
+    }
+    
+    vecPoints.push_back(normInside);
+    vecPoints.push_back(cF);
+    vecPoints.push_back(normOutside);
+    
+    allNormalVectors.push_back(vecPoints);
+  }
+  
+  // Dump the pixels contained in allNormalVectors as a massive image where the pixels
+  // from the original image are copied into rows of output.
+  
+  Mat binMat;
+  
+  if (debugDumpImages) {
+    binMat = Mat(size, CV_8UC3);
+    binMat = Scalar(0);
+    
+    for ( auto &vec : allNormalVectors ) {
+      for ( Point2f p : vec ) {
+        round(p);
+        Point2i pi = p;
+        binMat.at<uint8_t>(pi.y, pi.x) = 0xFF;
+      }
+    }
+    
+    for ( Coord c : contourCoords ) {
+      binMat.at<uint8_t>(c.y, c.x) = 0x7F;
+    }
+    
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_hull_iter_normal_over" << ".png";
+    string fname = fnameStream.str();
+    
+    writeWroteImg(fname, binMat);
+    cout << "" << endl;
+  }
+  
+  // This dump image will enlarge the original image multiple times so that vectors
+  // with arrow directions can be seen clearly over the enlarged images.
+  
+  if (debugDumpImages) {
+    CvSize origSize = size;
+    CvSize largerSize = origSize;
+    int multBy = 1;
+    
+    Vec3b grayVec(0x7F, 0x7F, 0x7F);
+    
+    while (largerSize.width < 1000 && largerSize.width < 1000) {
+      largerSize.width *= 2;
+      largerSize.height *= 2;
+      multBy *= 2;
+    }
+    
+    Mat smallColorMat(origSize, CV_8UC3, Scalar(0,0,0));
+    
+    Mat colorMat(largerSize, CV_8UC3, Scalar(0,0,0));
+    
+    for ( Coord c : contourCoords ) {
+      smallColorMat.at<Vec3b>(c.y, c.x) = grayVec;
+    }
+    
+    resize(smallColorMat, colorMat, colorMat.size(), 0, 0, INTER_CUBIC);
+    
+    // Render each normal vector as line with arrow at end
+    
+    for ( int y = 0; y < allNormalVectors.size(); y++) {
+      auto &vec = allNormalVectors[y];
+      
+      Point2f p1 = vec[0];
+      Point2f p2 = vec[vec.size() - 1];
+      
+      if ((1)) {
+        // Add a little more to the second vector
+        Point2f delta = p2 - p1;
+        p2 += delta;
+      }
+      
+      p1 *= multBy;
+      p2 *= multBy;
+      
+      round(p1);
+      round(p2);
+      
+      Point2i rp1 = p1;
+      Point2i rp2 = p2;
+      
+      double tipLength = 0.2;
+      
+      arrowedLine(colorMat, rp1, rp2, Scalar(0, 0, 0xFF), 1, 8, 0, tipLength);
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_hull_vecs_larger" << ".png";
+    string fname = fnameStream.str();
+    
+    writeWroteImg(fname, colorMat);
+    cout << "" << endl;
+  }
+  
+  if (debug) {
+    cout << "calcNormalsOnContour return " << allNormalVectors.size() << " normals" << endl;
+  }
+
+  assert(allNormalVectors.size() == contour.size());
+         
+  return allNormalVectors;
+}
+
 // Scan region given likely bounds and determine where most accurate region bounds are likely to be
 
 void
@@ -5101,6 +5455,11 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
   // to each line segment in order to find the shape normals.
 
   vector<TypedHullCoords> hullCoordsVec = clockwiseScanOfHullCoords(tagsImg, tag, regionCoords);
+  
+  // Iterate over all sets of coords at the same time and determine
+  // the order that coordinates on the contour would be consumed.
+  
+  vector<Coord> contourCoords;
   
   // The hull lines should have already been simplified when possible, so determine the
   // hulls by taking the first and last point in the coords vec and then find the midpoint.
@@ -5375,11 +5734,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       typedHullOffset++;
     }
     
-    // Iterate over all sets of coords at the same time and determine
-    // the order that coordinates on the contour would be consumed.
-    
-    vector<Coord> contourCoords;
-    
     vector<int32_t> startOffsets;
     
     vector<int32_t> contourIterOrder;
@@ -5531,372 +5885,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         }
       }
       
-      Rect roi(0,0,inputImg.size().width, inputImg.size().height);
-      
-      // FIXME: should attempt to invoke splitContourIntoLinesSegments() with episilon = 0.0
-      // to determine simplified set of points that combine into lines without any approx.
-      // When the approx is then applied it can find longer lines. But, when the approx is
-      // small this logic ends up finding really small lines of length 2 or 3 which are really
-      // part of curves.
-      
-      //        double epsilon = 0.0;
-      double epsilon = 1.4;
-      
-      vector<HullLineOrCurveSegment> vecOfSeg = splitContourIntoLinesSegments(tag, inputImg.size(), roi, contourCoords, epsilon);
-      
-      // Note that iteration order of coordinates in vecOfSeg may not start on contourCoords[0] so
-      // create a map from known line points to the common line slope.
-      
-      vector<Point2f> normalUnitVecTable;
-      
-      for ( HullLineOrCurveSegment & locSeg : vecOfSeg ) {
-        if (locSeg.isLine) {
-          Point2f slopeVec = locSeg.slope;
-          Point2f normF;
-          
-          // Calculate normal vector
-          float tmp = slopeVec.x;
-          normF.x = slopeVec.y * -1;
-          normF.y = tmp;
-          normF *= -1; // invert
-          
-          normalUnitVecTable.push_back(normF);
-        }
-      }
-      
-      unordered_map<Coord, Point2f> lineCoordToNormalMap;
-      
-      // Util lambda that will determine the slope for a position by ave of L and R slopes
-      
-      auto aveSlope = [&normalUnitVecTable, &contourCoords, &lineCoordToNormalMap](int offset)->Point2f {
-        const bool debug = true;
-        
-        if (debug) {
-          cout << "aveSlope starting at offset " << offset << endl;
-        }
-        
-        // Walk backwards until a normal is found
-        
-        int32_t offsetL = offset - 1;
-        int32_t offsetR = offset + 1;
-        
-        int32_t actualOffsetL;
-        int32_t actualOffsetR;
-        
-        Coord cL;
-        Coord cR;
-        
-        while (1) {
-          actualOffsetL = vecOffsetAround((int32_t)contourCoords.size(), offsetL);
-          
-          if (actualOffsetL == offset) {
-            break;
-          }
-          
-          cL = contourCoords[actualOffsetL];
-          
-          if (lineCoordToNormalMap.count(cL) > 0) {
-            break;
-          }
-          
-          offsetL--;
-        }
-        
-        while (1) {
-          actualOffsetR = vecOffsetAround((int32_t)contourCoords.size(), offsetR);
-          
-          if (actualOffsetR == offset) {
-            break;
-          }
-          
-          cR = contourCoords[actualOffsetR];
-          
-          if (lineCoordToNormalMap.count(cR) > 0) {
-            break;
-          }
-          
-          offsetR++;
-        }
-        
-        // Smooth out the difference between the two normal vectors
-        
-#if defined(DEBUG)
-        assert(lineCoordToNormalMap.count(cL) > 0);
-        assert(lineCoordToNormalMap.count(cR) > 0);
-#endif // DEBUG
-        
-        Point2f pF1 = lineCoordToNormalMap[cL];
-        Point2f pF2 = lineCoordToNormalMap[cR];
-        
-        if (debug) {
-          printf("Coord on Left  (%d,%d) from offset %d\n", cL.x, cL.y, actualOffsetL);
-          printf("Coord on Right (%d,%d) from offset %d\n", cR.x, cR.y, actualOffsetR);
-          
-          printf("Norm on Left  (%0.3f,%0.3f)\n", pF1.x, pF1.y);
-          printf("Norm on Right (%0.3f,%0.3f)\n", pF2.x, pF2.y);
-        }
-        
-        Point2f sumF = pF1 + pF2;
-        
-        if (debug) {
-          printf("Sum of directional vectors (%0.3f,%0.3f)\n", sumF.x, sumF.y);
-        }
-        
-        makeUnitVector(sumF);
-        
-        if (debug) {
-          printf("normal unit vector (%0.3f,%0.3f)\n", sumF.x, sumF.y);
-        }
-        
-        return sumF;
-      };
-      
-      vector<Coord> pendingLineEdges;
-      
-      int locOffset;
-      
-      locOffset = 0;
-      for ( HullLineOrCurveSegment & locSeg : vecOfSeg ) {
-        if (locSeg.isLine) {
-          auto &pointsVec = locSeg.points;
-          int startEndN;
-          
-          auto insideOutVec = iterInsideOut(pointsVec);
-          
-          if (pointsVec.size() <= 3) {
-            startEndN = 2;
-          } else if (pointsVec.size() <= 5) {
-            startEndN = 2;
-          } else {
-            startEndN = 2;
-            //              startEndN = 1;
-          }
-          
-          int maxOffset = (int) insideOutVec.size();
-          
-          for ( int i = 0; i < maxOffset; i++ ) {
-            Point2i p = insideOutVec[i];
-            
-            if (i >= (maxOffset - startEndN)) {
-              // Append rest of values
-              Coord c = pointToCoord(p);
-              pendingLineEdges.push_back(c);
-            } else {
-              Point2f normal = normalUnitVecTable[locOffset];
-              Coord c = pointToCoord(p);
-              lineCoordToNormalMap[c] = normal;
-            }
-          }
-        } else {
-          // All points on curves treated as average between line slopes.
-          
-          // FIXME: should curve points be added inside out, so that ave at
-          // edges is done before other points?
-          
-          vector<Coord> vec = convertPointsToCoords(locSeg.points);
-          append_to_vector(pendingLineEdges, vec);
-        }
-        
-        locOffset++;
-      }
-      
-      // Iterate over original contour points and determine if any points
-      // still need to have normals calculated.
-      
-      unordered_map<Coord, int> contourCoordsToFirstOffsetMap;
-      
-      int contourOffset = 0;
-      
-      for ( Coord c : contourCoords ) {
-        if (contourCoordsToFirstOffsetMap.count(c) == 0) {
-          contourCoordsToFirstOffsetMap[c] = contourOffset;
-        }
-        contourOffset++;
-      }
-      
-      // Average pending points in backward order so that the points
-      // farthest from the line center are processed first.
-      
-      for ( auto it = pendingLineEdges.begin(); it != pendingLineEdges.end(); it++ ) {
-        Coord c = *it;
-        cout << c << endl;
-        
-#if defined(DEBUG)
-        assert(contourCoordsToFirstOffsetMap.count(c) > 0);
-#endif // DEBUG
-        
-        int contourOffset = contourCoordsToFirstOffsetMap[c];
-        
-        Point2f normF = aveSlope(contourOffset);
-        
-        lineCoordToNormalMap[c] = normF;
-      }
-      
-      // Calculate normal vector that corresponds to each
-      // original contour coordinate.
-      
-      vector<vector<Point2f> > allNormalVectors;
-      
-      for ( Coord c : contourCoords ) {
-        Point2f normF;
-        
-#if defined(DEBUG)
-        assert(lineCoordToNormalMap.count(c) > 0);
-#endif // DEBUG
-        
-        if (lineCoordToNormalMap.count(c) == 0) {
-          assert(0);
-        } else {
-          normF = lineCoordToNormalMap[c];
-        }
-        
-        Point2f cF(c.x, c.y);
-        
-        Point2f normOutside = cF + (normF * 1);
-        Point2f normInside = cF + (normF * -1);
-        
-        vector<Point2f> vecPoints;
-        
-        const bool roundToPixels = false;
-        
-        if (roundToPixels) {
-          round(normInside);
-          round(normOutside);
-        }
-        
-        vecPoints.push_back(normInside);
-        vecPoints.push_back(cF);
-        vecPoints.push_back(normOutside);
-        
-        allNormalVectors.push_back(vecPoints);
-      }
-      
-      // Dump the pixels contained in allNormalVectors as a massive image where the pixels
-      // from the original image are copied into rows of output.
-      
-      if (debugDumpImages) {
-        binMat = Scalar(0);
-        
-        for ( auto &vec : allNormalVectors ) {
-          for ( Point2f p : vec ) {
-            round(p);
-            Point2i pi = p;
-            binMat.at<uint8_t>(pi.y, pi.x) = 0xFF;
-          }
-        }
-        
-        for ( int32_t offset : contourIterOrder ) {
-          Coord c = contourCoords[offset];
-          binMat.at<uint8_t>(c.y, c.x) = 0x7F;
-        }
-        
-        
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_hull_iter_normal_over" << ".png";
-        string fname = fnameStream.str();
-        
-        writeWroteImg(fname, binMat);
-        cout << "" << endl;
-      }
-      
-      // Emit an image where each vector of pixels is a row
-      
-      if (debugDumpImages) {
-        int maxWidth = 0;
-        
-        for ( auto &vec : allNormalVectors ) {
-          int N = (int) vec.size();
-          if (N > maxWidth) {
-            maxWidth = N;
-          }
-        }
-        
-        Mat colorMat((int)allNormalVectors.size(), maxWidth, CV_8UC3, Scalar(0,0,0));
-        
-        for ( int y = 0; y < colorMat.rows; y++) {
-          auto &vec = allNormalVectors[y];
-          int numCols = (int) vec.size();
-          
-          for ( int x = 0; x < numCols; x++) {
-            Point2f p = vec[x];
-            round(p);
-            Point2i c = p;
-            Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
-            colorMat.at<Vec3b>(y, x) = vec;
-          }
-        }
-        
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_hull_iter_vec_pixels" << ".png";
-        string fname = fnameStream.str();
-        
-        writeWroteImg(fname, colorMat);
-        cout << "" << endl;
-      }
-      
-      // This dump image will enlarge the original image multiple times so that vectors
-      // with arrow directions can be seen clearly over the enlarged images.
-      
-      if (debugDumpImages) {
-        CvSize origSize = inputImg.size();
-        CvSize largerSize = origSize;
-        int multBy = 1;
-        
-        Vec3b grayVec(0x7F, 0x7F, 0x7F);
-        
-        while (largerSize.width < 1000 && largerSize.width < 1000) {
-          largerSize.width *= 2;
-          largerSize.height *= 2;
-          multBy *= 2;
-        }
-        
-        Mat smallColorMat(origSize, CV_8UC3, Scalar(0,0,0));
-        
-        Mat colorMat(largerSize, CV_8UC3, Scalar(0,0,0));
-        
-        for ( int32_t offset : contourIterOrder ) {
-          Coord c = contourCoords[offset];
-          smallColorMat.at<Vec3b>(c.y, c.x) = grayVec;
-        }
-        
-        resize(smallColorMat, colorMat, colorMat.size(), 0, 0, INTER_CUBIC);
-        
-        // Render each normal vector as line with arrow at end
-        
-        for ( int y = 0; y < allNormalVectors.size(); y++) {
-          auto &vec = allNormalVectors[y];
-          
-          Point2f p1 = vec[0];
-          Point2f p2 = vec[vec.size() - 1];
-          
-          if ((1)) {
-            // Add a little more to the second vector
-            Point2f delta = p2 - p1;
-            p2 += delta;
-          }
-          
-          p1 *= multBy;
-          p2 *= multBy;
-          
-          round(p1);
-          round(p2);
-          
-          Point2i rp1 = p1;
-          Point2i rp2 = p2;
-          
-          double tipLength = 0.2;
-          
-          arrowedLine(colorMat, rp1, rp2, Scalar(0, 0, 0xFF), 1, 8, 0, tipLength);
-        }
-        
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_hull_vecs_larger" << ".png";
-        string fname = fnameStream.str();
-        
-        writeWroteImg(fname, colorMat);
-        cout << "" << endl;
-      }
-      
     }
   }
   
@@ -5932,7 +5920,9 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
   // in the mask that means the pixels are not available for an
   // inward scan.
   
-  /*
+  vector<Point2i> contour = convertCoordsToPoints(contourCoords);
+  
+  vector<vector<Point2f> > allNormalVectors = calcNormalsOnContour(tagsImg.size(), tag, contour);
   
   if (1) {
     int maxWidth = 0;
@@ -5966,8 +5956,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     writeWroteImg(fname, colorMat);
     cout << "" << endl;
   }
-  
-   */
   
   // Mark mask pixels as on or off depending on what the vectors indicate.
   

@@ -90,6 +90,9 @@ public:
 // as compared to the non-straight curves.
 
 vector<HullLineOrCurveSegment>
+splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector<Point2i> &contour, double epsilon);
+
+vector<HullLineOrCurveSegment>
 splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector<Coord> &contourCoords, double epsilon);
 
 #endif // OPENCV_HULL_H

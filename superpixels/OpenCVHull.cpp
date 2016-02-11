@@ -1521,11 +1521,20 @@ clockwiseScanOfHullContour(CvSize size,
   return hullCoords;
 }
 
+// For existing test cases
+
+vector<HullLineOrCurveSegment>
+splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector<Coord> &contourCoords, double epsilon)
+{
+  vector<Point2i> contour = convertCoordsToPoints(contourCoords);
+  return splitContourIntoLinesSegments(tag, size, roi, contour, epsilon);
+}
+
 // This method accepts a contour that is not simplified and detects straight lines
 // as compared to the non-straight curves.
 
 vector<HullLineOrCurveSegment>
-splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector<Coord> &contourCoords, double epsilon)
+splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector<Point2i> &contour, double epsilon)
 {
   const bool debug = true;
   const bool debugDumpImages = true;
@@ -1533,8 +1542,6 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
   if (debug) {
     cout << "splitContourIntoLinesSegments" << endl;
   }
-  
-  const vector<Point2i> contour = convertCoordsToPoints(contourCoords);
   
   if (debugDumpImages) {
     Mat binMat(size, CV_8UC1, Scalar(0));
