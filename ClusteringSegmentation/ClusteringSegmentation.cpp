@@ -6124,7 +6124,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       
       CvSize matSize(numCols, maxContouri);
       Mat typesBinMat(matSize, CV_8UC1, Scalar(0));
-      Mat colorPixelsMat(matSize, CV_8UC3, Scalar(0,0,0));
+      Mat colorPixelsMat(matSize, CV_8UC4, Scalar(0,0,0,0));
       
       for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
         Coord c = contourCoords[contouri];
@@ -6134,14 +6134,17 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         int midi = (maxInsideWidth + 1) - 1;
 
-        Vec3b colorVec;
+        Vec3b vec3;
+        Vec4b vec4(0,0,0,0xFF);
         uint8_t gray;
         
         gray = 0xFF;
-        colorVec = inputImg.at<Vec3b>(c.y, c.x);
+        
+        vec3 = inputImg.at<Vec3b>(c.y, c.x);
+        vec4[0] = vec3[0]; vec4[1] = vec3[1]; vec4[2] = vec3[2];
         
         typesBinMat.at<uint8_t>(contouri, midi) = gray;
-        colorPixelsMat.at<Vec3b>(contouri, midi) = colorVec;
+        colorPixelsMat.at<Vec4b>(contouri, midi) = vec4;
         
         int insidei = midi - 1;
         int outsidei = midi + 1;
@@ -6153,8 +6156,10 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         for ( Coord c : vecInside ) {
           typesBinMat.at<uint8_t>(contouri, insidei) = gray;
           
-          Vec3b colorVec = inputImg.at<Vec3b>(c.y, c.x);
-          colorPixelsMat.at<Vec3b>(contouri, insidei) = colorVec;
+          vec3 = inputImg.at<Vec3b>(c.y, c.x);
+          vec4[0] = vec3[0]; vec4[1] = vec3[1]; vec4[2] = vec3[2];
+          
+          colorPixelsMat.at<Vec4b>(contouri, insidei) = vec4;
           insidei--;
         }
         
@@ -6164,8 +6169,11 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         for ( Coord c : vecOutside ) {
           typesBinMat.at<uint8_t>(contouri, outsidei) = gray;
-          Vec3b colorVec = inputImg.at<Vec3b>(c.y, c.x);
-          colorPixelsMat.at<Vec3b>(contouri, outsidei) = colorVec;
+          
+          vec3 = inputImg.at<Vec3b>(c.y, c.x);
+          vec4[0] = vec3[0]; vec4[1] = vec3[1]; vec4[2] = vec3[2];
+          
+          colorPixelsMat.at<Vec4b>(contouri, outsidei) = vec4;
           outsidei++;
         }
       }
