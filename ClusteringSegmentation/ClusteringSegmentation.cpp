@@ -6123,7 +6123,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       int numCols = maxInsideWidth + 1 + maxOutsideWidth;
       
       CvSize matSize(numCols, maxContouri);
-      Mat colorMat(matSize, CV_8UC3, Scalar(0,0,0));
+      Mat typesBinMat(matSize, CV_8UC1, Scalar(0));
+      Mat colorPixelsMat(matSize, CV_8UC3, Scalar(0,0,0));
       
       for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
         Coord c = contourCoords[contouri];
@@ -6132,40 +6133,60 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         auto &vecOutside = edgesOutsideMap[c];
         
         int midi = (maxInsideWidth + 1) - 1;
-        
+
         Vec3b colorVec;
+        uint8_t gray;
         
-        colorVec = Vec3b(0xFF,0xFF,0xFF);
-        colorMat.at<Vec3b>(contouri, midi) = colorVec;
+        gray = 0xFF;
+        colorVec = inputImg.at<Vec3b>(c.y, c.x);
+        
+        typesBinMat.at<uint8_t>(contouri, midi) = gray;
+        colorPixelsMat.at<Vec3b>(contouri, midi) = colorVec;
         
         int insidei = midi - 1;
         int outsidei = midi + 1;
 
-        colorVec = Vec3b(0xFF/4,0xFF/4,0xFF/4);
+        gray = 0xFF/4;
         
         assert((insidei+1) >= vecInside.size());
         
         for ( Coord c : vecInside ) {
-          colorMat.at<Vec3b>(contouri, insidei) = colorVec;
+          typesBinMat.at<uint8_t>(contouri, insidei) = gray;
+          
+          Vec3b colorVec = inputImg.at<Vec3b>(c.y, c.x);
+          colorPixelsMat.at<Vec3b>(contouri, insidei) = colorVec;
           insidei--;
         }
         
-        colorVec = Vec3b(0xFF/2,0xFF/2,0xFF/2);
+        gray = 0xFF/2;
         
         assert((outsidei+1) >= vecOutside.size());
         
         for ( Coord c : vecOutside ) {
-          colorMat.at<Vec3b>(contouri, outsidei) = colorVec;
+          typesBinMat.at<uint8_t>(contouri, outsidei) = gray;
+          Vec3b colorVec = inputImg.at<Vec3b>(c.y, c.x);
+          colorPixelsMat.at<Vec3b>(contouri, outsidei) = colorVec;
           outsidei++;
         }
       }
       
+      {
       std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_hull_iter_inout5" << ".png";
+      fnameStream << "srm" << "_tag_" << tag << "_hull_iter_inout5_types" << ".png";
       string fname = fnameStream.str();
       
-      writeWroteImg(fname, colorMat);
+      writeWroteImg(fname, typesBinMat);
       cout << "" << endl;
+      }
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_hull_iter_inout5_pixels" << ".png";
+        string fname = fnameStream.str();
+        
+        writeWroteImg(fname, colorPixelsMat);
+        cout << "" << endl;
+      }
     }
     
     /*
