@@ -6056,6 +6056,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     
     // Generate vectors going through the edge point, this vector starts on the first coordinate
     // outside the contour shape.
+    
+    CvRect roi(0, 0, inputImg.size().width, inputImg.size().height);
    
     for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
       Coord c = contourCoords[contouri];
@@ -6075,6 +6077,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       
       vector<Point2i> generatedPoints = generatePointsOnLine(outsideF, wayOutsideF);
       
+      generatedPoints = filterPointsOutsideROI(generatedPoints, roi);
+      
       edgesOutsideMap[c] = convertPointsToCoords(generatedPoints);
       
       if (debugDumpImages) {
@@ -6088,6 +6092,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         arrowedLine(renderMat, outsideF, wayOutsideF, Scalar(0x7F), 2, 8, 0, tipLength);
         
         for ( Coord c : edgesOutsideMap[c] ) {
+          assert(c.x < renderMat.cols);
+          assert(c.y < renderMat.rows);
           renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
         }
         
@@ -6197,73 +6203,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       }
     }
     
-    /*
-    
-    int maxWidth = 0;
-    
-    for ( auto &vec : allNormalVectors ) {
-      int N = (int) vec.size();
-      if (N > maxWidth) {
-        maxWidth = N;
-      }
-    }
-    
-    Mat colorMat((int)allNormalVectors.size(), maxWidth, CV_8UC3, Scalar(0,0,0));
-    
-    for ( int y = 0; y < colorMat.rows; y++) {
-      auto &vec = allNormalVectors[y];
-      int numCols = (int) vec.size();
-      
-      for ( int x = 0; x < numCols; x++) {
-        Point2f p = vec[x];
-        round(p);
-        Point2i c = p;
-        Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
-        colorMat.at<Vec3b>(y, x) = vec;
-      }
-    }
-    
-    std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_hull_iter_vec_pixels" << ".png";
-    string fname = fnameStream.str();
-    
-    writeWroteImg(fname, colorMat);
-    cout << "" << endl;
-*/
-    
   }
-
-  /*
-  
-  for ( Coord c : contourCoords ) {
-    Point2f &normalVec = allNormalVectors[y];
-    
-    binMat = Mat(size, CV_8UC3);
-    binMat = Scalar(0);
-    
-    for ( auto &vec : allNormalVectors ) {
-      for ( Point2f p : vec ) {
-        round(p);
-        Point2i pi = p;
-        binMat.at<uint8_t>(pi.y, pi.x) = 0xFF;
-      }
-    }
-    
-    for ( Coord c : contourCoords ) {
-      binMat.at<uint8_t>(c.y, c.x) = 0x7F;
-    }
-    
-    
-    std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_hull_iter_normal_over" << ".png";
-    string fname = fnameStream.str();
-    
-    writeWroteImg(fname, binMat);
-    cout << "" << endl;
-    
-    MOMO
-  }
-  */
   
   // Mark mask pixels as on or off depending on what the vectors indicate.
   
@@ -6294,106 +6234,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
   }
    
   */
-  
-  
-  /*
-  
-  // The tagsImg mat contains tags, so generate lines around the 360 degrees
-  // of rotation and determine which tags the line pixels hit.
-  
-  int32_t originX, originY, regionWidth, regionHeight;
-  bbox(originX, originY, regionWidth, regionHeight, regionCoords);
-  Rect roiRect(originX, originY, regionWidth, regionHeight);
-  
-  Coord originCoord(originX, originY);
-  
-  Mat renderMat(roiRect.size(), CV_8UC1);
-  
-  renderMat = Scalar(0);
-  
-  // Generate coords that iterate around the region bbox starting from up which
-  // is taken to be degree zero.
-  
-  vector<Coord> outlineCoords = genRectangleOutline(regionWidth, regionHeight);
-  
-  // Render points in outlineCoords to binary mat and debug dump
-  
-  if (debugDumpImages) {
-    renderMat = Scalar(0);
-    
-    for ( Coord c : outlineCoords ) {
-      renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
-    }
-    
-    std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_region_outline_coords" << ".png";
-    string fname = fnameStream.str();
-    
-    imwrite(fname, renderMat);
-    cout << "wrote " << fname << endl;
-    cout << "";
-  }
-  
-  // Map from global coordinates to the specific tag at that coordinate
-  // but ignore the current shape tag since most coords will be for the
-  // interior of the shape.
-  
-  unordered_map<Coord, int32_t> tagMap;
-  
-  for ( Coord c : regionCoords ) {
-    Vec3b vec = tagsImg.at<Vec3b>(c.y, c.x);
-    int32_t inRegionTag = Vec3BToUID(vec);
-    if (inRegionTag == tag) {
-      continue;
-    }
-    tagMap[c] = inRegionTag;
-    if (debug) {
-      cout << "add mapping for " << c << " -> " << vec << endl;
-    }
-  }
-  
-  // Determine region center point and distance transform for approx region.
-  
-  renderMat = Scalar(0);
-  
-  // FIXME: could pass this in, but just query for now
-  
-  vector<Coord> currentTagCoords;
-  
-  for ( Coord c : regionCoords ) {
-    Vec3b vec = tagsImg.at<Vec3b>(c.y, c.x);
-    int32_t regionTag = Vec3BToUID(vec);
-    if (tag == regionTag) {
-      currentTagCoords.push_back(c);
-    }
-  }
-  
-  for ( Coord c : currentTagCoords ) {
-    c = c - originCoord;
-    renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
-  }
-  
-  Mat outDistMat;
-  Coord regionCenter = findRegionCenter(renderMat, Rect2d(0,0,regionWidth,regionHeight), outDistMat, tag);
-  
-  Point2i center(regionCenter.x, regionCenter.y);
-  
-  if (debugDumpImages) {
-    std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_region_center_dist" << ".png";
-    string fname = fnameStream.str();
-    
-    imwrite(fname, outDistMat);
-    cout << "wrote " << fname << endl;
-    cout << "";
-  }
-   
-  */
-  
-  // Use the dist mat to determine the "most alike" area inside the region and then
-  // start from the common or most alike bound and then move outward as the gradient
-  // increases. So, this should segment into "layers" where each layer is how alike
-  // a certain range is.
   
   /*
   

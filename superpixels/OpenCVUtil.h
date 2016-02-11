@@ -201,6 +201,35 @@ vector<uint32_t> generateVector(uint32_t fromPixel, uint32_t toPixel);
 
 vector<Point2i> generatePointsOnLine(Point2i startP, Point2i endP);
 
+// Filter out coords that are outside the given ROI
+
+static inline
+vector<Point2i> filterPointsOutsideROI(const vector<Point2i> &points, CvRect roi) {
+  vector<Point2i> filtered;
+  
+  int xMmin = roi.x;
+  int xMax = roi.x + roi.width;
+  int yMmin = roi.y;
+  int yMax = roi.y + roi.height;
+  
+  for ( Point2i p : points ) {
+    if (p.x < xMmin) {
+      continue;
+    }
+    if (p.x >= xMax) {
+      continue;
+    }
+    if (p.y < yMmin) {
+      continue;
+    }
+    if (p.y >= yMax) {
+      continue;
+    }
+    filtered.push_back(p);
+  }
+  return filtered;
+}
+
 // Flood fill based on region of zero values. Input comes from inBinMask and the results
 // are written to outBinMask. Black pixels are filled and white pixels are not filled.
 
