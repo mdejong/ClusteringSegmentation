@@ -371,7 +371,9 @@ clockwiseScanOfHullContour(CvSize size,
   const bool debug = true;
   const bool debugDumpImages = true;
 
-  vector<vector<Point> > contours;
+  vector<vector<Point2i> > contours;
+  
+  contours.push_back(contour);
   
   Mat binMat(size, CV_8UC1, Scalar(0));
   
@@ -455,11 +457,11 @@ clockwiseScanOfHullContour(CvSize size,
       hullPoints.push_back(p);
     }
     
-    vector<vector<Point2i> > contours;
+    vector<vector<Point2i> > hullVec;
     
-    contours.push_back(hullPoints);
+    hullVec.push_back(hullPoints);
     
-    drawContours(binMat, contours, 0, Scalar(0xFF), 1, 8 );
+    drawContours(binMat, hullVec, 0, Scalar(0xFF), 1, 8 );
     
     std::stringstream fnameStream;
     fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_lines" << ".png";
@@ -677,7 +679,7 @@ clockwiseScanOfHullContour(CvSize size,
       Point2i midP(round(midF.x), round(midF.y));
       line(binMat, defectP, midP, Scalar(0xFF), 1);
     }
-    
+        
     // Get angle between midpoint and defect point
     
     auto isSmallAngleFunc = [](Point2f v1, Point2f v2, int32_t &degrees)->bool {
@@ -862,20 +864,20 @@ clockwiseScanOfHullContour(CvSize size,
       // Render points that are not on the line
       
       if (debugDumpImages) {
-        binMat = Scalar(0);
+        Mat binMat2(size, CV_8UC1, Scalar(0));
         
         Coord originC(roiRect.x, roiRect.y);
         
         for ( Coord c : nonHullLinePoints ) {
           Coord gC = originC + c;
-          binMat.at<uint8_t>(gC.y, gC.x) = 0xFF;
+          binMat2.at<uint8_t>(gC.y, gC.x) = 0xFF;
         }
         
         std::stringstream fnameStream;
         fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_defect_" << cDefIt << "_not_on_line" << ".png";
         string fname = fnameStream.str();
         
-        imwrite(fname, binMat);
+        imwrite(fname, binMat2);
         cout << "wrote " << fname << endl;
         cout << "" << endl;
       }
@@ -947,7 +949,21 @@ clockwiseScanOfHullContour(CvSize size,
     }
   }
   
+  if (debugDumpImages) {
+    std::stringstream fnameStream;
+    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_defect_normals" << ".png";
+    string fname = fnameStream.str();
+    
+    writeWroteImg(fname, binMat);
+    cout << "" << endl;
+  }
+  
   // Render contours points by looking up offsets in defectStartOffsetMap
+  
+  if (debugDumpImages) {
+    colorMat = Scalar(0, 0, 0);
+    drawContours(colorMat, contours, 0, Scalar(0xFF,0xFF,0xFF), CV_FILLED); // Draw contour as white filled region
+  }
   
   if (debugDumpImages) {
     for (int cDefIt = 0; cDefIt < defectVec.size(); cDefIt++) {
@@ -972,16 +988,6 @@ clockwiseScanOfHullContour(CvSize size,
         printf("SKIP depth  %0.3f\n", depth);
       }
     }
-  }
-  
-  if (debugDumpImages) {
-    std::stringstream fnameStream;
-    fnameStream << HULL_DUMP_IMAGE_PREFIX << tag << "_hull_defect_normals" << ".png";
-    string fname = fnameStream.str();
-    
-    imwrite(fname, binMat);
-    cout << "wrote " << fname << endl;
-    cout << "" << endl;
   }
   
   if (debugDumpImages) {
