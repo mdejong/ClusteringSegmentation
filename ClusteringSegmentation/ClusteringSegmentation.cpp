@@ -6091,8 +6091,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         arrowedLine(renderMat, outsideF, wayOutsideF, Scalar(0x7F), 2, 8, 0, tipLength);
         
         for ( Coord c : edgesOutsideMap[c] ) {
-          assert(c.x < renderMat.cols);
-          assert(c.y < renderMat.rows);
           renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
         }
         
@@ -6184,12 +6182,12 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       }
       
       {
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_hull_iter_inout5_types" << ".png";
-      string fname = fnameStream.str();
-      
-      writeWroteImg(fname, typesBinMat);
-      cout << "" << endl;
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_hull_iter_inout5_types" << ".png";
+        string fname = fnameStream.str();
+        
+        writeWroteImg(fname, typesBinMat);
+        cout << "" << endl;
       }
       
       {
@@ -6202,7 +6200,39 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       }
     }
     
+    // Iterate from inside to outside looking for a transition from the interior area
+    // to the exterior area.
+    
+    for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+      Coord c = contourCoords[contouri];
+      auto &vecInside = edgesInsideMap[c];
+      
+      // Does the vector from outside to inside collapse in on a single
+      // value on the inside area of the contour.
+      
+      vector<uint32_t> pixels;
+      
+      for ( Coord c : vecInside ) {
+        Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
+        uint32_t pixel = Vec3BToUID(vec3);
+        pixels.push_back(pixel);
+      }
+      
+      // Calculate deltas on a pixel by pixel basis
+      
+      // MOMO
+      
+      //    auto &vecOutside = edgesOutsideMap[c];
+      
+      //    maxInsideWidth = maxi(maxInsideWidth, (int)vecInside.size());
+      //    maxOutsideWidth = maxi(maxOutsideWidth, (int)vecOutside.size());
+    }
+    
+    //  edgesInsideMap = edgesOutsideMap;
+    
+    
   }
+  
   
   // Mark mask pixels as on or off depending on what the vectors indicate.
   
