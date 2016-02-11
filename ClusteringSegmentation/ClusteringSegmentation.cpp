@@ -6104,6 +6104,104 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       cout << "generated " << edgesOutsideMap.size() << " entries for edge to outside vectors" << endl;
     }
     
+    // Dump image showing the vector contents
+    
+    if (debugDumpImages) {
+      int maxInsideWidth = 0;
+      int maxOutsideWidth = 0;
+    
+      for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+        Coord c = contourCoords[contouri];
+
+        auto &vecInside = edgesInsideMap[c];
+        auto &vecOutside = edgesOutsideMap[c];
+        
+        maxInsideWidth = maxi(maxInsideWidth, (int)vecInside.size());
+        maxOutsideWidth = maxi(maxOutsideWidth, (int)vecOutside.size());
+      }
+      
+      int numCols = maxInsideWidth + 1 + maxOutsideWidth;
+      
+      CvSize matSize(numCols, maxContouri);
+      Mat colorMat(matSize, CV_8UC3, Scalar(0,0,0));
+      
+      for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+        Coord c = contourCoords[contouri];
+        
+        auto &vecInside = edgesInsideMap[c];
+        auto &vecOutside = edgesOutsideMap[c];
+        
+        int midi = (maxInsideWidth + 1) - 1;
+        
+        Vec3b colorVec;
+        
+        colorVec = Vec3b(0xFF,0xFF,0xFF);
+        colorMat.at<Vec3b>(contouri, midi) = colorVec;
+        
+        int insidei = midi - 1;
+        int outsidei = midi + 1;
+
+        colorVec = Vec3b(0xFF/4,0xFF/4,0xFF/4);
+        
+        assert((insidei+1) >= vecInside.size());
+        
+        for ( Coord c : vecInside ) {
+          colorMat.at<Vec3b>(contouri, insidei) = colorVec;
+          insidei--;
+        }
+        
+        colorVec = Vec3b(0xFF/2,0xFF/2,0xFF/2);
+        
+        assert((outsidei+1) >= vecOutside.size());
+        
+        for ( Coord c : vecOutside ) {
+          colorMat.at<Vec3b>(contouri, outsidei) = colorVec;
+          outsidei++;
+        }
+      }
+      
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_hull_iter_inout5" << ".png";
+      string fname = fnameStream.str();
+      
+      writeWroteImg(fname, colorMat);
+      cout << "" << endl;
+    }
+    
+    /*
+    
+    int maxWidth = 0;
+    
+    for ( auto &vec : allNormalVectors ) {
+      int N = (int) vec.size();
+      if (N > maxWidth) {
+        maxWidth = N;
+      }
+    }
+    
+    Mat colorMat((int)allNormalVectors.size(), maxWidth, CV_8UC3, Scalar(0,0,0));
+    
+    for ( int y = 0; y < colorMat.rows; y++) {
+      auto &vec = allNormalVectors[y];
+      int numCols = (int) vec.size();
+      
+      for ( int x = 0; x < numCols; x++) {
+        Point2f p = vec[x];
+        round(p);
+        Point2i c = p;
+        Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+        colorMat.at<Vec3b>(y, x) = vec;
+      }
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_hull_iter_vec_pixels" << ".png";
+    string fname = fnameStream.str();
+    
+    writeWroteImg(fname, colorMat);
+    cout << "" << endl;
+*/
+    
   }
 
   /*
