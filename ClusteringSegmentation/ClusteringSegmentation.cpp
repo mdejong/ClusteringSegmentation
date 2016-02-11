@@ -5074,405 +5074,404 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
   // The hull lines should have already been simplified when possible, so determine the
   // hulls by taking the first and last point in the coords vec and then find the midpoint.
   
-  if (1) {
-    // Iterate over endpoints for hull lines and gather a set of coords
-    // where the nearest coord on the contour will be near at the hull line
-    // end.
+  // Iterate over endpoints for hull lines and gather a set of coords
+  // where the nearest coord on the contour will be near at the hull line
+  // end.
+  
+  vector<Coord> nearPoints;
+  unordered_map<Coord, int> isMidpointMap;
+  
+  Coord firstPoint;
+  Coord lastPoint;
+  
+  assert(hullCoordsVec.size() > 0);
+  firstPoint = hullCoordsVec[0].coords[0];
+  
+  const float minStartEndDist = 2.0f;
+  
+  int typedHullOffset = 0;
+  for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+    vector<Coord> &coordVec = typedHullCoords.coords;
     
-    vector<Coord> nearPoints;
-    unordered_map<Coord, int> isMidpointMap;
-    
-    Coord firstPoint;
-    Coord lastPoint;
-    
-    assert(hullCoordsVec.size() > 0);
-    firstPoint = hullCoordsVec[0].coords[0];
-    
-    const float minStartEndDist = 2.0f;
-    
-    int typedHullOffset = 0;
-    for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
-      vector<Coord> &coordVec = typedHullCoords.coords;
-      
-      if (debug) {
-        cout << "coordVec points:" << endl;
-        for ( Coord c : coordVec ) {
-          cout << c << endl;
-        }
-        cout << "";
-      }
-      
-      int numCoords = (int) coordVec.size();
-      
-      assert(numCoords > 0);
-      if (numCoords == 1) {
-        // Ignore single hull sets
-        
-        if (debug) {
-          cout << "skip single coord hull entry" << endl;
-        }
-        
-        lastPoint = coordVec[0];
-        typedHullOffset++;
-        continue;
-      }
-      
-      Coord cStart = coordVec[0];
-      Coord cEnd = coordVec[coordVec.size() - 1];
-      
-      float d = deltaDistance(cStart, cEnd);
-      if (d >= minStartEndDist) {
-        nearPoints.push_back(cStart);
-        
-        if (coordVec.size() > 2) {
-          // Determine midpoint of hull line
-          
-          Point2i p1 = coordToPoint(cStart);
-          Point2i p2 = coordToPoint(cEnd);
-          Point2i d = (p2 - p1)  / 2;
-          Point2i midP = p2 - d;
-          Coord midC = pointToCoord(midP);
-          
-          nearPoints.push_back(midC);
-          
-          isMidpointMap[midC] = typedHullOffset;
-          
-          if (debug) {
-            cout << "append midpoint " << midC << " in between " << cStart << " to " << cEnd << endl;
-          }
-        }
-      }
-      
-      lastPoint = cEnd;
-      typedHullOffset++;
-    }
-    if (hullCoordsVec.size() > 1) {
-      float d = deltaDistance(firstPoint, lastPoint);
-      
-      if (d >= minStartEndDist) {
-        nearPoints.push_back(lastPoint);
-        
-        if (debug) {
-          cout << "append last point " << lastPoint << endl;
-        }
-      }
-    }
-
     if (debug) {
-      cout << "near Points:" << endl;
-      for ( Coord c : nearPoints ) {
+      cout << "coordVec points:" << endl;
+      for ( Coord c : coordVec ) {
         cout << c << endl;
       }
       cout << "";
     }
     
-    // Render near points as bin Mat
+    int numCoords = (int) coordVec.size();
+    
+    assert(numCoords > 0);
+    if (numCoords == 1) {
+      // Ignore single hull sets
+      
+      if (debug) {
+        cout << "skip single coord hull entry" << endl;
+      }
+      
+      lastPoint = coordVec[0];
+      typedHullOffset++;
+      continue;
+    }
+    
+    Coord cStart = coordVec[0];
+    Coord cEnd = coordVec[coordVec.size() - 1];
+    
+    float d = deltaDistance(cStart, cEnd);
+    if (d >= minStartEndDist) {
+      nearPoints.push_back(cStart);
+      
+      if (coordVec.size() > 2) {
+        // Determine midpoint of hull line
+        
+        Point2i p1 = coordToPoint(cStart);
+        Point2i p2 = coordToPoint(cEnd);
+        Point2i d = (p2 - p1)  / 2;
+        Point2i midP = p2 - d;
+        Coord midC = pointToCoord(midP);
+        
+        nearPoints.push_back(midC);
+        
+        isMidpointMap[midC] = typedHullOffset;
+        
+        if (debug) {
+          cout << "append midpoint " << midC << " in between " << cStart << " to " << cEnd << endl;
+        }
+      }
+    }
+    
+    lastPoint = cEnd;
+    typedHullOffset++;
+  }
+  if (hullCoordsVec.size() > 1) {
+    float d = deltaDistance(firstPoint, lastPoint);
+    
+    if (d >= minStartEndDist) {
+      nearPoints.push_back(lastPoint);
+      
+      if (debug) {
+        cout << "append last point " << lastPoint << endl;
+      }
+    }
+  }
+  
+  if (debug) {
+    cout << "near Points:" << endl;
+    for ( Coord c : nearPoints ) {
+      cout << c << endl;
+    }
+    cout << "";
+  }
+  
+  // Render near points as bin Mat
+  
+  if (debugDumpImages) {
+    Mat binMat(tagsImg.size(), CV_8UC1, Scalar(0));
+    
+    for ( Coord c : nearPoints ) {
+      binMat.at<uint8_t>(c.y, c.x) = 0xFF;
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_hull_near_points" << ".png";
+    string fname = fnameStream.str();
+    
+    imwrite(fname, binMat);
+    cout << "wrote " << fname << endl;
+    cout << "" << endl;
+  }
+  
+  // Calculate the hull midpoint to nearest contour point map.
+  // In the case of a concave hull, circle the interior point
+  // otherwise circle the midpoint of the hull line.
+  
+  if (debugDumpImages) {
+    Mat colorMat(tagsImg.size(), CV_8UC3, Scalar(0, 0, 0));
+    
+    for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+      uint32_t pixel = 0;
+      pixel |= (rand() % 256);
+      pixel |= ((rand() % 256) << 8);
+      pixel |= ((rand() % 256) << 16);
+      pixel |= (0xFF << 24);
+      
+      Vec3b vec = PixelToVec3b(pixel);
+      
+      for ( Coord c : typedHullCoords.coords ) {
+        colorMat.at<Vec3b>(c.y, c.x) = vec;
+      }
+    }
+    
+    int typedHullOffset = 0;
+    for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+      if (typedHullCoords.isConcave) {
+        Point2i defectP = coordToPoint(typedHullCoords.defectPoint);
+        circle(colorMat, defectP, 4, Scalar(0,0,0xFF), 2);
+      } else {
+        for ( auto &pair : isMidpointMap ) {
+          if (pair.second == typedHullOffset) {
+            // Found midpoint that corresponds to this segment.
+            Point2i midP = coordToPoint(pair.first);
+            circle(colorMat, midP, 4, Scalar(0,0,0xFF), 2);
+            break;
+          }
+        }
+      }
+      
+      typedHullOffset++;
+    }
+    
+    if (debug) {
+      int numConcave = 0;
+      int numConvex = 0;
+      
+      for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+        if (typedHullCoords.isConcave) {
+          numConcave++;
+        } else {
+          numConvex++;
+        }
+      }
+      
+      cout << "numConcave " << numConcave << " and numConvex " << numConvex << endl;
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_hull_mid_defect_segments" << ".png";
+    string fname = fnameStream.str();
+    
+    writeWroteImg(fname, colorMat);
+    cout << "" << endl;
+  }
+  
+  // Generate an iteration order for each hull region. Regions are different sizes
+  // so these iteration orders are different lengths.
+  
+  {
+    int consumedLeft = 0;
+    int consumedRight = 0;
+    int typedHullOffset = 0;
+    
+    vector<stack<int32_t> > coordsIterStackVec;
+    
+    typedHullOffset = 0;
+    for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+      auto &coordVec = typedHullCoords.coords;
+      
+      vector<int32_t> coordsIterOrder;
+      
+      if (typedHullCoords.isConcave) {
+        Coord searchPoint = typedHullCoords.defectPoint;
+        // Find the offsets of c in coordVec
+        int offset = 0;
+        int foundOffset = -1;
+        for ( Coord c : coordVec ) {
+          if (c == searchPoint) {
+            foundOffset = offset;
+            break;
+          }
+          offset++;
+        }
+        assert(foundOffset != -1);
+        consumedLeft = foundOffset;
+        consumedRight = foundOffset;
+      } else {
+        // Choose the mid index in the convex list of points.
+        
+        int foundOffset = (int) coordVec.size() / 2;
+        consumedLeft = foundOffset;
+        consumedRight = foundOffset;
+      }
+      
+      // Process all coordinates in coordVec
+      
+      while (1) {
+        if (debug) {
+          cout << "consumedLeft  " << consumedLeft << endl;
+          cout << "consumedRight " << consumedRight << endl;
+        }
+        
+        if (consumedLeft == consumedRight) {
+          // Starting point where 1 element is consumed
+          
+          coordsIterOrder.push_back(consumedLeft);
+          consumedLeft--;
+          consumedRight++;
+        } else {
+          if (consumedLeft > -1) {
+            // Still coordinates to consume on left side of contour segment
+            coordsIterOrder.push_back(consumedLeft);
+            consumedLeft--;
+          }
+          
+          if (consumedRight < coordVec.size()) {
+            // Still coordinates to consume on right side of contour segment
+            coordsIterOrder.push_back(consumedRight);
+            consumedRight++;
+          }
+          
+          if (consumedLeft == -1 && consumedRight == coordVec.size()) {
+            // out of while(1) loop
+            break;
+          }
+        }
+      }
+      
+      assert(coordsIterOrder.size() == coordVec.size());
+      
+      if (debug) {
+        cout << "consumedLeft  " << consumedLeft << endl;
+        cout << "consumedRight " << consumedRight << endl;
+        
+        for ( int32_t offset : coordsIterOrder ) {
+          cout << "iter offset " << offset << endl;
+        }
+      }
+      
+      // Create stack and insert each iter offset into it
+      
+      stack<int32_t> iterStack;
+      
+      for ( auto it = coordsIterOrder.rbegin(); it != coordsIterOrder.rend(); it++) {
+        int32_t offset = *it;
+        iterStack.push(offset);
+      }
+      
+      coordsIterStackVec.push_back(iterStack);
+      
+      typedHullOffset++;
+    }
+    
+    // Iterate over all sets of coords at the same time and determine
+    // the order that coordinates on the contour would be consumed.
+    
+    vector<Coord> contourCoords;
+    
+    vector<int32_t> startOffsets;
+    
+    vector<int32_t> contourIterOrder;
+    
+    for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+      auto &coordVec = typedHullCoords.coords;
+      startOffsets.push_back((int32_t)contourCoords.size());
+      append_to_vector(contourCoords, coordVec);
+    }
+    
+    for ( int contourNumCoords = (int) contourCoords.size(); contourNumCoords > 0; contourNumCoords-- ) {
+      // Consume 1 coordinate from each regions if possible
+      
+      if (debug) {
+        cout << "contourNumCoords  " << contourNumCoords << endl;
+      }
+      
+      for ( typedHullOffset = 0; typedHullOffset < hullCoordsVec.size(); typedHullOffset++ ) {
+        stack<int32_t> &iterStack = coordsIterStackVec[typedHullOffset];
+        
+        if (iterStack.size() > 0) {
+          int32_t offset = iterStack.top();
+          iterStack.pop();
+          
+          // Make offset into contourCoords and push onto contourIterOrder
+          int32_t contourOffset = startOffsets[typedHullOffset] + offset;
+          contourIterOrder.push_back(contourOffset);
+          
+          if (debug) {
+            cout << "popped  " << offset << " from typedHullOffset " << typedHullOffset << " which maps to contour offset " << contourOffset << endl;
+          }
+        }
+      }
+    }
+    
+    // contourIterOrder now contains contour iteration order
+    
+    if (debug) {
+      for ( int32_t offset : contourIterOrder ) {
+        cout << "iter offset " << offset << endl;
+      }
+      cout << "";
+    }
+    
+#if defined(DEBUG)
+    {
+      set<int32_t> seen;
+      for ( int32_t offset : contourIterOrder ) {
+        if (seen.count(offset) > 0) {
+          assert(0);
+        }
+        seen.insert(offset);
+      }
+    }
+#endif // DEBUG
+    
+    // Dump grayscale pixels in iteration order
     
     if (debugDumpImages) {
       Mat binMat(tagsImg.size(), CV_8UC1, Scalar(0));
       
-      for ( Coord c : nearPoints ) {
-        binMat.at<uint8_t>(c.y, c.x) = 0xFF;
+      int bVal = 0xFF;
+      
+      for ( int32_t offset : contourIterOrder ) {
+        Coord c = contourCoords[offset];
+        binMat.at<uint8_t>(c.y, c.x) = bVal;
+        bVal -= 3;
+        if (bVal < 127) {
+          bVal = 0xFF;
+        }
       }
-    
+      
       std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_hull_near_points" << ".png";
+      fnameStream << "srm" << "_tag_" << tag << "_hull_iter_order" << ".png";
       string fname = fnameStream.str();
       
-      imwrite(fname, binMat);
-      cout << "wrote " << fname << endl;
+      writeWroteImg(fname, binMat);
       cout << "" << endl;
     }
     
-    // Calculate the hull midpoint to nearest contour point map.
-    // In the case of a concave hull, circle the interior point
-    // otherwise circle the midpoint of the hull line.
+    // Return normal vector at indicated point
+    
+    auto normalAtOffset = [](const vector<Coord> &contourCoords, int32_t offset)->Point2f {
+      int32_t o1 = offset - 2;
+      int32_t o2 = offset + 2;
+      
+      int32_t act1 = vecOffsetAround((int32_t)contourCoords.size(), o1);
+      int32_t act2 = vecOffsetAround((int32_t)contourCoords.size(), o2);
+      
+#if defined(DEBUG)
+      assert(act1 >= 0 && act1 < contourCoords.size());
+      assert(act2 >= 0 && act2 < contourCoords.size());
+#endif // DEBUG
+      
+      Coord c1 = contourCoords[act1];
+      Coord c2 = contourCoords[act2];
+      
+      Point2f pF1(c1.x, c1.y);
+      Point2f pF2(c2.x, c2.y);
+      
+      // Get unit normalized vector from pF1 -> pF2
+      // pointing away from the contour center.
+      
+      Point2f deltaN = pF1 - pF2;
+      
+      printf("delta vector %0.3f %0.3f\n", deltaN.x, deltaN.y);
+      
+      normalUnitVector(deltaN);
+      
+      printf("normal unit vector %0.3f %0.3f\n", deltaN.x, deltaN.y);
+      
+      return deltaN;
+    };
+    
+    // Define N steps where a normal to the point in question passes through
+    // the point and defines the vector away from the shape.
     
     if (debugDumpImages) {
-      Mat colorMat(tagsImg.size(), CV_8UC3, Scalar(0, 0, 0));
+      Mat binMat(tagsImg.size(), CV_8UC1, Scalar(0));
       
-      for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
-        uint32_t pixel = 0;
-        pixel |= (rand() % 256);
-        pixel |= ((rand() % 256) << 8);
-        pixel |= ((rand() % 256) << 16);
-        pixel |= (0xFF << 24);
-        
-        Vec3b vec = PixelToVec3b(pixel);
-        
-        for ( Coord c : typedHullCoords.coords ) {
-          colorMat.at<Vec3b>(c.y, c.x) = vec;
-        }
-      }
+      // Dump all normal vectors as bin Mat, note that this is a lot of images
       
-      int typedHullOffset = 0;
-      for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
-        if (typedHullCoords.isConcave) {
-          Point2i defectP = coordToPoint(typedHullCoords.defectPoint);
-          circle(colorMat, defectP, 4, Scalar(0,0,0xFF), 2);
-        } else {
-          for ( auto &pair : isMidpointMap ) {
-            if (pair.second == typedHullOffset) {
-              // Found midpoint that corresponds to this segment.
-              Point2i midP = coordToPoint(pair.first);
-              circle(colorMat, midP, 4, Scalar(0,0,0xFF), 2);
-              break;
-            }
-          }
-        }
-        
-        typedHullOffset++;
-      }
-      
-      if (debug) {
-        int numConcave = 0;
-        int numConvex = 0;
-        
-        for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
-          if (typedHullCoords.isConcave) {
-            numConcave++;
-          } else {
-            numConvex++;
-          }
-        }
-        
-        cout << "numConcave " << numConcave << " and numConvex " << numConvex << endl;
-      }
-      
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_hull_mid_defect_segments" << ".png";
-      string fname = fnameStream.str();
-      
-      writeWroteImg(fname, colorMat);
-      cout << "" << endl;
-    }
-    
-    // Generate an iteration order for each hull region. Regions are different sizes
-    // so these iteration orders are different lengths.
-    
-    {
-      int consumedLeft = 0;
-      int consumedRight = 0;
-      int typedHullOffset = 0;
-      
-      vector<stack<int32_t> > coordsIterStackVec;
-      
-      typedHullOffset = 0;
-      for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
-        auto &coordVec = typedHullCoords.coords;
-        
-        vector<int32_t> coordsIterOrder;
-
-        if (typedHullCoords.isConcave) {
-          Coord searchPoint = typedHullCoords.defectPoint;
-          // Find the offsets of c in coordVec
-          int offset = 0;
-          int foundOffset = -1;
-          for ( Coord c : coordVec ) {
-            if (c == searchPoint) {
-              foundOffset = offset;
-              break;
-            }
-            offset++;
-          }
-          assert(foundOffset != -1);
-          consumedLeft = foundOffset;
-          consumedRight = foundOffset;
-        } else {
-          // Choose the mid index in the convex list of points.
-          
-          int foundOffset = (int) coordVec.size() / 2;
-          consumedLeft = foundOffset;
-          consumedRight = foundOffset;
-        }
-        
-        // Process all coordinates in coordVec
-        
-        while (1) {
-          if (debug) {
-            cout << "consumedLeft  " << consumedLeft << endl;
-            cout << "consumedRight " << consumedRight << endl;
-          }
-          
-          if (consumedLeft == consumedRight) {
-            // Starting point where 1 element is consumed
-            
-            coordsIterOrder.push_back(consumedLeft);
-            consumedLeft--;
-            consumedRight++;
-          } else {
-            if (consumedLeft > -1) {
-              // Still coordinates to consume on left side of contour segment
-              coordsIterOrder.push_back(consumedLeft);
-              consumedLeft--;
-            }
-            
-            if (consumedRight < coordVec.size()) {
-              // Still coordinates to consume on right side of contour segment
-              coordsIterOrder.push_back(consumedRight);
-              consumedRight++;
-            }
-            
-            if (consumedLeft == -1 && consumedRight == coordVec.size()) {
-              // out of while(1) loop
-              break;
-            }
-          }
-        }
-        
-        assert(coordsIterOrder.size() == coordVec.size());
-        
-        if (debug) {
-          cout << "consumedLeft  " << consumedLeft << endl;
-          cout << "consumedRight " << consumedRight << endl;
-          
-          for ( int32_t offset : coordsIterOrder ) {
-            cout << "iter offset " << offset << endl;
-          }
-        }
-        
-        // Create stack and insert each iter offset into it
-        
-        stack<int32_t> iterStack;
-        
-        for ( auto it = coordsIterOrder.rbegin(); it != coordsIterOrder.rend(); it++) {
-          int32_t offset = *it;
-          iterStack.push(offset);
-        }
-        
-        coordsIterStackVec.push_back(iterStack);
-        
-        typedHullOffset++;
-      }
-      
-      // Iterate over all sets of coords at the same time and determine
-      // the order that coordinates on the contour would be consumed.
-
-      vector<Coord> contourCoords;
-      
-      vector<int32_t> startOffsets;
-      
-      vector<int32_t> contourIterOrder;
-      
-      for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
-        auto &coordVec = typedHullCoords.coords;
-        startOffsets.push_back((int32_t)contourCoords.size());
-        append_to_vector(contourCoords, coordVec);
-      }
-      
-      for ( int contourNumCoords = (int) contourCoords.size(); contourNumCoords > 0; contourNumCoords-- ) {
-        // Consume 1 coordinate from each regions if possible
-        
-        if (debug) {
-          cout << "contourNumCoords  " << contourNumCoords << endl;
-        }
-        
-        for ( typedHullOffset = 0; typedHullOffset < hullCoordsVec.size(); typedHullOffset++ ) {
-          stack<int32_t> &iterStack = coordsIterStackVec[typedHullOffset];
-          
-          if (iterStack.size() > 0) {
-            int32_t offset = iterStack.top();
-            iterStack.pop();
-            
-            // Make offset into contourCoords and push onto contourIterOrder
-            int32_t contourOffset = startOffsets[typedHullOffset] + offset;
-            contourIterOrder.push_back(contourOffset);
-            
-            if (debug) {
-              cout << "popped  " << offset << " from typedHullOffset " << typedHullOffset << " which maps to contour offset " << contourOffset << endl;
-            }
-          }
-        }
-      }
-      
-      // contourIterOrder now contains contour iteration order
-
-      if (debug) {
-        for ( int32_t offset : contourIterOrder ) {
-          cout << "iter offset " << offset << endl;
-        }
-        cout << "";
-      }
-      
-#if defined(DEBUG)
-      {
-        set<int32_t> seen;
-        for ( int32_t offset : contourIterOrder ) {
-          if (seen.count(offset) > 0) {
-            assert(0);
-          }
-          seen.insert(offset);
-        }
-      }
-#endif // DEBUG
-      
-      // Dump grayscale pixels in iteration order
-      
-      if (debugDumpImages) {
-        Mat binMat(tagsImg.size(), CV_8UC1, Scalar(0));
-        
-        int bVal = 0xFF;
-        
-        for ( int32_t offset : contourIterOrder ) {
-          Coord c = contourCoords[offset];
-          binMat.at<uint8_t>(c.y, c.x) = bVal;
-          bVal -= 3;
-          if (bVal < 127) {
-            bVal = 0xFF;
-          }
-        }
-        
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_hull_iter_order" << ".png";
-        string fname = fnameStream.str();
-        
-        writeWroteImg(fname, binMat);
-        cout << "" << endl;
-      }
-      
-      // Return normal vector at indicated point
-      
-      auto normalAtOffset = [](const vector<Coord> &contourCoords, int32_t offset)->Point2f {
-        int32_t o1 = offset - 2;
-        int32_t o2 = offset + 2;
-        
-        int32_t act1 = vecOffsetAround((int32_t)contourCoords.size(), o1);
-        int32_t act2 = vecOffsetAround((int32_t)contourCoords.size(), o2);
-        
-#if defined(DEBUG)
-        assert(act1 >= 0 && act1 < contourCoords.size());
-        assert(act2 >= 0 && act2 < contourCoords.size());
-#endif // DEBUG
-        
-        Coord c1 = contourCoords[act1];
-        Coord c2 = contourCoords[act2];
-        
-        Point2f pF1(c1.x, c1.y);
-        Point2f pF2(c2.x, c2.y);
-        
-        // Get unit normalized vector from pF1 -> pF2
-        // pointing away from the contour center.
-        
-        Point2f deltaN = pF1 - pF2;
-        
-        printf("delta vector %0.3f %0.3f\n", deltaN.x, deltaN.y);
-        
-        normalUnitVector(deltaN);
-        
-        printf("normal unit vector %0.3f %0.3f\n", deltaN.x, deltaN.y);
-        
-        return deltaN;
-      };
-      
-      // Define N steps where a normal to the point in question passes through
-      // the point and defines the vector away from the shape.
-
-      if (debugDumpImages) {
-        Mat binMat(tagsImg.size(), CV_8UC1, Scalar(0));
-        
-        // Dump all normal vectors as bin Mat, note that this is a lot of images
-        
-        if ((0)) {
+      if ((0)) {
         
         for ( int32_t offset : contourIterOrder ) {
           binMat = Scalar(0);
@@ -5500,379 +5499,376 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           writeWroteImg(fname, binMat);
           cout << "" << endl;
         }
-          
-        }
         
-        Rect roi(0,0,inputImg.size().width, inputImg.size().height);
-        
-        // FIXME: should attempt to invoke splitContourIntoLinesSegments() with episilon = 0.0
-        // to determine simplified set of points that combine into lines without any approx.
-        // When the approx is then applied it can find longer lines. But, when the approx is
-        // small this logic ends up finding really small lines of length 2 or 3 which are really
-        // part of curves.
-        
-//        double epsilon = 0.0;
-        double epsilon = 1.4;
-        
-        vector<HullLineOrCurveSegment> vecOfSeg = splitContourIntoLinesSegments(tag, inputImg.size(), roi, contourCoords, epsilon);
-        
-        // Note that iteration order of coordinates in vecOfSeg may not start on contourCoords[0] so
-        // create a map from known line points to the common line slope.
-
-        vector<Point2f> normalUnitVecTable;
-        
-        for ( HullLineOrCurveSegment & locSeg : vecOfSeg ) {
-          if (locSeg.isLine) {
-            Point2f slopeVec = locSeg.slope;
-            Point2f normF;
-            
-            // Calculate normal vector
-            float tmp = slopeVec.x;
-            normF.x = slopeVec.y * -1;
-            normF.y = tmp;
-            normF *= -1; // invert
-            
-            normalUnitVecTable.push_back(normF);
-          }
-        }
-        
-        unordered_map<Coord, Point2f> lineCoordToNormalMap;
-        
-        // Util lambda that will determine the slope for a position by ave of L and R slopes
-        
-        auto aveSlope = [&normalUnitVecTable, &contourCoords, &lineCoordToNormalMap](int offset)->Point2f {
-          const bool debug = true;
-          
-          if (debug) {
-            cout << "aveSlope starting at offset " << offset << endl;
-          }
-          
-          // Walk backwards until a normal is found
-          
-          int32_t offsetL = offset - 1;
-          int32_t offsetR = offset + 1;
-          
-          int32_t actualOffsetL;
-          int32_t actualOffsetR;
-          
-          Coord cL;
-          Coord cR;
-          
-          while (1) {
-            actualOffsetL = vecOffsetAround((int32_t)contourCoords.size(), offsetL);
-            
-            if (actualOffsetL == offset) {
-              break;
-            }
-            
-            cL = contourCoords[actualOffsetL];
-            
-            if (lineCoordToNormalMap.count(cL) > 0) {
-              break;
-            }
-            
-            offsetL--;
-          }
-          
-          while (1) {
-            actualOffsetR = vecOffsetAround((int32_t)contourCoords.size(), offsetR);
-            
-            if (actualOffsetR == offset) {
-              break;
-            }
-            
-            cR = contourCoords[actualOffsetR];
-            
-            if (lineCoordToNormalMap.count(cR) > 0) {
-              break;
-            }
-            
-            offsetR++;
-          }
-          
-          // Smooth out the difference between the two normal vectors
-          
-#if defined(DEBUG)
-          assert(lineCoordToNormalMap.count(cL) > 0);
-          assert(lineCoordToNormalMap.count(cR) > 0);
-#endif // DEBUG
-          
-          Point2f pF1 = lineCoordToNormalMap[cL];
-          Point2f pF2 = lineCoordToNormalMap[cR];
-          
-          if (debug) {
-            printf("Coord on Left  (%d,%d) from offset %d\n", cL.x, cL.y, actualOffsetL);
-            printf("Coord on Right (%d,%d) from offset %d\n", cR.x, cR.y, actualOffsetR);
-            
-            printf("Norm on Left  (%0.3f,%0.3f)\n", pF1.x, pF1.y);
-            printf("Norm on Right (%0.3f,%0.3f)\n", pF2.x, pF2.y);
-          }
-          
-          Point2f sumF = pF1 + pF2;
-          
-          if (debug) {
-            printf("Sum of directional vectors (%0.3f,%0.3f)\n", sumF.x, sumF.y);
-          }
-          
-          makeUnitVector(sumF);
-          
-          if (debug) {
-            printf("normal unit vector (%0.3f,%0.3f)\n", sumF.x, sumF.y);
-          }
-          
-          return sumF;
-        };
-        
-        vector<Coord> pendingLineEdges;
-        
-        int locOffset;
-        
-        locOffset = 0;
-        for ( HullLineOrCurveSegment & locSeg : vecOfSeg ) {
-          if (locSeg.isLine) {
-            auto &pointsVec = locSeg.points;
-            int startEndN;
-            
-            auto insideOutVec = iterInsideOut(pointsVec);
-
-            if (pointsVec.size() <= 3) {
-              startEndN = 2;
-            } else if (pointsVec.size() <= 5) {
-              startEndN = 2;
-            } else {
-              startEndN = 2;
-//              startEndN = 1;
-            }
-            
-            int maxOffset = (int) insideOutVec.size();
-            
-            for ( int i = 0; i < maxOffset; i++ ) {
-              Point2i p = insideOutVec[i];
-              
-              if (i >= (maxOffset - startEndN)) {
-                // Append rest of values
-                Coord c = pointToCoord(p);
-                pendingLineEdges.push_back(c);
-              } else {
-                Point2f normal = normalUnitVecTable[locOffset];
-                Coord c = pointToCoord(p);
-                lineCoordToNormalMap[c] = normal;
-              }
-            }
-          } else {
-            // All points on curves treated as average between line slopes.
-            
-            // FIXME: should curve points be added inside out, so that ave at
-            // edges is done before other points?
-            
-            vector<Coord> vec = convertPointsToCoords(locSeg.points);
-            append_to_vector(pendingLineEdges, vec);
-          }
-          
-          locOffset++;
-        }
-        
-        // Iterate over original contour points and determine if any points
-        // still need to have normals calculated.
-        
-        unordered_map<Coord, int> contourCoordsToFirstOffsetMap;
-        
-        int contourOffset = 0;
-        
-        for ( Coord c : contourCoords ) {
-          if (contourCoordsToFirstOffsetMap.count(c) == 0) {
-            contourCoordsToFirstOffsetMap[c] = contourOffset;
-          }
-          contourOffset++;
-        }
-        
-        // Average pending points in backward order so that the points
-        // farthest from the line center are processed first.
-        
-        for ( auto it = pendingLineEdges.begin(); it != pendingLineEdges.end(); it++ ) {
-          Coord c = *it;
-          cout << c << endl;
-          
-#if defined(DEBUG)
-          assert(contourCoordsToFirstOffsetMap.count(c) > 0);
-#endif // DEBUG
-          
-          int contourOffset = contourCoordsToFirstOffsetMap[c];
-          
-          Point2f normF = aveSlope(contourOffset);
-          
-          lineCoordToNormalMap[c] = normF;
-        }
-        
-        // Calculate all normals
-        
-        vector<vector<Point2f> > allNormalVectors;
-        
-        for ( Coord c : contourCoords ) {
+      }
+      
+      Rect roi(0,0,inputImg.size().width, inputImg.size().height);
+      
+      // FIXME: should attempt to invoke splitContourIntoLinesSegments() with episilon = 0.0
+      // to determine simplified set of points that combine into lines without any approx.
+      // When the approx is then applied it can find longer lines. But, when the approx is
+      // small this logic ends up finding really small lines of length 2 or 3 which are really
+      // part of curves.
+      
+      //        double epsilon = 0.0;
+      double epsilon = 1.4;
+      
+      vector<HullLineOrCurveSegment> vecOfSeg = splitContourIntoLinesSegments(tag, inputImg.size(), roi, contourCoords, epsilon);
+      
+      // Note that iteration order of coordinates in vecOfSeg may not start on contourCoords[0] so
+      // create a map from known line points to the common line slope.
+      
+      vector<Point2f> normalUnitVecTable;
+      
+      for ( HullLineOrCurveSegment & locSeg : vecOfSeg ) {
+        if (locSeg.isLine) {
+          Point2f slopeVec = locSeg.slope;
           Point2f normF;
           
-#if defined(DEBUG)
-          assert(lineCoordToNormalMap.count(c) > 0);
-#endif // DEBUG
+          // Calculate normal vector
+          float tmp = slopeVec.x;
+          normF.x = slopeVec.y * -1;
+          normF.y = tmp;
+          normF *= -1; // invert
           
-          if (lineCoordToNormalMap.count(c) == 0) {
-            assert(0);
-          } else {
-            normF = lineCoordToNormalMap[c];
-          }
-          
-          Point2f cF(c.x, c.y);
-          
-          Point2f normOutside = cF + (normF * 1);
-          Point2f normInside = cF + (normF * -1);
-          
-          vector<Point2f> vecPoints;
-          
-          const bool roundToPixels = false;
-          
-          if (roundToPixels) {
-            round(normInside);
-            round(normOutside);
-          }
-          
-          vecPoints.push_back(normInside);
-          vecPoints.push_back(cF);
-          vecPoints.push_back(normOutside);
-          
-          allNormalVectors.push_back(vecPoints);
+          normalUnitVecTable.push_back(normF);
         }
-        
-        // Dump the pixels contained in allNormalVectors as a massive image where the pixels
-        // from the original image are copied into rows of output.
-        
-        if ((1)) {
-          binMat = Scalar(0);
-          
-          for ( auto &vec : allNormalVectors ) {
-            for ( Point2f p : vec ) {
-              round(p);
-              Point2i pi = p;
-              binMat.at<uint8_t>(pi.y, pi.x) = 0xFF;
-            }
-          }
-          
-          for ( int32_t offset : contourIterOrder ) {
-            Coord c = contourCoords[offset];
-            binMat.at<uint8_t>(c.y, c.x) = 0x7F;
-          }
-          
-          
-          std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_normal_over" << ".png";
-          string fname = fnameStream.str();
-            
-          writeWroteImg(fname, binMat);
-          cout << "" << endl;
-        }
-        
-        // Emit an image where each vector of pixels is a row
-        
-        if (1) {
-          int maxWidth = 0;
-          
-          for ( auto &vec : allNormalVectors ) {
-            int N = (int) vec.size();
-            if (N > maxWidth) {
-              maxWidth = N;
-            }
-          }
-          
-          Mat colorMat((int)allNormalVectors.size(), maxWidth, CV_8UC3, Scalar(0,0,0));
-          
-          for ( int y = 0; y < colorMat.rows; y++) {
-            auto &vec = allNormalVectors[y];
-            int numCols = (int) vec.size();
-            
-            for ( int x = 0; x < numCols; x++) {
-              Point2f p = vec[x];
-              round(p);
-              Point2i c = p;
-              Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
-              colorMat.at<Vec3b>(y, x) = vec;
-            }
-          }
-          
-          std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_vec_pixels" << ".png";
-          string fname = fnameStream.str();
-          
-          writeWroteImg(fname, colorMat);
-          cout << "" << endl;
-        }
-        
-        
-        // This dump image will enlarge the original image multiple times so that vectors
-        // with arrow directions can be seen clearly over the enlarged images.
-        
-        if (1) {
-          CvSize origSize = inputImg.size();
-          CvSize largerSize = origSize;
-          int multBy = 1;
-          
-          Vec3b grayVec(0x7F, 0x7F, 0x7F);
-          
-          while (largerSize.width < 1000 && largerSize.width < 1000) {
-            largerSize.width *= 2;
-            largerSize.height *= 2;
-            multBy *= 2;
-          }
-          
-          Mat smallColorMat(origSize, CV_8UC3, Scalar(0,0,0));
-          
-          Mat colorMat(largerSize, CV_8UC3, Scalar(0,0,0));
-          
-          for ( int32_t offset : contourIterOrder ) {
-            Coord c = contourCoords[offset];
-            smallColorMat.at<Vec3b>(c.y, c.x) = grayVec;
-          }
-          
-          resize(smallColorMat, colorMat, colorMat.size(), 0, 0, INTER_CUBIC);
-          
-          // Render each normal vector as line with arrow at end
-          
-          for ( int y = 0; y < allNormalVectors.size(); y++) {
-            auto &vec = allNormalVectors[y];
-
-            Point2f p1 = vec[0];
-            Point2f p2 = vec[vec.size() - 1];
-            
-            if ((1)) {
-              // Add a little more to the second vector
-              Point2f delta = p2 - p1;
-              p2 += delta;
-            }
-            
-            p1 *= multBy;
-            p2 *= multBy;
-            
-            round(p1);
-            round(p2);
-            
-            Point2i rp1 = p1;
-            Point2i rp2 = p2;
-            
-            double tipLength = 0.2;
-            
-            arrowedLine(colorMat, rp1, rp2, Scalar(0, 0, 0xFF), 1, 8, 0, tipLength);
-          }
-          
-          std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_hull_vecs_larger" << ".png";
-          string fname = fnameStream.str();
-          
-          writeWroteImg(fname, colorMat);
-          cout << "" << endl;
-        }
-
-
       }
+      
+      unordered_map<Coord, Point2f> lineCoordToNormalMap;
+      
+      // Util lambda that will determine the slope for a position by ave of L and R slopes
+      
+      auto aveSlope = [&normalUnitVecTable, &contourCoords, &lineCoordToNormalMap](int offset)->Point2f {
+        const bool debug = true;
+        
+        if (debug) {
+          cout << "aveSlope starting at offset " << offset << endl;
+        }
+        
+        // Walk backwards until a normal is found
+        
+        int32_t offsetL = offset - 1;
+        int32_t offsetR = offset + 1;
+        
+        int32_t actualOffsetL;
+        int32_t actualOffsetR;
+        
+        Coord cL;
+        Coord cR;
+        
+        while (1) {
+          actualOffsetL = vecOffsetAround((int32_t)contourCoords.size(), offsetL);
+          
+          if (actualOffsetL == offset) {
+            break;
+          }
+          
+          cL = contourCoords[actualOffsetL];
+          
+          if (lineCoordToNormalMap.count(cL) > 0) {
+            break;
+          }
+          
+          offsetL--;
+        }
+        
+        while (1) {
+          actualOffsetR = vecOffsetAround((int32_t)contourCoords.size(), offsetR);
+          
+          if (actualOffsetR == offset) {
+            break;
+          }
+          
+          cR = contourCoords[actualOffsetR];
+          
+          if (lineCoordToNormalMap.count(cR) > 0) {
+            break;
+          }
+          
+          offsetR++;
+        }
+        
+        // Smooth out the difference between the two normal vectors
+        
+#if defined(DEBUG)
+        assert(lineCoordToNormalMap.count(cL) > 0);
+        assert(lineCoordToNormalMap.count(cR) > 0);
+#endif // DEBUG
+        
+        Point2f pF1 = lineCoordToNormalMap[cL];
+        Point2f pF2 = lineCoordToNormalMap[cR];
+        
+        if (debug) {
+          printf("Coord on Left  (%d,%d) from offset %d\n", cL.x, cL.y, actualOffsetL);
+          printf("Coord on Right (%d,%d) from offset %d\n", cR.x, cR.y, actualOffsetR);
+          
+          printf("Norm on Left  (%0.3f,%0.3f)\n", pF1.x, pF1.y);
+          printf("Norm on Right (%0.3f,%0.3f)\n", pF2.x, pF2.y);
+        }
+        
+        Point2f sumF = pF1 + pF2;
+        
+        if (debug) {
+          printf("Sum of directional vectors (%0.3f,%0.3f)\n", sumF.x, sumF.y);
+        }
+        
+        makeUnitVector(sumF);
+        
+        if (debug) {
+          printf("normal unit vector (%0.3f,%0.3f)\n", sumF.x, sumF.y);
+        }
+        
+        return sumF;
+      };
+      
+      vector<Coord> pendingLineEdges;
+      
+      int locOffset;
+      
+      locOffset = 0;
+      for ( HullLineOrCurveSegment & locSeg : vecOfSeg ) {
+        if (locSeg.isLine) {
+          auto &pointsVec = locSeg.points;
+          int startEndN;
+          
+          auto insideOutVec = iterInsideOut(pointsVec);
+          
+          if (pointsVec.size() <= 3) {
+            startEndN = 2;
+          } else if (pointsVec.size() <= 5) {
+            startEndN = 2;
+          } else {
+            startEndN = 2;
+            //              startEndN = 1;
+          }
+          
+          int maxOffset = (int) insideOutVec.size();
+          
+          for ( int i = 0; i < maxOffset; i++ ) {
+            Point2i p = insideOutVec[i];
+            
+            if (i >= (maxOffset - startEndN)) {
+              // Append rest of values
+              Coord c = pointToCoord(p);
+              pendingLineEdges.push_back(c);
+            } else {
+              Point2f normal = normalUnitVecTable[locOffset];
+              Coord c = pointToCoord(p);
+              lineCoordToNormalMap[c] = normal;
+            }
+          }
+        } else {
+          // All points on curves treated as average between line slopes.
+          
+          // FIXME: should curve points be added inside out, so that ave at
+          // edges is done before other points?
+          
+          vector<Coord> vec = convertPointsToCoords(locSeg.points);
+          append_to_vector(pendingLineEdges, vec);
+        }
+        
+        locOffset++;
+      }
+      
+      // Iterate over original contour points and determine if any points
+      // still need to have normals calculated.
+      
+      unordered_map<Coord, int> contourCoordsToFirstOffsetMap;
+      
+      int contourOffset = 0;
+      
+      for ( Coord c : contourCoords ) {
+        if (contourCoordsToFirstOffsetMap.count(c) == 0) {
+          contourCoordsToFirstOffsetMap[c] = contourOffset;
+        }
+        contourOffset++;
+      }
+      
+      // Average pending points in backward order so that the points
+      // farthest from the line center are processed first.
+      
+      for ( auto it = pendingLineEdges.begin(); it != pendingLineEdges.end(); it++ ) {
+        Coord c = *it;
+        cout << c << endl;
+        
+#if defined(DEBUG)
+        assert(contourCoordsToFirstOffsetMap.count(c) > 0);
+#endif // DEBUG
+        
+        int contourOffset = contourCoordsToFirstOffsetMap[c];
+        
+        Point2f normF = aveSlope(contourOffset);
+        
+        lineCoordToNormalMap[c] = normF;
+      }
+      
+      // Calculate all normals
+      
+      vector<vector<Point2f> > allNormalVectors;
+      
+      for ( Coord c : contourCoords ) {
+        Point2f normF;
+        
+#if defined(DEBUG)
+        assert(lineCoordToNormalMap.count(c) > 0);
+#endif // DEBUG
+        
+        if (lineCoordToNormalMap.count(c) == 0) {
+          assert(0);
+        } else {
+          normF = lineCoordToNormalMap[c];
+        }
+        
+        Point2f cF(c.x, c.y);
+        
+        Point2f normOutside = cF + (normF * 1);
+        Point2f normInside = cF + (normF * -1);
+        
+        vector<Point2f> vecPoints;
+        
+        const bool roundToPixels = false;
+        
+        if (roundToPixels) {
+          round(normInside);
+          round(normOutside);
+        }
+        
+        vecPoints.push_back(normInside);
+        vecPoints.push_back(cF);
+        vecPoints.push_back(normOutside);
+        
+        allNormalVectors.push_back(vecPoints);
+      }
+      
+      // Dump the pixels contained in allNormalVectors as a massive image where the pixels
+      // from the original image are copied into rows of output.
+      
+      if ((1)) {
+        binMat = Scalar(0);
+        
+        for ( auto &vec : allNormalVectors ) {
+          for ( Point2f p : vec ) {
+            round(p);
+            Point2i pi = p;
+            binMat.at<uint8_t>(pi.y, pi.x) = 0xFF;
+          }
+        }
+        
+        for ( int32_t offset : contourIterOrder ) {
+          Coord c = contourCoords[offset];
+          binMat.at<uint8_t>(c.y, c.x) = 0x7F;
+        }
+        
+        
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_hull_iter_normal_over" << ".png";
+        string fname = fnameStream.str();
+        
+        writeWroteImg(fname, binMat);
+        cout << "" << endl;
+      }
+      
+      // Emit an image where each vector of pixels is a row
+      
+      if (1) {
+        int maxWidth = 0;
+        
+        for ( auto &vec : allNormalVectors ) {
+          int N = (int) vec.size();
+          if (N > maxWidth) {
+            maxWidth = N;
+          }
+        }
+        
+        Mat colorMat((int)allNormalVectors.size(), maxWidth, CV_8UC3, Scalar(0,0,0));
+        
+        for ( int y = 0; y < colorMat.rows; y++) {
+          auto &vec = allNormalVectors[y];
+          int numCols = (int) vec.size();
+          
+          for ( int x = 0; x < numCols; x++) {
+            Point2f p = vec[x];
+            round(p);
+            Point2i c = p;
+            Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+            colorMat.at<Vec3b>(y, x) = vec;
+          }
+        }
+        
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_hull_iter_vec_pixels" << ".png";
+        string fname = fnameStream.str();
+        
+        writeWroteImg(fname, colorMat);
+        cout << "" << endl;
+      }
+      
+      
+      // This dump image will enlarge the original image multiple times so that vectors
+      // with arrow directions can be seen clearly over the enlarged images.
+      
+      if (1) {
+        CvSize origSize = inputImg.size();
+        CvSize largerSize = origSize;
+        int multBy = 1;
+        
+        Vec3b grayVec(0x7F, 0x7F, 0x7F);
+        
+        while (largerSize.width < 1000 && largerSize.width < 1000) {
+          largerSize.width *= 2;
+          largerSize.height *= 2;
+          multBy *= 2;
+        }
+        
+        Mat smallColorMat(origSize, CV_8UC3, Scalar(0,0,0));
+        
+        Mat colorMat(largerSize, CV_8UC3, Scalar(0,0,0));
+        
+        for ( int32_t offset : contourIterOrder ) {
+          Coord c = contourCoords[offset];
+          smallColorMat.at<Vec3b>(c.y, c.x) = grayVec;
+        }
+        
+        resize(smallColorMat, colorMat, colorMat.size(), 0, 0, INTER_CUBIC);
+        
+        // Render each normal vector as line with arrow at end
+        
+        for ( int y = 0; y < allNormalVectors.size(); y++) {
+          auto &vec = allNormalVectors[y];
+          
+          Point2f p1 = vec[0];
+          Point2f p2 = vec[vec.size() - 1];
+          
+          if ((1)) {
+            // Add a little more to the second vector
+            Point2f delta = p2 - p1;
+            p2 += delta;
+          }
+          
+          p1 *= multBy;
+          p2 *= multBy;
+          
+          round(p1);
+          round(p2);
+          
+          Point2i rp1 = p1;
+          Point2i rp2 = p2;
+          
+          double tipLength = 0.2;
+          
+          arrowedLine(colorMat, rp1, rp2, Scalar(0, 0, 0xFF), 1, 8, 0, tipLength);
+        }
+        
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_hull_vecs_larger" << ".png";
+        string fname = fnameStream.str();
+        
+        writeWroteImg(fname, colorMat);
+        cout << "" << endl;
+      }
+      
     }
-
   }
   
   // Dump skel generated from region bin Mat
@@ -5896,6 +5892,13 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       cout << "" << endl;
     }
   }
+  
+  // Map inside to outside vectors through edge pixels and then generate
+  // edge -> inside vectors that consume available interior pixels.
+  // This iteration inside can be terminated when pixels are found to
+  // be mostly alike or all alike.
+  
+  /*
   
   // The tagsImg mat contains tags, so generate lines around the 360 degrees
   // of rotation and determine which tags the line pixels hit.
@@ -5986,6 +5989,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     cout << "wrote " << fname << endl;
     cout << "";
   }
+   
+  */
   
   // Use the dist mat to determine the "most alike" area inside the region and then
   // start from the common or most alike bound and then move outward as the gradient
