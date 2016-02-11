@@ -5342,7 +5342,7 @@ vector<vector<Point2f> > calcNormalsOnContour(CvSize size,
   Mat binMat;
   
   if (debugDumpImages) {
-    binMat = Mat(size, CV_8UC3);
+    binMat = Mat(size, CV_8UC1);
     binMat = Scalar(0);
     
     for ( auto &vec : allNormalVectors ) {
@@ -5356,7 +5356,6 @@ vector<vector<Point2f> > calcNormalsOnContour(CvSize size,
     for ( Coord c : contourCoords ) {
       binMat.at<uint8_t>(c.y, c.x) = 0x7F;
     }
-    
     
     std::stringstream fnameStream;
     fnameStream << "srm" << "_tag_" << tag << "_hull_iter_normal_over" << ".png";
