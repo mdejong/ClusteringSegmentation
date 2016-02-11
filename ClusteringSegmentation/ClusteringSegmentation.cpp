@@ -5083,7 +5083,10 @@ vector<Coord> genRectangleOutline(int regionWidth, int regionHeight)
 // This method accepts an unsimplified contour of points and returns the approx normal vector for
 // each point on the contour.
 
-vector<vector<Point2f> > calcNormalsOnContour(CvSize size, int32_t tag, const vector<Point2i> &contour)
+vector<vector<Point2f> > calcNormalsOnContour(CvSize size,
+                                              int32_t tag,
+                                              const vector<Point2i> &contour,
+                                              unordered_map<Coord, Point2f> &lineCoordToNormalMap)
 {
   const bool debug = true;
   const bool debugDumpImages = true;
@@ -5129,7 +5132,7 @@ vector<vector<Point2f> > calcNormalsOnContour(CvSize size, int32_t tag, const ve
     }
   }
   
-  unordered_map<Coord, Point2f> lineCoordToNormalMap;
+//  unordered_map<Coord, Point2f> lineCoordToNormalMap;
   
   const vector<Coord> contourCoords = convertPointsToCoords(contour);
   
@@ -5922,7 +5925,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
   
   vector<Point2i> contour = convertCoordsToPoints(contourCoords);
   
-  vector<vector<Point2f> > allNormalVectors = calcNormalsOnContour(tagsImg.size(), tag, contour);
+  unordered_map<Coord, Point2f> lineCoordToNormalMap;
+  vector<vector<Point2f> > allNormalVectors = calcNormalsOnContour(tagsImg.size(), tag, contour, lineCoordToNormalMap);
   
   if (1) {
     int maxWidth = 0;
@@ -6010,7 +6014,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       vector<Point2f> normalVecPoints = allNormalVectors[contouri];
       
       Point2f insideF = normalVecPoints[0];
-      Point2f onP = normalVecPoints[1];
+      Point2f onF = normalVecPoints[1];
       Point2f outsideF = normalVecPoints[2];
       
       round(insideF);
@@ -6050,7 +6054,55 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       cout << "generated " << edgesInsideMap.size() << " entries for edge to center vectors" << endl;
     }
     
-    // Generate vectors going through the edge point and outward limit length to N pixels
+    // Generate vectors going through the edge point, this vector starts on the first coordinate
+    // outside the contour shape.
+   
+    for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+      Coord c = contourCoords[contouri];
+      vector<Point2f> normalVecPoints = allNormalVectors[contouri];
+      
+      Point2f insideF = normalVecPoints[0];
+      Point2f onF = normalVecPoints[1];
+      Point2f outsideF = normalVecPoints[2];
+      
+      round(insideF);
+      round(outsideF);
+      
+      // Determine point 5 pixels away from outside point based on normal vector
+      
+      Point2f normVec = lineCoordToNormalMap[c];
+      Point2f wayOutsideF = onF + (5 * normVec);
+      
+      vector<Point2i> generatedPoints = generatePointsOnLine(outsideF, wayOutsideF);
+      
+      edgesOutsideMap[c] = convertPointsToCoords(generatedPoints);
+      
+      if (debugDumpImages) {
+        Mat renderMat(tagsImg.size(), CV_8UC1, Scalar(0));
+        
+        for ( Coord c : regionCoords ) {
+          renderMat.at<uint8_t>(c.y, c.x) = 0x7F / 2;
+        }
+        
+        double tipLength = 0.2;
+        arrowedLine(renderMat, outsideF, wayOutsideF, Scalar(0x7F), 2, 8, 0, tipLength);
+        
+        for ( Coord c : edgesOutsideMap[c] ) {
+          renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
+        }
+        
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_hull_line_outside_step" << contouri << ".png";
+        string fname = fnameStream.str();
+        
+        writeWroteImg(fname, renderMat);
+        cout << "";
+      }
+    }
+    
+    if (debug) {
+      cout << "generated " << edgesOutsideMap.size() << " entries for edge to outside vectors" << endl;
+    }
     
   }
 
