@@ -93,7 +93,7 @@ void for_each_byte (Mat & binMat1, const Mat & binMat2, F f) noexcept
   assert(binMat1.channels() == 1);
   assert(binMat2.channels() == 1);
   assert(binMat1.isContinuous() == binMat2.isContinuous());
-  std::function<void(uint8_t*, const uint8_t*)> funcPtr = f;
+  std::function<void(uint8_t* bytePtr1, const uint8_t* bytePtr2)> funcPtr = f;
 #endif // DEBUG
   
   int numRows = binMat1.rows;
@@ -232,6 +232,47 @@ void for_each_bgr_const_byte (Mat & mat, const Mat & binMat, F f) noexcept
       rowPtr[0] = result[0]; // B
       rowPtr[1] = result[1]; // G
       rowPtr[2] = result[2]; // R
+    }
+  }
+  
+  return;
+}
+
+// Double iterator that loops over a read only bgr Mat and a
+// read/write byte Mat. Since the byte Mat can be written
+// it is passed as a uint8_t* to the function.
+
+// F = std::function<void(uint8_t* bytePtr, uint8_t B, uint8_t G, uint8_t R)>
+
+template <typename F>
+void for_each_byte_const_bgr (Mat & binMat, const Mat & mat, F f) noexcept
+{
+#if defined(DEBUG)
+  assert(mat.size() == binMat.size());
+  assert(mat.channels() == 3);
+  assert(binMat.channels() == 1);
+  assert(mat.isContinuous() == binMat.isContinuous());
+  std::function<void(uint8_t* bytePtr, uint8_t B, uint8_t G, uint8_t R)> funcPtr = f;
+#endif // DEBUG
+  
+  int numRows = mat.rows;
+  int numCols = mat.cols;
+  
+  if (mat.isContinuous()) {
+    numCols *= numRows;
+    numRows = 1;
+  }
+  
+  for (int y = 0; y < numRows; y++) {
+    uint8_t *binRowPtr = binMat.ptr<uint8_t>(y);
+    const uint8_t *rowPtr2 = mat.ptr<uint8_t>(y);
+    const uint8_t * const rowPtr2Max = rowPtr2 + (3 * numCols);
+    
+    for ( ; rowPtr2 < rowPtr2Max; binRowPtr++, rowPtr2 += 3) {
+      uint8_t B = rowPtr2[0];
+      uint8_t G = rowPtr2[1];
+      uint8_t R = rowPtr2[2];
+      f(binRowPtr, B, G, R);
     }
   }
   

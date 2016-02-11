@@ -1269,7 +1269,7 @@ captureRegion(SuperpixelImage &spImage,
   // but the contracted or expanded bounds are not known. Scan clockwise to determine likely bounds based
   // on the initial region shape.
   
-  clockwiseScanForShapeBounds(inputImg, srmTags, tag, srmRegionCoords, mask);
+//  clockwiseScanForShapeBounds(inputImg, srmTags, tag, srmRegionCoords, mask);
   
   /*
    
@@ -1299,7 +1299,7 @@ captureRegion(SuperpixelImage &spImage,
 
    */
   
-  return;
+//  return;
   
   vector<Coord> outCoords;
   
@@ -7252,14 +7252,14 @@ bool srmMultiSegment(const Mat & inputImg, Mat & tagsMat) {
   
   Mat srmTags1 = generateSRM(inputImg, Q);
   
-  Mat srmTags2 = generateSRM(inputImg, Qmore);
+//  Mat srmTags2 = generateSRM(inputImg, Qmore);
   
   // Collect the more precise segmentations into groups
   
   // Alloc object on stack
   SuperpixelImage spImage2;
   
-  bool worked = SuperpixelImage::parse(srmTags2, spImage2);
+  bool worked = SuperpixelImage::parse(srmTags1, spImage2);
   
   if (!worked) {
     return false;
@@ -7269,9 +7269,10 @@ bool srmMultiSegment(const Mat & inputImg, Mat & tagsMat) {
     // Bypass second stage SRM
     
     tagsMat = srmTags1;
-    
-    return true;
+
   }
+  
+  if (0) {
   
   // Scan each grouping to determine when pixels identified as being in
   // the same group in srmTags1 are not included in the group in srmTags2.
@@ -7387,7 +7388,7 @@ bool srmMultiSegment(const Mat & inputImg, Mat & tagsMat) {
     allMergeCoordsVec.push_back(coordsInRegion);
 
   } // foreach tag in sortedSuperpixelTags
-  
+    
 #if defined(DEBUG)
   int numCoordsExpected = inputImg.rows * inputImg.cols;
   int numCoordsTotal = 0;
@@ -7415,6 +7416,8 @@ bool srmMultiSegment(const Mat & inputImg, Mat & tagsMat) {
 
     mergeUID += 1;
   }
+  
+  } // if 0
   
 #if defined(DEBUG)
   // Verify that each tags value is larger than zero

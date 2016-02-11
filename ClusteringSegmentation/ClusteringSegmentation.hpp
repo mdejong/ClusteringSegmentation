@@ -270,4 +270,5 @@ public:
   
 };
 
+
 #endif /* ClusteringSegmentation_hpp */

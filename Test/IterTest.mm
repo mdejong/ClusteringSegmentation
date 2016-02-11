@@ -341,6 +341,72 @@
   return;
 }
 
+// This test calls the for_each_byte_const_bgr iterator with a
+// non-constant byte Mat and a constant pixel Mat. The byte
+// value is written with the result of inspecting pixel (B G R).
+
+- (void) testNonConstBinIteratorWithConstBGR
+{
+  NSArray *pixelsArr = @[
+                         @(0x00030201), @(0x00060504),
+                         @(0x00090807), @(0x000C0B0A),
+                         ];
+  
+  Mat tagsImg(2, 2, CV_MAKETYPE(CV_8U, 3));
+  
+  NSArray *binPixelsArr = @[
+                            @(0), @(0),
+                            @(0), @(0),
+                            ];
+  
+  Mat binImg(2, 2, CV_MAKETYPE(CV_8U, 1));
+  
+  [self.class fillImageWithPixels:pixelsArr img:tagsImg];
+  [self.class fillImageWithBytes:binPixelsArr img:binImg];
+  
+  int counter = 1;
+  
+  for_each_byte_const_bgr(binImg, tagsImg, [&counter](uint8_t *maskBPtr, uint8_t B, uint8_t G, uint8_t R) {
+    if (B == 0 && G == 0 && R == 0) {
+      assert(0);
+    }
+    if (B >= G) {
+      assert(0);
+    }
+    if (G >= R) {
+      assert(0);
+    }
+    
+    *maskBPtr = (uint8_t) (counter++);
+  });
+
+  std::stringstream outStream;
+  
+  for_each_bgr_const_byte(tagsImg, binImg, [&outStream](uint8_t B, uint8_t G, uint8_t R, uint8_t bVal)->Vec3b {
+    char buffer[1000];
+    snprintf(buffer, sizeof(buffer), "%3d %3d %3d %3d\n", B, G, R, bVal);
+    outStream << buffer;
+    snprintf(buffer, sizeof(buffer), "0x00%02X%02X%02X\n", R, G, B);
+    outStream << buffer;
+    return Vec3b(B, G, R);
+  });
+  
+  string result = outStream.str();
+  
+  string expectedOutput =
+  "  1   2   3   1\n"
+  "0x00030201\n"
+  "  4   5   6   2\n"
+  "0x00060504\n"
+  "  7   8   9   3\n"
+  "0x00090807\n"
+  " 10  11  12   4\n"
+  "0x000C0B0A\n";
+  
+  XCTAssert(result == expectedOutput, @"output");
+  
+  return;
+}
 
 // Number of Mat iteration loops inside the main test method
 

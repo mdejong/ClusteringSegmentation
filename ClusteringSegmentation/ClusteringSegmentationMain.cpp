@@ -36,6 +36,8 @@
 
 #include "Util.h"
 
+#include "RegionRemerger.hpp"
+
 #include <stack>
 
 using namespace cv;
@@ -255,28 +257,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
   // Scan all superpixels and implement region merge and split based on the input pixels
   
   {
-    
-    Mat maskMat(inputImg.rows, inputImg.cols, CV_8UC1);
-    Mat mergeMat(inputImg.rows, inputImg.cols, CV_8UC3);
-    
-    mergeMat = Scalar(0, 0, 0);
-    
-    // Calculate adler before rescanning and attempting region merges
-    // in case the identical regions get regenerated and there is no
-    // reason to reparse.
-    
-    uint32_t tagsAdlerBeforeMerge = 0;
-    
-    for ( int y = 0; y < srmTags.rows; y++ ) {
-      for ( int x = 0; x < srmTags.cols; x++ ) {
-        Vec3b vec = srmTags.at<Vec3b>(y, x);
-        uint32_t pixel = Vec3BToUID(vec);
-        tagsAdlerBeforeMerge = my_adler32(tagsAdlerBeforeMerge, (unsigned char const *)&pixel, sizeof(uint32_t), 0);
-      }
-    }
-    
-    // Merge id to use next
-    int32_t mergedTag = 1;
+    RegionRemerger remerger(inputImg);
     
     // Quant the entire image into small 4x4 blocks and then generate histograms
     // for each block. The histogram data can be scanned significantly faster
@@ -294,24 +275,10 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         cout << "process tag " << tag << " containing " << spPtr->coords.size() << endl;
       }
       
-      // Copy current merge mask state into mask
-      
-      for ( int y = 0; y < mergeMat.rows; y++ ) {
-        for ( int x = 0; x < mergeMat.cols; x++ ) {
-          Vec3b vec = mergeMat.at<Vec3b>(y, x);
-          uint32_t pixel = Vec3BToUID(vec);
-          uint8_t bval;
-          if (pixel == 0x0) {
-            bval = 0;
-          } else {
-            bval = 0xFF;
-          }
-          maskMat.at<uint8_t>(y, x) = bval;
-        }
-      }
+      remerger.mergeMatToMask();
       
       bool maskWritten =
-      captureRegionMask(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, maskMat, blockBasedQuantMat);
+      captureRegionMask(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, remerger.maskMat, blockBasedQuantMat);
       
       if (maskWritten)
       {
@@ -319,90 +286,23 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
         fnameStream << "srm" << "_tag_" << tag << "_region_mask" << ".png";
         string fname = fnameStream.str();
         
-        imwrite(fname, maskMat);
+        imwrite(fname, remerger.maskMat);
         cout << "wrote " << fname << endl;
         cout << "";
       }
       
       if (maskWritten) {
-        vector<Point> locations;
-        findNonZero(maskMat, locations);
-        
-        for ( Point p : locations ) {
-          int x = p.x;
-          int y = p.y;
-          
-          Coord c(x, y);
-          
-          Vec3b vec;
-          
-          vec = mergeMat.at<Vec3b>(y, x);
-          
-          if (vec[0] == 0x0 && vec[1] == 0x0 && vec[2] == 0x0) {
-            // This pixel has not been seen before, define new merge tag value
-            
-            vec = srmTags.at<Vec3b>(y, x);
-            
-#if defined(DEBUG)
-            // Find spImage tag associated with this (x,y) coordinate
-            uint32_t renderedTag = Vec3BToUID(vec);
-            assert(renderedTag != 0);
-            Superpixel *srcSpPtr = spImage.getSuperpixelPtr(renderedTag);
-            if (srcSpPtr == NULL) {
-              printf("coord (%5d, %5d) = 0x%08X aka %d\n", x, y, renderedTag, renderedTag);
-            }
-            assert(srcSpPtr);
-#endif // DEBUG
-            
-            if (debug && false) {
-              printf("set merge mat (%5d, %5d) = 0x%08X aka %d\n", x, y, mergedTag, mergedTag);
-            }
-            
-            Vec3b mergedVec = Vec3BToUID(mergedTag); // FIXME: do outside loop
-            mergeMat.at<Vec3b>(y, x) = mergedVec;
-          } else {
-            // A region must not attempt to include pixels from a previously merged region ever!
-            
-            uint32_t alreadySetTag = Vec3BToUID(vec);
-            
-            printf("coord (%5d, %5d) = attempted remerge when tag already set to 0x%08X aka %d\n", x, y, alreadySetTag, alreadySetTag);
-            assert(0);
-            
-            /*
-            // Attempting to merge already merged (x,y) location
-            uint32_t mergedTag = Vec3BToUID(vec);
-            printf("coord (%5d, %5d) = 0x%08X aka %d\n", x, y, mergedTag, mergedTag);
-            vec = srmTags.at<Vec3b>(y, x);
-            uint32_t toBeMergedTag = Vec3BToUID(vec);
-            
-            const bool allowReplaceWithSameTag = false;
-            
-            if (allowReplaceWithSameTag) {
-              if (mergedTag != toBeMergedTag) {
-                printf("coord (%5d, %5d) = attempted merge 0x%08X aka %d\n", x, y, toBeMergedTag, toBeMergedTag);
-                assert(0);
-              }
-            } else {
-              printf("coord (%5d, %5d) = attempted merge 0x%08X aka %d\n", x, y, toBeMergedTag, toBeMergedTag);
-              assert(0);
-            }
-            */
-          }
-        } // foreach locations
-        
-        // Update merge tag after setting all pixel values
-        mergedTag += 1;
+        remerger.mergeFromMask();
         
         if (debugWriteIntermediateFiles) {
           std::stringstream fnameStream;
           fnameStream << "srm" << "_tag_" << tag << "_merge_region" << ".png";
           string fname = fnameStream.str();
           
-          imwrite(fname, mergeMat);
+          imwrite(fname, remerger.mergeMat);
           cout << "wrote " << fname << endl;
           cout << "" << endl;
         }
-        
       } // if maskWritten
       
     } // foreach tag in sorted superpixels
@@ -410,46 +310,19 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     // Gather any remaining tags that have not been merged
     // and add these as new sets of pixels.
     
-    unordered_map<uint32_t, vector<Coord>> mergeTagsToCoords;
-    
-    for ( int y = 0; y < mergeMat.rows; y++ ) {
-      for ( int x = 0; x < mergeMat.cols; x++ ) {
-        Vec3b vec = mergeMat.at<Vec3b>(y, x);
-        
-        if (vec[0] == 0x0 && vec[1] == 0x0 && vec[2] == 0x0) {
-          vec = srmTags.at<Vec3b>(y, x);
-          uint32_t srmTag = Vec3BToUID(vec);
-          
-          vector<Coord> &vecRef = mergeTagsToCoords[srmTag];
-          vecRef.push_back(Coord(x, y));
-        }
-      }
-    }
-    
-    for ( auto & pair : mergeTagsToCoords ) {
-      vector<Coord> &vecRef = pair.second;
-      
-      for ( Coord c : vecRef ) {
-        Vec3b mergedVec = Vec3BToUID(mergedTag); // FIXME: do outside loop
-        mergeMat.at<Vec3b>(c.y, c.x) = mergedVec;
-        
-        if ((debug) && true) {
-          fprintf(stdout, "merge unmerged srm tag at (%5d, %5d) = 0X%08X\n", c.x, c.y, mergedTag);
-        }
-      }
-      
-      mergedTag += 1;
-    }
+    remerger.mergeLeftovers(srmTags);
     
     if (debugWriteIntermediateFiles) {
       std::stringstream fnameStream;
       fnameStream << "srm_merged_all_regions" << ".png";
       string fname = fnameStream.str();
       
-      imwrite(fname, mergeMat);
+      imwrite(fname, remerger.mergeMat);
       cout << "wrote " << fname << endl;
       cout << "" << endl;
     }
+    
+    /*
     
     uint32_t tagsAdlerAfterMerge = 0;
     
@@ -478,6 +351,16 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     }
     
     // FIXME: If there have been no changes, no reason to reparse ? (check an adler32)
+    
+    */
+    
+    spImage = SuperpixelImage();
+    
+    worked = SuperpixelImage::parse(remerger.mergeMat, spImage);
+    
+    if (!worked) {
+      return false;
+    }
     
     // mergeMat now contains tags after a split and merge operation
     

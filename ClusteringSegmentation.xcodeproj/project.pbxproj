@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		3C3106D71C4C4C6700F1A62D /* ClusteringSegmentation.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3C3106D51C4C4C6700F1A62D /* ClusteringSegmentation.cpp */; };
 		3C3106D81C4C4C6700F1A62D /* ClusteringSegmentation.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3C3106D51C4C4C6700F1A62D /* ClusteringSegmentation.cpp */; };
+		3C7A64081C6C7D280097CA92 /* RegionRemerger.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3C7A64061C6C7D280097CA92 /* RegionRemerger.cpp */; };
+		3C7A64091C6C7D280097CA92 /* RegionRemerger.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3C7A64061C6C7D280097CA92 /* RegionRemerger.cpp */; };
 		3CCC52281C6B1F3F0005EC86 /* OpenCVHull.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CCC52261C6B1F3F0005EC86 /* OpenCVHull.cpp */; };
 		3CCC52291C6B1F3F0005EC86 /* OpenCVHull.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CCC52261C6B1F3F0005EC86 /* OpenCVHull.cpp */; };
 		3CCD1AE01C45B51D00DBC550 /* SuperpixelMergeManager.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CCD1ADE1C45B51D00DBC550 /* SuperpixelMergeManager.cpp */; };
@@ -170,6 +172,8 @@
 /* Begin PBXFileReference section */
 		3C3106D51C4C4C6700F1A62D /* ClusteringSegmentation.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ClusteringSegmentation.cpp; sourceTree = "<group>"; };
 		3C3106D61C4C4C6700F1A62D /* ClusteringSegmentation.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = ClusteringSegmentation.hpp; sourceTree = "<group>"; };
+		3C7A64061C6C7D280097CA92 /* RegionRemerger.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = RegionRemerger.cpp; sourceTree = "<group>"; };
+		3C7A64071C6C7D280097CA92 /* RegionRemerger.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = RegionRemerger.hpp; sourceTree = "<group>"; };
 		3CCC52261C6B1F3F0005EC86 /* OpenCVHull.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = OpenCVHull.cpp; sourceTree = "<group>"; };
 		3CCC52271C6B1F3F0005EC86 /* OpenCVHull.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = OpenCVHull.hpp; sourceTree = "<group>"; };
 		3CCD1ADE1C45B51D00DBC550 /* SuperpixelMergeManager.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SuperpixelMergeManager.cpp; sourceTree = "<group>"; };
@@ -798,6 +802,8 @@
 				3CCC52261C6B1F3F0005EC86 /* OpenCVHull.cpp */,
 				3CD524CF1C3481E2005AF4A7 /* Coord.h */,
 				3CD524CE1C3481E2005AF4A7 /* Coord.cpp */,
+				3C7A64071C6C7D280097CA92 /* RegionRemerger.hpp */,
+				3C7A64061C6C7D280097CA92 /* RegionRemerger.cpp */,
 				3CD524D41C3481E2005AF4A7 /* Superpixel.h */,
 				3CD524D31C3481E2005AF4A7 /* Superpixel.cpp */,
 				3CD524D61C3481E2005AF4A7 /* SuperpixelEdge.h */,
@@ -1799,6 +1805,7 @@
 				3CEB38FD1C3F489E0071358C /* DivQuantMapColors.cpp in Sources */,
 				3CD524E01C3481E2005AF4A7 /* OpenCVUtil.cpp in Sources */,
 				3CCC52281C6B1F3F0005EC86 /* OpenCVHull.cpp in Sources */,
+				3C7A64081C6C7D280097CA92 /* RegionRemerger.cpp in Sources */,
 				3CD524E31C3481E2005AF4A7 /* SuperpixelEdge.cpp in Sources */,
 				3CEB39011C3F489E0071358C /* DivQuantUni.cpp in Sources */,
 				3CEB38F01C3F32E00071358C /* SuperpixelEdgeFuncs.cpp in Sources */,
@@ -1813,6 +1820,7 @@
 				3CEB39001C3F489E0071358C /* DivQuantMisc.cpp in Sources */,
 				3CEB38FE1C3F489E0071358C /* DivQuantMapColors.cpp in Sources */,
 				3CD8B7B41C4F54B700DB325F /* ContainmentTest.mm in Sources */,
+				3C7A64091C6C7D280097CA92 /* RegionRemerger.cpp in Sources */,
 				3CEB39121C40FCCD0071358C /* unionfind.c in Sources */,
 				3CDC334D1C600E52006A4242 /* IterTest.mm in Sources */,
 				3CD525061C35EAC0005AF4A7 /* SuperpixelImage.cpp in Sources */,
