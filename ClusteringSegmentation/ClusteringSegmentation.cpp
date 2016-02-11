@@ -80,11 +80,11 @@ getEdgesInRegion(SuperpixelImage &spImage,
                  const vector<Coord> &coords);
 
 void
-clockwiseScanForShapeBounds(
-                            const Mat & inputImg,
+clockwiseScanForShapeBounds(const Mat & inputImg,
                             const Mat & tagsImg,
                             int32_t tag,
-                            const vector<Coord> &regionCoords);
+                            const vector<Coord> &regionCoords,
+                            Mat & mask);
 
 // Data and method for scanning ranges of tags around a shape.
 // The total number of divisions (start, end) depends on the
@@ -1269,7 +1269,37 @@ captureRegion(SuperpixelImage &spImage,
   // but the contracted or expanded bounds are not known. Scan clockwise to determine likely bounds based
   // on the initial region shape.
   
-  clockwiseScanForShapeBounds(inputImg, srmTags, tag, srmRegionCoords);
+  clockwiseScanForShapeBounds(inputImg, srmTags, tag, srmRegionCoords, mask);
+  
+  /*
+   
+   const bool debugOnOff = false;
+   
+   for ( int i = 0; i < numPixels; i++ ) {
+   Coord c = combinedCoords[i];
+   uint32_t quantPixel = outPixels[i];
+   
+   #if defined(DEBUG)
+   assert(pixelToInside.count(quantPixel));
+   #endif // DEBUG
+   bool isInside = pixelToInside[quantPixel].isInside;
+   
+   if (isInside) {
+   mask.at<uint8_t>(c.y, c.x) = 0xFF;
+   
+   if (debug && debugOnOff) {
+   printf("pixel 0x%08X at (%5d,%5d) is marked on (inside)\n", quantPixel, c.x, c.y);
+   }
+   } else {
+   if (debug && debugOnOff) {
+   printf("pixel 0x%08X at (%5d,%5d) is marked off (outside)\n", quantPixel, c.x, c.y);
+   }
+   }
+   }
+
+   */
+  
+  return;
   
   vector<Coord> outCoords;
   
@@ -5056,7 +5086,8 @@ void
 clockwiseScanForShapeBounds(const Mat & inputImg,
                             const Mat & tagsImg,
                             int32_t tag,
-                            const vector<Coord> &regionCoords)
+                            const vector<Coord> &regionCoords,
+                            Mat & mask)
 {
   const bool debug = true;
   const bool debugDumpImages = true;
@@ -5472,7 +5503,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       // Dump all normal vectors as bin Mat, note that this is a lot of images
       
       if ((0)) {
-        
         for ( int32_t offset : contourIterOrder ) {
           binMat = Scalar(0);
           
@@ -5499,7 +5529,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           writeWroteImg(fname, binMat);
           cout << "" << endl;
         }
-        
       }
       
       Rect roi(0,0,inputImg.size().width, inputImg.size().height);
@@ -5703,7 +5732,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         lineCoordToNormalMap[c] = normF;
       }
       
-      // Calculate all normals
+      // Calculate normal vector that corresponds to each
+      // original contour coordinate.
       
       vector<vector<Point2f> > allNormalVectors;
       
@@ -5744,7 +5774,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       // Dump the pixels contained in allNormalVectors as a massive image where the pixels
       // from the original image are copied into rows of output.
       
-      if ((1)) {
+      if (debugDumpImages) {
         binMat = Scalar(0);
         
         for ( auto &vec : allNormalVectors ) {
@@ -5771,7 +5801,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       
       // Emit an image where each vector of pixels is a row
       
-      if (1) {
+      if (debugDumpImages) {
         int maxWidth = 0;
         
         for ( auto &vec : allNormalVectors ) {
@@ -5804,11 +5834,10 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         cout << "" << endl;
       }
       
-      
       // This dump image will enlarge the original image multiple times so that vectors
       // with arrow directions can be seen clearly over the enlarged images.
       
-      if (1) {
+      if (debugDumpImages) {
         CvSize origSize = inputImg.size();
         CvSize largerSize = origSize;
         int multBy = 1;
@@ -5897,6 +5926,79 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
   // edge -> inside vectors that consume available interior pixels.
   // This iteration inside can be terminated when pixels are found to
   // be mostly alike or all alike.
+  
+  // Scan from the region edge to the center of the region area.
+  // Note that in the case where pixels inside the region are off
+  // in the mask that means the pixels are not available for an
+  // inward scan.
+  
+  /*
+  
+  if (1) {
+    int maxWidth = 0;
+    
+    for ( auto &vec : allNormalVectors ) {
+      int N = (int) vec.size();
+      if (N > maxWidth) {
+        maxWidth = N;
+      }
+    }
+    
+    Mat colorMat((int)allNormalVectors.size(), maxWidth, CV_8UC3, Scalar(0,0,0));
+    
+    for ( int y = 0; y < colorMat.rows; y++) {
+      auto &vec = allNormalVectors[y];
+      int numCols = (int) vec.size();
+      
+      for ( int x = 0; x < numCols; x++) {
+        Point2f p = vec[x];
+        round(p);
+        Point2i c = p;
+        Vec3b vec = inputImg.at<Vec3b>(c.y, c.x);
+        colorMat.at<Vec3b>(y, x) = vec;
+      }
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_hull_iter_vec_pixels" << ".png";
+    string fname = fnameStream.str();
+    
+    writeWroteImg(fname, colorMat);
+    cout << "" << endl;
+  }
+  
+   */
+  
+  // Mark mask pixels as on or off depending on what the vectors indicate.
+  
+  /*
+  
+  const bool debugOnOff = false;
+  
+  for ( int i = 0; i < numPixels; i++ ) {
+    Coord c = combinedCoords[i];
+    uint32_t quantPixel = outPixels[i];
+    
+#if defined(DEBUG)
+    assert(pixelToInside.count(quantPixel));
+#endif // DEBUG
+    bool isInside = pixelToInside[quantPixel].isInside;
+    
+    if (isInside) {
+      mask.at<uint8_t>(c.y, c.x) = 0xFF;
+      
+      if (debug && debugOnOff) {
+        printf("pixel 0x%08X at (%5d,%5d) is marked on (inside)\n", quantPixel, c.x, c.y);
+      }
+    } else {
+      if (debug && debugOnOff) {
+        printf("pixel 0x%08X at (%5d,%5d) is marked off (outside)\n", quantPixel, c.x, c.y);
+      }
+    }
+  }
+   
+  */
+  
   
   /*
   
