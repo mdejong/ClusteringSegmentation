@@ -1127,6 +1127,86 @@ vector<uint32_t> generateVector(uint32_t fromPixel, uint32_t toPixel)
   return pixelsVec;
 }
 
+// Given a 2D line starting point and ending point, generate a vector of ordered coordinates
+// on the line.
+
+vector<Point2i> generatePointsOnLine(Point2i startP, Point2i endP)
+{
+  const bool debug = true;
+  
+  Point2f deltaP = endP - startP;
+  Point2f deltaUnit = deltaP;
+  
+  float scale = makeUnitVector(deltaUnit);
+
+  if (debug) {
+    printf("generatePointsOnLine from (%d,%d) -> (%d %d)\n", startP.x, startP.y, endP.x, endP.y);
+    printf("deltaP (%0.3f,%0.3f) -> as unit vector (%0.3f,%0.3f) with scale %0.3f\n", deltaP.x, deltaP.y, deltaUnit.x, deltaUnit.y, scale);
+  }
+  
+  vector<Point2i> outPointsVec;
+  
+  bool done = false;
+  
+  int numSteps = round(scale) + 2;
+  
+  Point2f startF = startP;
+  
+  for ( int i = 0; !done && i < numSteps; i++ ) {
+    Point2f pointVec = startF + (deltaUnit * i);
+    
+    if (debug && 1) {
+      cout << "at step " << i << " scaled vec " << (deltaUnit * i) << endl;
+      cout << "at step " << i << " point vec " << pointVec << endl;
+    }
+    
+    round(pointVec);
+    
+    if (debug) {
+      cout << "at step " << i << " rounded point vec " << pointVec << endl;
+    }
+    
+    Point2i pointVecP = pointVec;
+    
+    if (pointVecP == endP) {
+      // Reached the end point, stop processing now
+      done = true;
+    } else if (outPointsVec.size() > 0) {
+      Point2i lastP = outPointsVec[outPointsVec.size() - 1];
+      if (pointVecP == lastP) {
+        // In this case, the delta is so small that the int value did not change, skip
+        continue;
+      }
+    }
+    
+    outPointsVec.push_back(pointVecP);
+  }
+  
+  // Verify that first point matches insidePixel and that last point matches outsidePixel
+  
+#if defined(DEBUG)
+  {
+    Point2i p0 = outPointsVec[0];
+    Point2i pLast = outPointsVec[outPointsVec.size() - 1];
+    
+    assert(p0 == startP);
+    assert(pLast == endP);
+  }
+#endif // DEBUG
+  
+  if (debug) {
+    printf("generateVector returning %d coords\n", (int)outPointsVec.size());
+    
+    int i = 0;
+    for ( Point2i p : outPointsVec ) {
+      printf("points[%3d] = (%3d,%3d)\n", i, p.x, p.y);
+      i += 1;
+    }
+  }
+  
+  return outPointsVec;
+}
+
 // Flood fill based on region of zero values. Input comes from inBinMask and the results
 // are written to outBinMask. Black pixels are filled and white pixels are not filled.
 

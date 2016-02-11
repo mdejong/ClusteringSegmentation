@@ -196,6 +196,11 @@ uint32_t centerOfMassPixels(const vector<uint32_t> & pixels);
 
 vector<uint32_t> generateVector(uint32_t fromPixel, uint32_t toPixel);
 
+// Given a 2D line starting point and ending point, generate a vector of ordered coordinates
+// on the line.
+
+vector<Point2i> generatePointsOnLine(Point2i startP, Point2i endP);
+
 // Flood fill based on region of zero values. Input comes from inBinMask and the results
 // are written to outBinMask. Black pixels are filled and white pixels are not filled.
 

@@ -5957,6 +5957,135 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     cout << "" << endl;
   }
   
+  // Calculate region center
+  
+  Point2i regionCenterP;
+  
+  {
+    Mat renderMat(tagsImg.size(), CV_8UC1, Scalar(0));
+    
+    for ( Coord c : regionCoords ) {
+      renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
+    }
+  
+    if (debugDumpImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_contour_center_detect" << ".png";
+      string fname = fnameStream.str();
+      
+      writeWroteImg(fname, renderMat);
+      cout << "" << endl;
+    }
+  
+    Mat outDistMat;
+    Coord regionCenter = findRegionCenter(renderMat, Rect2d(0,0,tagsImg.cols,tagsImg.rows), outDistMat, tag);
+
+    // FIXME: if roi is used, account for origin
+    
+    regionCenterP = coordToPoint(regionCenter);
+  
+    if (debugDumpImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_region_center_dist" << ".png";
+      string fname = fnameStream.str();
+      
+      writeWroteImg(fname, outDistMat);
+      cout << "";
+    }
+  }
+  
+  // From the normal vector, determine the first "inside" pixel and then follow the vector from
+  // the inside pixel to the center of the region shape. Note the case where the interior
+  // pixels inside the shape are marked as consumed already, in that case the iteration has
+  // to stop once a consumed pixel is found.
+  
+  unordered_map<Coord, vector<Coord>> edgesInsideMap;
+  unordered_map<Coord, vector<Coord>> edgesOutsideMap;
+  
+  {
+    int maxContouri = (int) contourCoords.size();
+    
+    for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+      Coord c = contourCoords[contouri];
+      vector<Point2f> normalVecPoints = allNormalVectors[contouri];
+      
+      Point2f insideF = normalVecPoints[0];
+      Point2f onP = normalVecPoints[1];
+      Point2f outsideF = normalVecPoints[2];
+      
+      round(insideF);
+      round(outsideF);
+      
+      vector<Point2i> generatedPoints = generatePointsOnLine(insideF, regionCenterP);
+      
+      edgesInsideMap[c] = convertPointsToCoords(generatedPoints);
+      
+      if (debugDumpImages) {
+        Mat renderMat(tagsImg.size(), CV_8UC1, Scalar(0));
+        
+        for ( Coord c : regionCoords ) {
+          renderMat.at<uint8_t>(c.y, c.x) = 0x7F / 2;
+        }
+        
+        double tipLength = 0.2;
+        arrowedLine(renderMat, insideF, regionCenterP, Scalar(0x7F), 2, 8, 0, tipLength);
+        
+        for ( Coord c : edgesInsideMap[c] ) {
+          renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
+        }
+        
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_hull_line_inside_to_center_step" << contouri << ".png";
+        string fname = fnameStream.str();
+        
+        writeWroteImg(fname, renderMat);
+        cout << "";
+      }
+    }
+    
+    // FIXME: Second round of processing iterates from the outside to the center again but if a coordinate
+    // if found to not be in the mask then terminate the inward iteration at that point.
+    
+    if (debug) {
+      cout << "generated " << edgesInsideMap.size() << " entries for edge to center vectors" << endl;
+    }
+    
+    // Generate vectors going through the edge point and outward limit length to N pixels
+    
+  }
+
+  /*
+  
+  for ( Coord c : contourCoords ) {
+    Point2f &normalVec = allNormalVectors[y];
+    
+    binMat = Mat(size, CV_8UC3);
+    binMat = Scalar(0);
+    
+    for ( auto &vec : allNormalVectors ) {
+      for ( Point2f p : vec ) {
+        round(p);
+        Point2i pi = p;
+        binMat.at<uint8_t>(pi.y, pi.x) = 0xFF;
+      }
+    }
+    
+    for ( Coord c : contourCoords ) {
+      binMat.at<uint8_t>(c.y, c.x) = 0x7F;
+    }
+    
+    
+    std::stringstream fnameStream;
+    fnameStream << "srm" << "_tag_" << tag << "_hull_iter_normal_over" << ".png";
+    string fname = fnameStream.str();
+    
+    writeWroteImg(fname, binMat);
+    cout << "" << endl;
+    
+    MOMO
+  }
+  */
+  
   // Mark mask pixels as on or off depending on what the vectors indicate.
   
   /*
@@ -6468,8 +6597,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
   } // end if more than 1 segment block
    
    */
-  
-  if (debug) {
+
+if (debug) {
     cout << "return clockwiseScanForShapeBounds " << tag << " with N = " << 0 << " ranges" << endl;
   }
   
