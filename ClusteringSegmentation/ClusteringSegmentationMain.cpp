@@ -269,6 +269,8 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
     
     // Loop over superpixels starting at the most contained and working outwards
     
+    bool maskWritten;
+    
     for ( int32_t tag : srmInsideOutOrder ) {
       if (debug) {
         Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
@@ -277,8 +279,7 @@ bool clusteringCombine(Mat &inputImg, Mat &resultImg)
       
       remerger.mergeMatToMask();
       
-      bool maskWritten =
-      captureRegionMask(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, remerger.maskMat, blockBasedQuantMat);
+      maskWritten = captureRegionMask(spImage, inputImg, srmTags, tag, blockWidth, blockHeight, superpixelDim, remerger.maskMat, blockBasedQuantMat);
       
       if (maskWritten)
       {

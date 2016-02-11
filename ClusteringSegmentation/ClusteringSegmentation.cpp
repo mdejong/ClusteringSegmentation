@@ -28,6 +28,8 @@
 
 #include "peakdetect.h"
 
+#include "RegionRemerger.hpp"
+
 #include <stack>
 
 using namespace cv;
@@ -7257,9 +7259,9 @@ bool srmMultiSegment(const Mat & inputImg, Mat & tagsMat) {
   // Collect the more precise segmentations into groups
   
   // Alloc object on stack
-  SuperpixelImage spImage2;
+  SuperpixelImage spImage;
   
-  bool worked = SuperpixelImage::parse(srmTags1, spImage2);
+  bool worked = SuperpixelImage::parse(srmTags1, spImage);
   
   if (!worked) {
     return false;
@@ -7272,12 +7274,105 @@ bool srmMultiSegment(const Mat & inputImg, Mat & tagsMat) {
 
   }
   
+  // Check input coming from the SRM process for the difficult to deal with condition
+  // where two regions that are not 8 connected are assigned the same tag. This
+  // makes it impossible to process correctly so each superpixel region needs to
+  // be test via a flood fill to make sure that no disconnected pixels are found.
+  
+  if (1) {
+    
+    RegionRemerger remerger(inputImg);
+    
+    vector<int32_t> sortedSuperpixelTags = spImage.sortSuperpixelsBySize();
+    
+    Mat floodMask = remerger.maskMat.clone();
+    
+    //Mat outMask = remerger.maskMat.clone();
+    
+    for ( auto it = begin(sortedSuperpixelTags); it != end(sortedSuperpixelTags); ) {
+      int32_t tag = *it;
+      
+      if (1) {
+        cout << "iter tag " << tag << endl;
+      }
+
+      floodMask = Scalar(0);
+      
+      // FIXME: not strictly needed since floodFillMask() clears
+      //outMask = Scalar(0);
+      
+      // Find bbox for this superpixel region
+      
+      Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
+      
+//      int32_t originX, originY, regionWidth, regionHeight;
+//      bbox(originX, originY, regionWidth, regionHeight, spPtr->coords);
+//      Rect roiRect(originX, originY, regionWidth, regionHeight);
+
+      // Generate flood fill in mask based on input
+      
+      for (Coord c : spPtr->coords) {
+        floodMask.at<uint8_t>(c.y, c.x) = 0xFF;
+      }
+      
+      // Set remerger.maskMat for any already merged superpixels
+      
+      remerger.mergeMatToMask();
+      
+      for_each_byte(floodMask, remerger.maskMat, [](uint8_t* bytePtr1, const uint8_t* bytePtr2) {
+        if (*bytePtr2) {
+          *bytePtr1 = 0x0;
+        }
+      });
+      
+      // FIXME: could make faster with int count on, instead of findNonZero.
+      // Could also manintain a count of pixels consumed for each superpixel.
+      
+//      Point2i startPoint = coordToPoint(spPtr->coords[0]);
+      
+      vector<Point> locations;
+      findNonZero(floodMask, locations);
+      if (locations.size() == 0) {
+        // All pixels in specific superpixel now consumed
+        ++it;
+        continue;
+      }
+      Point2i startPoint = locations[0];
+      
+      // Invert so that black pixels get filled, white means do not expand
+      
+      binMatInvert(floodMask);
+      
+      floodMask.at<uint8_t>(startPoint.y, startPoint.x) = 0xFF;
+      
+      // FIXME: what about pixels that were not merged from same superpixel ?
+      
+      int numFilled = floodFillMask(floodMask, remerger.maskMat, startPoint, 8);
+      
+      if (numFilled == 0) {
+        // When no more pixels can be filled from this superpixel, advance to next one
+        ++it;
+      } else {
+        remerger.mergeFromMask();
+      }
+    }
+    
+    remerger.mergeLeftovers(tagsMat);
+    
+    // State of remerged Mat should now be ready to use
+    
+    tagsMat = remerger.mergeMat;
+  
+  }
+    
+  // -----------------------------------------------------------------------------
+  
   if (0) {
   
   // Scan each grouping to determine when pixels identified as being in
   // the same group in srmTags1 are not included in the group in srmTags2.
   
-  vector<int32_t> sortedSuperpixelTags = spImage2.sortSuperpixelsBySize();
+  vector<int32_t> sortedSuperpixelTags = spImage.sortSuperpixelsBySize();
   
   vector<vector<Coord> > allMergeCoordsVec;
   
@@ -7285,7 +7380,7 @@ bool srmMultiSegment(const Mat & inputImg, Mat & tagsMat) {
     
     // Find bbox for this superpixel region
     
-    Superpixel *spPtr = spImage2.getSuperpixelPtr(tag);
+    Superpixel *spPtr = spImage.getSuperpixelPtr(tag);
     
     int32_t originX, originY, regionWidth, regionHeight;
     bbox(originX, originY, regionWidth, regionHeight, spPtr->coords);
