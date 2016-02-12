@@ -103,6 +103,8 @@ public:
     mergedTag += 1;
   }
   
+  // FIXME: no need to pass tagMat, simply merge using next uid
+  
   void mergeLeftovers(const Mat &tagMat) {
     // Gather any remaining tags that have not been merged
     // and add these as new sets of pixels.

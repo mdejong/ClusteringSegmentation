@@ -1271,7 +1271,7 @@ captureRegion(SuperpixelImage &spImage,
   // but the contracted or expanded bounds are not known. Scan clockwise to determine likely bounds based
   // on the initial region shape.
   
-//  clockwiseScanForShapeBounds(inputImg, srmTags, tag, srmRegionCoords, mask);
+  clockwiseScanForShapeBounds(inputImg, srmTags, tag, srmRegionCoords, mask);
   
   /*
    
@@ -1301,7 +1301,7 @@ captureRegion(SuperpixelImage &spImage,
 
    */
   
-//  return;
+  return;
   
   vector<Coord> outCoords;
   
@@ -6202,12 +6202,108 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       }
     }
     
+    // Iterate from region bound to the center point until a clear
+    // interior bound is detected.
+    
+    unordered_map<Coord, int32_t> insideVecEndOffsetMap;
+    unordered_map<Coord, vector<uint32_t>> insideVecPixelsMap;
+    
+    bool done = false;
+    int insideStep = 0;
+    
+    while (!done) {
+      int numEmpty = 0;
+      
+      for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+        Coord c = contourCoords[contouri];
+        auto &vecInside = edgesInsideMap[c];
+        
+        // Grab current value and init to zero in first loop
+        
+        int32_t &offset = insideVecEndOffsetMap[c];
+        
+        if (offset < vecInside.size()) {
+          vector<uint32_t> &pixelsVec = insideVecPixelsMap[c];
+          
+          if (offset == 0) {
+            // Init case adds edge pixel
+            Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
+            uint32_t pixel = Vec3BToUID(vec3);
+            pixelsVec.push_back(pixel);
+          }
+          
+          {
+            Coord c = vecInside[offset];
+            Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
+            uint32_t pixel = Vec3BToUID(vec3);
+            pixelsVec.push_back(pixel);
+          }
+          
+          offset++;
+        } else {
+          numEmpty += 1;
+        }
+      }
+      
+      if (numEmpty == maxContouri) {
+        done = true;
+      }
+      
+      if (debugDumpImages) {
+        // Emit vector image that shows how many pixels are filled in at this step level
+        
+        int maxInsideWidth = 0;
+        
+        for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+          Coord c = contourCoords[contouri];
+          int numPixels = insideVecPixelsMap[c].size();
+          assert(numPixels > 0);
+          maxInsideWidth = maxi(maxInsideWidth, numPixels);
+        }
+        
+        int numCols = maxInsideWidth;
+        
+        CvSize matSize(numCols, maxContouri);
+
+        Mat colorPixelsMat(matSize, CV_8UC4, Scalar(0,0,0,0));
+        
+        for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+          Coord c = contourCoords[contouri];
+          
+          assert(insideVecPixelsMap.count(c) > 0); // DEBUG
+          vector<uint32_t> &pixels = insideVecPixelsMap[c];
+          
+          for ( int i = 0; i < pixels.size(); i++ ) {
+            Vec3b vec3 = PixelToVec3b(pixels[i]);
+            Vec4b vec4;
+            vec4[0] = vec3[0]; vec4[1] = vec3[1]; vec4[2] = vec3[2]; vec4[3] = 0xFF;
+
+            colorPixelsMat.at<Vec4b>(contouri, i) = vec4;
+          }
+        }
+
+        {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_inside_" << insideStep << "_pixels" << ".png";
+          string fname = fnameStream.str();
+          
+          writeWroteImg(fname, colorPixelsMat);
+          cout << "" << endl;
+        }
+      }
+      
+      insideStep++;
+    } // while !done loop
+
+    /*
+    
     // Iterate from inside to outside looking for a transition from the interior area
     // to the exterior area.
     
     for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
       Coord c = contourCoords[contouri];
       auto &vecInside = edgesInsideMap[c];
+      auto &vecOutside = edgesOutsideMap[c];
       
       // Does the vector from outside to inside collapse in on a single
       // value on the inside area of the contour.
@@ -6220,18 +6316,22 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         pixels.push_back(pixel);
       }
       
-      // Calculate deltas on a pixel by pixel basis
+      {
+        Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
+        uint32_t pixel = Vec3BToUID(vec3);
+        pixels.push_back(pixel);
+      }
       
-      // MOMO
+      for ( Coord c : vecOutside ) {
+        Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
+        uint32_t pixel = Vec3BToUID(vec3);
+        pixels.push_back(pixel);
+      }
       
-      //    auto &vecOutside = edgesOutsideMap[c];
-      
-      //    maxInsideWidth = maxi(maxInsideWidth, (int)vecInside.size());
-      //    maxOutsideWidth = maxi(maxOutsideWidth, (int)vecOutside.size());
     }
-    
-    //  edgesInsideMap = edgesOutsideMap;
-    
+     
+    */
+
     
   }
   
