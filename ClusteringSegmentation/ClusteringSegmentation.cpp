@@ -6208,6 +6208,9 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     unordered_map<Coord, int32_t> insideVecEndOffsetMap;
     unordered_map<Coord, vector<uint32_t>> insideVecPixelsMap;
     
+    bool convergedFromPixelSet = false;
+    uint32_t convergedFromPixel;
+    
     bool done = false;
     int insideStep = 0;
     
@@ -6249,6 +6252,46 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         done = true;
       }
       
+      // scan the vectors for insideVecPixelsMap at this point and
+      // if the pixels all collapse to the same value or COM then this
+      // it a likely early termination.
+      
+      {
+        bool allVectorsConverge = true;
+        
+        convergedFromPixelSet = false;
+        
+        for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+          Coord c = contourCoords[contouri];
+          
+          vector<uint32_t> &pixels = insideVecPixelsMap[c];
+          
+          assert(pixels.size() > 1);
+          
+          uint32_t prev = pixels[0];
+          
+          for ( uint32_t pixel : pixels ) {
+            if (pixel != prev) {
+              allVectorsConverge = false;
+              break;
+            }
+          }
+          
+          if (allVectorsConverge && (convergedFromPixelSet == false)) {
+            convergedFromPixel = prev;
+            convergedFromPixelSet = true;
+          }
+        }
+        
+        if (allVectorsConverge) {
+          // All pixels inside are the same
+          
+          printf("all inside pixels the same as 0x%08X\n", convergedFromPixel);
+          
+          done = true;
+        }
+      }
+      
       if (debugDumpImages) {
         // Emit vector image that shows how many pixels are filled in at this step level
         
@@ -6256,7 +6299,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
           Coord c = contourCoords[contouri];
-          int numPixels = insideVecPixelsMap[c].size();
+          int numPixels = (int) insideVecPixelsMap[c].size();
           assert(numPixels > 0);
           maxInsideWidth = maxi(maxInsideWidth, numPixels);
         }
@@ -6294,6 +6337,149 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       
       insideStep++;
     } // while !done loop
+    
+    if (convergedFromPixelSet) {
+      
+      // convergedFromPixel
+      
+      for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+        Coord c = contourCoords[contouri];
+        
+        vector<uint32_t> &pixels = insideVecPixelsMap[c];
+        
+        vector<uint32_t> trimmedPixels;
+        
+        assert(pixels.size() > 1);
+        
+        int trimInd = 0;
+        
+        // Note that first pixel is skipped here since it is the middle one
+        
+        for ( int i = 1; i < pixels.size(); i++ ) {
+          uint32_t pixel = pixels[i];
+          trimmedPixels.push_back(pixel);
+          
+          if (pixel == convergedFromPixel) {
+            // When converge pixel is found, trim pixels
+            trimmedPixels.push_back(pixel);
+            trimInd = i - 1;
+            break;
+          }
+        }
+        
+        insideVecPixelsMap[c] = trimmedPixels;
+        
+        // Trim to N coords for this vector
+        
+        vector<Coord> &vecInside = edgesInsideMap[c];
+        vector<Coord> filteredCoords;
+        
+        for ( int i = 0; i < vecInside.size(); i++ ) {
+          Coord c = vecInside[i];
+          filteredCoords.push_back(c);
+          
+          if (trimInd == i) {
+            break;
+          }
+        }
+        
+        edgesInsideMap[c] = filteredCoords;
+      }
+
+    }
+    
+    // Dump image showing the vector contents
+    
+    if (debugDumpImages) {
+      int maxInsideWidth = 0;
+      int maxOutsideWidth = 0;
+      
+      for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+        Coord c = contourCoords[contouri];
+        
+        auto &vecInside = edgesInsideMap[c];
+        auto &vecOutside = edgesOutsideMap[c];
+        
+        maxInsideWidth = maxi(maxInsideWidth, (int)vecInside.size());
+        maxOutsideWidth = maxi(maxOutsideWidth, (int)vecOutside.size());
+      }
+      
+      int numCols = maxInsideWidth + 1 + maxOutsideWidth;
+      
+      CvSize matSize(numCols, maxContouri);
+      Mat typesBinMat(matSize, CV_8UC1, Scalar(0));
+      Mat colorPixelsMat(matSize, CV_8UC4, Scalar(0,0,0,0));
+      
+      for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+        Coord c = contourCoords[contouri];
+        
+        auto &vecInside = edgesInsideMap[c];
+        auto &vecOutside = edgesOutsideMap[c];
+        
+        int midi = (maxInsideWidth + 1) - 1;
+        
+        Vec3b vec3;
+        Vec4b vec4(0,0,0,0xFF);
+        uint8_t gray;
+        
+        gray = 0xFF;
+        
+        vec3 = inputImg.at<Vec3b>(c.y, c.x);
+        vec4[0] = vec3[0]; vec4[1] = vec3[1]; vec4[2] = vec3[2];
+        
+        typesBinMat.at<uint8_t>(contouri, midi) = gray;
+        colorPixelsMat.at<Vec4b>(contouri, midi) = vec4;
+        
+        int insidei = midi - 1;
+        int outsidei = midi + 1;
+        
+        gray = 0xFF/4;
+        
+        assert((insidei+1) >= vecInside.size());
+        
+        for ( Coord c : vecInside ) {
+          typesBinMat.at<uint8_t>(contouri, insidei) = gray;
+          
+          vec3 = inputImg.at<Vec3b>(c.y, c.x);
+          vec4[0] = vec3[0]; vec4[1] = vec3[1]; vec4[2] = vec3[2];
+          
+          colorPixelsMat.at<Vec4b>(contouri, insidei) = vec4;
+          insidei--;
+        }
+        
+        gray = 0xFF/2;
+        
+        //assert((outsidei+1) >= vecOutside.size());
+        
+        for ( Coord c : vecOutside ) {
+          typesBinMat.at<uint8_t>(contouri, outsidei) = gray;
+          
+          vec3 = inputImg.at<Vec3b>(c.y, c.x);
+          vec4[0] = vec3[0]; vec4[1] = vec3[1]; vec4[2] = vec3[2];
+          
+          colorPixelsMat.at<Vec4b>(contouri, outsidei) = vec4;
+          outsidei++;
+        }
+      }
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_hull_iter_inout6_types" << ".png";
+        string fname = fnameStream.str();
+        
+        writeWroteImg(fname, typesBinMat);
+        cout << "" << endl;
+      }
+      
+      {
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_hull_iter_inout6_pixels" << ".png";
+        string fname = fnameStream.str();
+        
+        writeWroteImg(fname, colorPixelsMat);
+        cout << "" << endl;
+      }
+    }
 
     /*
     
