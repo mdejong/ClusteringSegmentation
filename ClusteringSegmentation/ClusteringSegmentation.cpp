@@ -6206,7 +6206,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     // interior bound is detected.
     
     unordered_map<Coord, int32_t> insideVecEndOffsetMap;
-    unordered_map<Coord, vector<uint32_t>> insideVecPixelsMap;
     
     bool convergedFromPixelSet = false;
     uint32_t convergedFromPixel;
@@ -6226,27 +6225,13 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         int32_t &offset = insideVecEndOffsetMap[c];
         
         if (offset < vecInside.size()) {
-          vector<uint32_t> &pixelsVec = insideVecPixelsMap[c];
-          
-          if (offset == 0) {
-            // Init case adds edge pixel
-            Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
-            uint32_t pixel = Vec3BToUID(vec3);
-            pixelsVec.push_back(pixel);
-          }
-          
-          {
-            Coord c = vecInside[offset];
-            Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
-            uint32_t pixel = Vec3BToUID(vec3);
-            pixelsVec.push_back(pixel);
-          }
-          
           offset++;
         } else {
           numEmpty += 1;
         }
       }
+      
+      // stop when all vectors are considered empty
       
       if (numEmpty == maxContouri) {
         done = true;
@@ -6264,9 +6249,21 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
           Coord c = contourCoords[contouri];
           
-          vector<uint32_t> &pixels = insideVecPixelsMap[c];
+          auto &vecInside = edgesInsideMap[c];
+          int32_t &endOffset = insideVecEndOffsetMap[c];
           
-          assert(pixels.size() > 1);
+          // Gather pixels from (0, endOffset)
+          
+          vector<uint32_t> pixels;
+          
+          for ( int i = 0; i < endOffset; i++ ) {
+            Coord c = vecInside[i];
+            Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
+            uint32_t pixel = Vec3BToUID(vec3);
+            pixels.push_back(pixel);
+          }
+          
+          //assert(pixels.size() > 1);
           
           uint32_t prev = pixels[0];
           
@@ -6299,7 +6296,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
           Coord c = contourCoords[contouri];
-          int numPixels = (int) insideVecPixelsMap[c].size();
+          int numPixels = (int) insideVecEndOffsetMap[c];
           assert(numPixels > 0);
           maxInsideWidth = maxi(maxInsideWidth, numPixels);
         }
@@ -6313,8 +6310,19 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
           Coord c = contourCoords[contouri];
           
-          assert(insideVecPixelsMap.count(c) > 0); // DEBUG
-          vector<uint32_t> &pixels = insideVecPixelsMap[c];
+          auto &vecInside = edgesInsideMap[c];
+          int32_t &endOffset = insideVecEndOffsetMap[c];
+          
+          // Gather pixels from (0, endOffset)
+          
+          vector<uint32_t> pixels;
+          
+          for ( int i = 0; i < endOffset; i++ ) {
+            Coord c = vecInside[i];
+            Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
+            uint32_t pixel = Vec3BToUID(vec3);
+            pixels.push_back(pixel);
+          }
           
           for ( int i = 0; i < pixels.size(); i++ ) {
             Vec3b vec3 = PixelToVec3b(pixels[i]);
@@ -6345,33 +6353,32 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
         Coord c = contourCoords[contouri];
         
-        vector<uint32_t> &pixels = insideVecPixelsMap[c];
+        // Find first offset where convergedFromPixel is located
+        // and use this offset as the trim point.
         
-        vector<uint32_t> trimmedPixels;
+        int trimInd = -1;
         
-        assert(pixels.size() > 1);
+        auto &vecInside = edgesInsideMap[c];
+        int32_t &endOffset = insideVecEndOffsetMap[c];
         
-        int trimInd = 0;
+        // Gather pixels from (0, endOffset)
         
-        // Note that first pixel is skipped here since it is the middle one
+        vector<uint32_t> pixels;
         
-        for ( int i = 1; i < pixels.size(); i++ ) {
-          uint32_t pixel = pixels[i];
-          trimmedPixels.push_back(pixel);
+        for ( int i = 0; i < endOffset; i++ ) {
+          Coord c = vecInside[i];
+          Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
+          uint32_t pixel = Vec3BToUID(vec3);
           
           if (pixel == convergedFromPixel) {
-            // When converge pixel is found, trim pixels
-            trimmedPixels.push_back(pixel);
-            trimInd = i - 1;
-            break;
+            trimInd = i;
           }
         }
         
-        insideVecPixelsMap[c] = trimmedPixels;
+        assert(trimInd != -1);
         
         // Trim to N coords for this vector
         
-        vector<Coord> &vecInside = edgesInsideMap[c];
         vector<Coord> filteredCoords;
         
         for ( int i = 0; i < vecInside.size(); i++ ) {
@@ -6552,389 +6559,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
    
   */
   
-  /*
-  
-  // Iterate over each vector of (center, edgePoint) along the bbox bounds
-  
-  vector<set<int32_t> > allTagSetsForVectors;
-  
-  // Store coords found for each vector
-  
-  vector<vector<Coord> > allCoordForVectors;
-  
-  int stepi = 0;
-  int stepMax = (int) outlineCoords.size();
-  
-  for ( ; stepi < stepMax; stepi++ ) {
-    
-    set<int32_t> tagsForVector;
-    vector<Coord> coordsForVector;
-    
-    Coord edgeCoord = outlineCoords[stepi];
-    
-    Point2i edgePoint(edgeCoord.x, edgeCoord.y);
-    
-    renderMat = Scalar(0);
-    line(renderMat, center, edgePoint, Scalar(0xFF));
-    
-    if (debug) {
-      cout << "render center line from " << center << " to " << edgePoint << endl;
-    }
-    
-    if (debugDumpImages && debugDumpStepImages) {
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_step" << stepi << "_region_vec" << ".png";
-      string fname = fnameStream.str();
-      
-      imwrite(fname, renderMat);
-      cout << "wrote " << fname << endl;
-      cout << "";
-    }
-    
-    vector<Point> locations;
-    findNonZero(renderMat, locations);
-    
-    for ( Point p : locations ) {
-      Coord c(p.x, p.y);
-      c = originCoord + c;
-      if (tagMap.count(c) > 0) {
-        int32_t regionTag = tagMap[c];
-        tagsForVector.insert(regionTag);
-        coordsForVector.push_back(c);
-      }
-    }
-    
-    allTagSetsForVectors.push_back(tagsForVector);
-    allCoordForVectors.push_back(coordsForVector);
-    
-    if (debugDumpImages && debugDumpStepImages) {
-      Mat regionRoiMat = tagsImg(roiRect);
-      
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_step" << stepi << "_region_input_tags_roi" << ".png";
-      string fname = fnameStream.str();
-      
-      imwrite(fname, regionRoiMat);
-      cout << "wrote " << fname << endl;
-      cout << "";
-    }
-    
-    if (debugDumpImages && debugDumpStepImages) {
-      // Dump tags that are defined as on in regionCoords
-      
-      Mat allTagsOn = tagsImg.clone();
-      allTagsOn = Scalar(0,0,0);
-      
-      for ( Coord c : regionCoords ) {
-        allTagsOn.at<Vec3b>(c.y, c.x) = tagsImg.at<Vec3b>(c.y, c.x);
-      }
-      
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_step" << stepi << "_region_input_tags" << ".png";
-      string fname = fnameStream.str();
-      
-      imwrite(fname, allTagsOn);
-      cout << "wrote " << fname << endl;
-      cout << "";
-    }
-    
-    if (debugDumpImages && debugDumpStepImages) {
-      renderMat = Scalar(0);
-      
-      for ( Point p : locations ) {
-        Coord c(p.x, p.y);
-        c = originCoord + c;
-        if (tagMap.count(c) > 0) {
-          c = c - originCoord;
-          renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
-        }
-      }
-      
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_step" << stepi << "_hits_for_tag_vec" << ".png";
-      string fname = fnameStream.str();
-      
-      imwrite(fname, renderMat);
-      cout << "wrote " << fname << endl;
-      cout << "";
-    }
-    
-    if (debugDumpImages && debugDumpStepImages) {
-      // Dump tags that are defined as on in regionCoords
-      
-      Mat allTagsHit = tagsImg.clone();
-      allTagsHit = Scalar(0,0,0);
-      
-      for ( Point p : locations ) {
-        Coord c(p.x, p.y);
-        c = originCoord + c;
-        if (tagMap.count(c) > 0) {
-          allTagsHit.at<Vec3b>(c.y, c.x) = tagsImg.at<Vec3b>(c.y, c.x);
-        }
-      }
-      
-      std::stringstream fnameStream;
-      fnameStream << "srm" << "_tag_" << tag << "_step" << stepi << "_hit_tags_for_tag_vec" << ".png";
-      string fname = fnameStream.str();
-      
-      imwrite(fname, allTagsHit);
-      cout << "wrote " << fname << endl;
-      cout << "";
-    }
-    
-  }
-  
-  // Identify all the tags found in the region and with a tag other than this one
-  
-  unordered_map<int32_t, bool> allTagsCombined;
-  
-  for ( set<int32_t> & tagSet : allTagSetsForVectors ) {
-    for ( int32_t regionTag : tagSet ) {
-      allTagsCombined[regionTag] = true;
-    }
-  }
-  
   if (debug) {
-    cout << "all tags found around region" << endl;
-    
-    for ( auto & pair : allTagsCombined ) {
-      int32_t regionTag = pair.first;
-      printf("tag = 0x%08X aka %d\n", regionTag, regionTag);
-    }
-  }
-  
-  if (debugDumpImages) {
-    // Dump tags that are defined as on in regionCoords
-    
-    Mat allTagsHit = tagsImg.clone();
-    allTagsHit = Scalar(0,0,0);
-    
-    for ( Coord c : regionCoords ) {
-      Vec3b vec = tagsImg.at<Vec3b>(c.y, c.x);
-      int32_t regionTag = Vec3BToUID(vec);
-      
-      if (allTagsCombined.count(regionTag) > 0) {
-        allTagsHit.at<Vec3b>(c.y, c.x) = vec;
-        
-        if (debug) {
-          printf("found region tag %9d at coord (%5d, %5d)\n", regionTag, c.x, c.y);
-        }
-      }
-    }
-    
-    std::stringstream fnameStream;
-    fnameStream << "srm" << "_tag_" << tag << "_hit_tags_in_scan_region" << ".png";
-    string fname = fnameStream.str();
-    
-    imwrite(fname, allTagsHit);
-    cout << "wrote " << fname << endl;
-    cout << "";
-  }
-  
-  // Condense tags in regions starting from the top. A region range is condensed as long
-  // as the tags in the range are the same or if there are no tags.
-  
-  unordered_map<Coord, bool> uniqueCoords;
-  
-  for ( stepi = 0 ; stepi < stepMax; ) {
-    if (debug) {
-      cout << "consider stepi " << stepi << endl;
-    }
-    
-    set<int32_t> &currentSet = allTagSetsForVectors[stepi];
-    
-    int nextStepi = stepi + 1;
-    
-    for ( ; nextStepi < stepMax; nextStepi++ ) {
-      set<int32_t> &nextSet = allTagSetsForVectors[nextStepi];
-      
-      // If the sets are identical then merge the regions.
-      
-      if (currentSet == nextSet) {
-        if (debug && true) {
-          cout << "same set for step " << nextStepi << endl;
-        }
-        if (debug && false) {
-          cout << "set 1" << endl;
-          for ( int32_t tag : currentSet ) {
-            cout << tag << endl;
-          }
-          cout << "set 2" << endl;
-          for ( int32_t tag : nextSet ) {
-            cout << tag << endl;
-          }
-        }
-      } else {
-        nextStepi -= 1;
-        break;
-      }
-    }
-    
-    // Range is (stepi, nextStepi)
-    
-    if (debug) {
-      cout << "step same range (" << stepi << "," << nextStepi << ")" << endl;
-    }
-    
-    tagsAroundVec.push_back(TagsAroundShape());
-    TagsAroundShape &tas = tagsAroundVec[tagsAroundVec.size() - 1];
-    
-    tas.start = stepi;
-    tas.end = nextStepi;
-    
-    vector<int32_t> vecOfTags;
-    
-    for ( int32_t tag : currentSet ) {
-      vecOfTags.push_back(tag);
-    }
-    
-    tas.tags = vecOfTags;
-    
-    // Gather all unique coords from combined range
-    
-#if defined(DEBUG)
-    for ( auto &pair : uniqueCoords ) {
-      bool uniqueThisLoop = pair.second;
-      assert(uniqueThisLoop == false);
-    }
-#endif // DEBUG
-    
-    int maxStepi = mini((nextStepi + 1), stepMax);
-    
-#if defined(DEBUG)
-    assert(allTagSetsForVectors.size() == allCoordForVectors.size());
-    assert(maxStepi <= allCoordForVectors.size());
-#endif // DEBUG
-    
-    for ( int i = stepi ; i < maxStepi; i++ ) {
-#if defined(DEBUG)
-      assert(i < allCoordForVectors.size());
-#endif // DEBUG
-      
-      if (debug) {
-        cout << "allCoordForVectors[" << i << "] num coords " << allCoordForVectors[i].size() << endl;
-      }
-      
-      for ( Coord c : allCoordForVectors[i] ) {
-        if (uniqueCoords.count(c) == 0) {
-          uniqueCoords[c] = true;
-        }
-      }
-    }
-    
-    vector<Coord> &uniqueCoordsVec = tas.coords;
-    for ( auto &pair : uniqueCoords ) {
-      Coord c = pair.first;
-      bool uniqueThisLoop = pair.second;
-      if (uniqueThisLoop) {
-        pair.second = false;
-        uniqueCoordsVec.push_back(c);
-      }
-    }
-    
-#if defined(DEBUG)
-    assert((nextStepi + 1) > stepi);
-#endif // DEBUG
-    stepi = nextStepi + 1;
-  }
-  
-  // In the special case where the final range is larger than 1 element
-  // and the range extends to 12 oclock and the sets match, then combine
-  // the last range with the first one.
-  
-  if (tagsAroundVec.size() > 1) {
-    
-    if (allTagSetsForVectors.size() > 2) {
-      // Check for the special case of the first and second sets being exactly equal,
-      // in this case iterate backwards from 12 oclock so that and initial same range
-      // at the front of the vector is moved to the start of the vector.
-      
-      set<int32_t> &firstSet = allTagSetsForVectors[0];
-      
-      set<int32_t> &lastSet = allTagSetsForVectors[stepMax - 1];
-      
-      if (firstSet == lastSet) {
-        if (debug) {
-          cout << "first and last range sets are the same" << endl;
-        }
-        
-        assert(tagsAroundVec.size() > 0);
-        TagsAroundShape &firstTas = tagsAroundVec[0];
-        TagsAroundShape &lastTas = tagsAroundVec[tagsAroundVec.size() - 1];
-        
-        firstTas.start = lastTas.start;
-        //firstTas.end = nextStepi;
-        
-        for ( Coord c : lastTas.coords ) {
-          firstTas.coords.push_back(c);
-        }
-        
-        int numBefore = (int) tagsAroundVec.size();
-        tagsAroundVec.erase(end(tagsAroundVec) - 1);
-        int numAfter = (int) tagsAroundVec.size();
-        assert(numBefore == (numAfter + 1));
-      }
-    }
-    
-    // Mark entries that are simple clusters of N tags
-    
-    for ( TagsAroundShape &tas : tagsAroundVec ) {
-      if (tas.start == tas.end) {
-        tas.flag = true;
-      } else {
-        tas.flag = false;
-      }
-    }
-    
-    // Do a second scan of the resulting TagsAroundShape elements and combine ranges that consist of just
-    // one single step
-    
-    stepMax = (int) tagsAroundVec.size() - 1;
-    
-    bool mergeNext = false;
-    
-    for ( stepi = 0; stepi < stepMax; stepi += 1) {
-      TagsAroundShape &oneTas = tagsAroundVec[stepi];
-      TagsAroundShape &nextTas = tagsAroundVec[stepi+1];
-      
-      if (oneTas.flag && nextTas.flag) {
-        // Merge 2 in a row that differ in set contents
-        
-        oneTas.end = nextTas.end;
-        
-        set<int32_t> uniqueTags;
-        
-        for ( int32_t tag : oneTas.tags ) {
-          uniqueTags.insert(tag);
-        }
-        
-        for ( int32_t tag : nextTas.tags ) {
-          uniqueTags.insert(tag);
-        }
-        
-        oneTas.tags.clear();
-        
-        for ( int32_t tag : uniqueTags ) {
-          oneTas.tags.push_back(tag);
-        }
-        
-        for ( Coord c : nextTas.coords ) {
-          oneTas.coords.push_back(c);
-        }
-        
-        tagsAroundVec.erase(begin(tagsAroundVec) + stepi+1);
-        stepMax = (int) tagsAroundVec.size() - 1;
-        mergeNext = true;
-      } else {
-        mergeNext = false;
-      }
-    }
-    
-  } // end if more than 1 segment block
-   
-   */
-
-if (debug) {
     cout << "return clockwiseScanForShapeBounds " << tag << " with N = " << 0 << " ranges" << endl;
   }
   
