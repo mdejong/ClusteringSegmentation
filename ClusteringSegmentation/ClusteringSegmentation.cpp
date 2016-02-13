@@ -5449,6 +5449,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
 {
   const bool debug = true;
   const bool debugDumpImages = true;
+  const bool debugDumpInsideOutsiteStepImages = false;
   
   if (debug) {
     cout << "clockwiseScanForShapeBounds " << tag << endl;
@@ -6025,7 +6026,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       
       edgesInsideMap[c] = convertPointsToCoords(generatedPoints);
       
-      if (debugDumpImages) {
+      if (debugDumpInsideOutsiteStepImages) {
         Mat renderMat(tagsImg.size(), CV_8UC1, Scalar(0));
         
         for ( Coord c : regionCoords ) {
@@ -6082,7 +6083,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       
       edgesOutsideMap[c] = convertPointsToCoords(generatedPoints);
       
-      if (debugDumpImages) {
+      if (debugDumpInsideOutsiteStepImages) {
         Mat renderMat(tagsImg.size(), CV_8UC1, Scalar(0));
         
         for ( Coord c : regionCoords ) {
@@ -6208,7 +6209,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     unordered_map<Coord, int32_t> insideVecEndOffsetMap;
     
     bool convergedFromPixelSet = false;
-    uint32_t convergedFromPixel;
+    uint32_t convergedFromPixel = 0;
     
     bool done = false;
     int insideStep = 0;
@@ -6246,6 +6247,29 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         convergedFromPixelSet = false;
         
+        vector<uint32_t> innerMostPixels;
+        innerMostPixels.reserve(1024);
+        
+        if (insideStep == 0) {
+          insideStep++;
+          insideStep--;
+        }
+        
+        // FIXME: do some of the coords in contour appear more than once, is that
+        // what is causing the increased count of the inside pixels? How to dedup?
+
+        // The reality of a fix here is that instead of using Coord, the offset
+        // in the contour needs to be used to uniq identify a specific coordinate
+        // to deal with cases like a star shape that could cross itself.
+        
+        if (1) {
+          unordered_map<Coord, bool> seen;
+          for ( Coord c : contourCoords ) {
+            assert(seen.count(c) == 0);
+            seen[c] = true;
+          }
+        }
+        
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
           Coord c = contourCoords[contouri];
           
@@ -6254,20 +6278,55 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           
           // Gather pixels from (0, endOffset)
           
-          vector<uint32_t> pixels;
+//          vector<uint32_t> pixels;
           
-          for ( int i = 0; i < endOffset; i++ ) {
-            Coord c = vecInside[i];
+//          for ( int i = 0; i < endOffset; i++ ) {
+//            Coord c = vecInside[i];
+//            Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
+//            uint32_t pixel = Vec3BToUID(vec3);
+//            pixels.push_back(pixel);
+//          }
+          
+          {
+            int actualOffset = endOffset;
+            if (actualOffset > 0) {
+              actualOffset -= 1;
+            }
+            Coord c = vecInside[actualOffset];
             Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
             uint32_t pixel = Vec3BToUID(vec3);
-            pixels.push_back(pixel);
+            innerMostPixels.push_back(pixel);
+            
+            if (insideStep == 0 && endOffset > 1) {
+              printf("endOffset %d\n", endOffset);
+            }
           }
           
           //assert(pixels.size() > 1);
           
-          uint32_t prev = pixels[0];
+          // FIXME: converge means that all pixels at the end of the
+          // vectors is the same, not all the same for all in each
+          // vector.
           
-          for ( uint32_t pixel : pixels ) {
+//          uint32_t prev = pixels[0];
+//          
+//          for ( uint32_t pixel : pixels ) {
+//            if (pixel != prev) {
+//              allVectorsConverge = false;
+//              break;
+//            }
+//          }
+          
+//          if (allVectorsConverge && (convergedFromPixelSet == false)) {
+//            convergedFromPixel = prev;
+//            convergedFromPixelSet = true;
+//          }
+        }
+        
+        if (innerMostPixels.size() > 0) {
+          uint32_t prev = innerMostPixels[0];
+          
+          for ( uint32_t pixel : innerMostPixels ) {
             if (pixel != prev) {
               allVectorsConverge = false;
               break;
@@ -6283,10 +6342,15 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         if (allVectorsConverge) {
           // All pixels inside are the same
           
-          printf("all inside pixels the same as 0x%08X\n", convergedFromPixel);
+          printf("all inside pixels converge to as 0x%08X\n", convergedFromPixel);
           
           done = true;
         }
+      }
+      
+      if (insideStep == 0) {
+        insideStep++;
+        insideStep--;
       }
       
       if (debugDumpImages) {
@@ -6298,6 +6362,9 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           Coord c = contourCoords[contouri];
           int numPixels = (int) insideVecEndOffsetMap[c];
           assert(numPixels > 0);
+          
+          printf("for contouri %4d : numPixels inside %d\n", contouri, numPixels);
+          
           maxInsideWidth = maxi(maxInsideWidth, numPixels);
         }
         
@@ -6313,29 +6380,74 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           auto &vecInside = edgesInsideMap[c];
           int32_t &endOffset = insideVecEndOffsetMap[c];
           
-          // Gather pixels from (0, endOffset)
+          // Gather pixels from (0, endOffset) which correspond
+          // to pixels from the edge to the center.
           
-          vector<uint32_t> pixels;
+          vector<uint32_t> edgeToCenterPixels;
           
           for ( int i = 0; i < endOffset; i++ ) {
             Coord c = vecInside[i];
             Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
             uint32_t pixel = Vec3BToUID(vec3);
-            pixels.push_back(pixel);
+            edgeToCenterPixels.push_back(pixel);
           }
           
-          for ( int i = 0; i < pixels.size(); i++ ) {
-            Vec3b vec3 = PixelToVec3b(pixels[i]);
+          // center most pixels on the left, pixels nearest edge on right
+          
+          for ( int i = 0; i < edgeToCenterPixels.size(); i++ ) {
+            Vec3b vec3 = PixelToVec3b(edgeToCenterPixels[i]);
             Vec4b vec4;
             vec4[0] = vec3[0]; vec4[1] = vec3[1]; vec4[2] = vec3[2]; vec4[3] = 0xFF;
 
-            colorPixelsMat.at<Vec4b>(contouri, i) = vec4;
+            int offset = (int) (numCols - 1) - i;
+            colorPixelsMat.at<Vec4b>(contouri, offset) = vec4;
           }
         }
 
         {
           std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_inside_" << insideStep << "_pixels" << ".png";
+          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_inside_center_to_edge" << insideStep << ".png";
+          string fname = fnameStream.str();
+          
+          writeWroteImg(fname, colorPixelsMat);
+          cout << "" << endl;
+        }
+        
+        colorPixelsMat = Scalar(0,0,0,0);
+        
+        for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+          Coord c = contourCoords[contouri];
+          
+          auto &vecInside = edgesInsideMap[c];
+          int32_t &endOffset = insideVecEndOffsetMap[c];
+          
+          // Gather pixels from (0, endOffset) which correspond
+          // to pixels from the edge to the center.
+          
+          vector<uint32_t> edgeToCenterPixels;
+          
+          for ( int i = 0; i < endOffset; i++ ) {
+            Coord c = vecInside[i];
+            Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
+            uint32_t pixel = Vec3BToUID(vec3);
+            edgeToCenterPixels.push_back(pixel);
+          }
+          
+          // center most pixels on the left, pixels nearest edge on right
+          
+          for ( int i = 0; i < edgeToCenterPixels.size(); i++ ) {
+            Vec3b vec3 = PixelToVec3b(edgeToCenterPixels[i]);
+            Vec4b vec4;
+            vec4[0] = vec3[0]; vec4[1] = vec3[1]; vec4[2] = vec3[2]; vec4[3] = 0xFF;
+            
+            int offset = i;
+            colorPixelsMat.at<Vec4b>(contouri, offset) = vec4;
+          }
+        }
+        
+        {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_inside_edge_to_center" << insideStep << ".png";
           string fname = fnameStream.str();
           
           writeWroteImg(fname, colorPixelsMat);
