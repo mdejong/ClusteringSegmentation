@@ -5466,6 +5466,15 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
   
   vector<Coord> contourCoords;
   
+  for ( TypedHullCoords &typedHullCoords : hullCoordsVec ) {
+    auto &coordVec = typedHullCoords.coords;
+    append_to_vector(contourCoords, coordVec);
+  }
+  
+  /*
+  
+  vector<Coord> contourCoords;
+  
   // The hull lines should have already been simplified when possible, so determine the
   // hulls by taking the first and last point in the coords vec and then find the midpoint.
   
@@ -5893,6 +5902,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     }
   }
   
+  */
+   
   // Dump skel generated from region bin Mat
   
   if ((1)) {
