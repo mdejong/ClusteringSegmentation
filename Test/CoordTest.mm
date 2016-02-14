@@ -2403,6 +2403,7 @@
   XCTAssert(locSeg.isLine == false, @"result");
   XCTAssert(locSeg.points.size() == 1, @"result");
   XCTAssert(locSeg.points[0] == Point2i(0,0), @"result");
+  XCTAssert(locSeg.startContourOffset == 0, @"result");
 }
 
 - (void)testSplitContourIntoLinesSegmentsNotLine2
@@ -2423,6 +2424,7 @@
   XCTAssert(locSeg.points.size() == 2, @"result");
   XCTAssert(locSeg.points[0] == Point2i(0,0), @"result");
   XCTAssert(locSeg.points[1] == Point2i(0,1), @"result");
+  XCTAssert(locSeg.startContourOffset == 0, @"result");
 }
 
 // Lines around the outside of the box, note that the
@@ -2463,6 +2465,7 @@
   ptr = &results[0];
   XCTAssert(ptr->isLine == true, @"result");
   XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->startContourOffset == 0, @"result");
   XCTAssert(ptr->points[0] == Point2i(0,0), @"result");
   XCTAssert(ptr->points[1] == Point2i(1,0), @"result");
   XCTAssert(ptr->points[2] == Point2i(2,0), @"result");
@@ -2470,6 +2473,7 @@
   ptr = &results[1];
   XCTAssert(ptr->isLine == true, @"result");
   XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->startContourOffset == 3, @"result");
   XCTAssert(ptr->points[0] == Point2i(3,0), @"result");
   XCTAssert(ptr->points[1] == Point2i(3,1), @"result");
   XCTAssert(ptr->points[2] == Point2i(3,2), @"result");
@@ -2477,6 +2481,7 @@
   ptr = &results[2];
   XCTAssert(ptr->isLine == true, @"result");
   XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->startContourOffset == 6, @"result");
   XCTAssert(ptr->points[0] == Point2i(3,3), @"result");
   XCTAssert(ptr->points[1] == Point2i(2,3), @"result");
   XCTAssert(ptr->points[2] == Point2i(1,3), @"result");
@@ -2484,6 +2489,7 @@
   ptr = &results[3];
   XCTAssert(ptr->isLine == true, @"result");
   XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->startContourOffset == 9, @"result");
   XCTAssert(ptr->points[0] == Point2i(0,3), @"result");
   XCTAssert(ptr->points[1] == Point2i(0,2), @"result");
   XCTAssert(ptr->points[2] == Point2i(0,1), @"result");
@@ -2532,6 +2538,7 @@
   ptr = &results[0];
   XCTAssert(ptr->isLine == true, @"result");
   XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->startContourOffset == 1, @"result");
   XCTAssert(ptr->points[0] == Point2i(3,0), @"result");
   XCTAssert(ptr->points[1] == Point2i(3,1), @"result");
   XCTAssert(ptr->points[2] == Point2i(3,2), @"result");
@@ -2539,6 +2546,7 @@
   ptr = &results[1];
   XCTAssert(ptr->isLine == true, @"result");
   XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->startContourOffset == 4, @"result");
   XCTAssert(ptr->points[0] == Point2i(3,3), @"result");
   XCTAssert(ptr->points[1] == Point2i(2,3), @"result");
   XCTAssert(ptr->points[2] == Point2i(1,3), @"result");
@@ -2546,6 +2554,7 @@
   ptr = &results[2];
   XCTAssert(ptr->isLine == true, @"result");
   XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->startContourOffset == 7, @"result");
   XCTAssert(ptr->points[0] == Point2i(0,3), @"result");
   XCTAssert(ptr->points[1] == Point2i(0,2), @"result");
   XCTAssert(ptr->points[2] == Point2i(0,1), @"result");
@@ -2553,6 +2562,7 @@
   ptr = &results[3];
   XCTAssert(ptr->isLine == true, @"result");
   XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->startContourOffset == 10, @"result");
   XCTAssert(ptr->points[0] == Point2i(0,0), @"result");
   XCTAssert(ptr->points[1] == Point2i(1,0), @"result");
   XCTAssert(ptr->points[2] == Point2i(2,0), @"result");
@@ -2593,12 +2603,14 @@
   ptr = &results[0];
   XCTAssert(ptr->isLine == true, @"result");
   XCTAssert(ptr->points.size() == 2, @"result");
+  XCTAssert(ptr->startContourOffset == 0, @"result");
   XCTAssert(ptr->points[0] == Point2i(0,0), @"result");
   XCTAssert(ptr->points[1] == Point2i(1,0), @"result");
 
   ptr = &results[1];
   XCTAssert(ptr->isLine == false, @"result");
   XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->startContourOffset == 2, @"result");
   XCTAssert(ptr->points[0] == Point2i(2,0), @"result");
   XCTAssert(ptr->points[1] == Point2i(3,1), @"result");
   XCTAssert(ptr->points[2] == Point2i(3,2), @"result");
@@ -2606,15 +2618,19 @@
   ptr = &results[2];
   XCTAssert(ptr->isLine == true, @"result");
   XCTAssert(ptr->points.size() == 2, @"result");
+  XCTAssert(ptr->startContourOffset == 5, @"result");
   XCTAssert(ptr->points[0] == Point2i(2,3), @"result");
   XCTAssert(ptr->points[1] == Point2i(1,3), @"result");
 
   ptr = &results[3];
   XCTAssert(ptr->isLine == true, @"result");
   XCTAssert(ptr->points.size() == 3, @"result");
+  XCTAssert(ptr->startContourOffset == 7, @"result");
   XCTAssert(ptr->points[0] == Point2i(0,3), @"result");
   XCTAssert(ptr->points[1] == Point2i(0,2), @"result");
   XCTAssert(ptr->points[2] == Point2i(0,1), @"result");
+  
+  return;
 }
 
 

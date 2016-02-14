@@ -1705,12 +1705,25 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
 #if defined(DEBUG)
       {
         assert(contouri < contouriMax);
-        Point2i contourP = contour[vecOffsetAround((int)contour.size(), contouri)];
+        int actualContouri = vecOffsetAround((int)contour.size(), contouri);
+        Point2i contourP = contour[actualContouri];
         assert(contourP == p1);
       }
 #endif // DEBUG
       
       vector<Point2i> &consumedPointsVec = segments[segments.size() - 1].points;
+      if (consumedPointsVec.size() == 0) {
+        // First coordinate in non-line segment
+        HullLineOrCurveSegment &locSeg = segments[segments.size() - 1];
+        
+        int actualContouri = vecOffsetAround((int)contour.size(), contouri);
+        locSeg.startContourOffset = actualContouri;
+        
+        if (debug) {
+          Point2i contourP = contour[actualContouri];
+          printf("set contouri for first non-line coordinate (%d, %d) to %d\n", contourP.x, contourP.y, locSeg.startContourOffset);
+        }
+      }
       consumedPointsVec.push_back(p1);
       
       if (debug) {
@@ -1762,7 +1775,18 @@ splitContourIntoLinesSegments(int32_t tag, CvSize size, CvRect roi, const vector
         // FIXME: adjust ahead so that max is set to the number skipped over in iter1!
         // Then wrap the array access around.
         
-        Point2i contourP = contour[vecOffsetAround((int)contour.size(), contouri)];
+        int actualContouri = vecOffsetAround((int)contour.size(), contouri);
+        Point2i contourP = contour[actualContouri];
+        
+        if (consumedPointsVec.size() == 0) {
+          // First coordinate in line segment
+          HullLineOrCurveSegment &locSeg = segments[segments.size() - 1];
+          locSeg.startContourOffset = actualContouri;
+          
+          if (debug) {
+            printf("set contouri for first line coordinate (%d, %d) to %d\n", contourP.x, contourP.y, locSeg.startContourOffset);
+          }
+        }
         
         if (contourP == p2) {
           if (debug) {

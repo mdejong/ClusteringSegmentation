@@ -60,6 +60,12 @@ public:
   
   std::vector<cv::Point2i> points;
   
+  // The original contour offset that the first point in points corresponds to.
+  // This offset makes it possible to deal with contours that contain duplicate
+  // points.
+  
+  int32_t startContourOffset;
+  
   // Slope for known line segment
   
   cv::Point2f slope;
@@ -68,7 +74,7 @@ public:
   
   int32_t cost;
   
-  HullLineOrCurveSegment() : isLine(false), slope(), cost(0)
+  HullLineOrCurveSegment() : isLine(false), slope(), cost(0), startContourOffset(-1)
   {
   }
   

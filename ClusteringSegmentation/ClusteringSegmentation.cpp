@@ -5135,6 +5135,8 @@ void calcNormalsOnContour(CvSize size,
   
   vector<HullLineOrCurveSegment> vecOfSeg = splitContourIntoLinesSegments(tag, size, roi, contour, epsilon);
   
+  /*
+  
   // Implement very simple mapping that examines the first 2 coords returned in vecOfSeg and determines
   // the contour offset where these 2 coords are found.
   
@@ -5224,6 +5226,8 @@ void calcNormalsOnContour(CvSize size,
       assert(contourOffset != -1);
     }
   }
+   
+  */
   
   // Note that iteration order of coordinates in vecOfSeg may not start on contourCoords[0] so
   // create a map from known line points to the common line slope.
@@ -5246,8 +5250,7 @@ void calcNormalsOnContour(CvSize size,
   }
   
 //  unordered_map<Coord, Point2f> lineCoordToNormalMap;
-  
-  const vector<Coord> contourCoords = convertPointsToCoords(contour);
+//  const vector<Coord> contourCoords = convertPointsToCoords(contour);
   
   // Util lambda that will determine the slope for a position by ave of L and R slopes
   
@@ -5364,10 +5367,7 @@ void calcNormalsOnContour(CvSize size,
   unordered_map<int, Coord> pendingLineEdges;
   
   int locOffset;
-  int locContourOffset;
-  
   locOffset = 0;
-  locContourOffset = contourOffset;
   
   const int lastContourOffset = (int)contour.size() - 1;
   
@@ -5377,6 +5377,8 @@ void calcNormalsOnContour(CvSize size,
     if (locSeg.isLine) {
       auto &pointsVec = locSeg.points;
       int startEndN;
+      
+      int locContourOffset = locSeg.startContourOffset;
       
       // Generate mapping from point to contour offset
       const int numPoints = (int) pointsVec.size();
@@ -5488,7 +5490,9 @@ void calcNormalsOnContour(CvSize size,
         }
       }
     } else {
-      // All points on curves treated as average between line slopes.
+      // All points on curves treated as average between existing slopes.
+      
+      int locContourOffset = locSeg.startContourOffset;
       
       // FIXME: should curve points be added inside out, so that ave at
       // edges is done before other points?
@@ -5497,7 +5501,12 @@ void calcNormalsOnContour(CvSize size,
       
       for ( Coord c : vec ) {
         int originalContourOffset = locContourOffset;
-        locContourOffset += 1;
+        
+        if (locContourOffset == lastContourOffset) {
+          locContourOffset = 0;
+        } else {
+          locContourOffset++;
+        }
         
 #if defined(DEBUG)
         assert(pendingLineEdges.count(originalContourOffset) == 0);
@@ -5558,15 +5567,13 @@ void calcNormalsOnContour(CvSize size,
   
   int contouri = 0;
   
-  // FIXME: if this is the only use for contourCoords  then use contour directly!
-  
-  for ( Coord c : contourCoords ) {
+  for ( Point2i p : contour ) {
     Point2f normF;
     
 #if defined(DEBUG)
     {
       Point2f zeroSlopeF(0.0f, 0.0f);
-      assert(contouri < contourCoords.size());
+      assert(contouri < contour.size());
       bool isNormalSet = (contourNormals[contouri] != zeroSlopeF);
       assert(isNormalSet);
     }
@@ -5574,7 +5581,7 @@ void calcNormalsOnContour(CvSize size,
     
     normF = contourNormals[contouri];
     
-    Point2f cF(c.x, c.y);
+    Point2f cF(p.x, p.y);
     
     Point2f normOutside = cF + (normF * 1);
     Point2f normInside = cF + (normF * -1);
@@ -5614,8 +5621,8 @@ void calcNormalsOnContour(CvSize size,
       }
     }
     
-    for ( Coord c : contourCoords ) {
-      binMat.at<uint8_t>(c.y, c.x) = 0x7F;
+    for ( Point2i p : contour ) {
+      binMat.at<uint8_t>(p.y, p.x) = 0x7F;
     }
     
     std::stringstream fnameStream;
@@ -5646,8 +5653,8 @@ void calcNormalsOnContour(CvSize size,
     
     Mat colorMat(largerSize, CV_8UC3, Scalar(0,0,0));
     
-    for ( Coord c : contourCoords ) {
-      smallColorMat.at<Vec3b>(c.y, c.x) = grayVec;
+    for ( Point2i p : contour ) {
+      smallColorMat.at<Vec3b>(p.y, p.x) = grayVec;
     }
     
     resize(smallColorMat, colorMat, colorMat.size(), 0, 0, INTER_CUBIC);
@@ -6740,7 +6747,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       // convergedFromPixel
       
       for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-        Coord c = contourCoords[contouri];
+        //Coord c = contourCoords[contouri];
         
         // Find first offset where convergedFromPixel is located
         // and use this offset as the trim point.
@@ -6791,7 +6798,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       int maxOutsideWidth = 0;
       
       for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-        Coord c = contourCoords[contouri];
+        //Coord c = contourCoords[contouri];
         
         auto &vecInside = edgesInsideMap[contouri];
         auto &vecOutside = edgesOutsideMap[contouri];
