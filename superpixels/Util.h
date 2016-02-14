@@ -402,6 +402,26 @@ vector<T> iterInsideOut(const vector<T> &vec)
     }
   }
   
+#if defined(DEBUG)
+  {
+    assert(results.size() == vec.size());
+    
+    unordered_map<T,int> seen;
+    
+    for ( int i = 0; i < results.size(); i++ ) {
+      T val = results[i];
+      assert(seen.count(val) == 0);
+      seen[val] = i;
+    }
+    
+    for ( int i = 0; i < vec.size(); i++ ) {
+      T val = vec[i];
+      assert(seen.count(val) == 1);
+    }
+
+  }
+#endif // DEBUG
+  
   return results;
 }
 
