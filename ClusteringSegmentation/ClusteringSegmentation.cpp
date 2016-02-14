@@ -5085,10 +5085,11 @@ vector<Coord> genRectangleOutline(int regionWidth, int regionHeight)
 // This method accepts an unsimplified contour of points and returns the approx normal vector for
 // each point on the contour.
 
-vector<vector<Point2f> > calcNormalsOnContour(CvSize size,
-                                              int32_t tag,
-                                              const vector<Point2i> &contour,
-                                              unordered_map<Coord, Point2f> &lineCoordToNormalMap)
+void calcNormalsOnContour(CvSize size,
+                          int32_t tag,
+                          const vector<Point2i> &contour,
+                          vector<Point2f> &contourNormals,
+                          vector<vector<Point2f> > &contourNormalCoords)
 {
   const bool debug = true;
   const bool debugDumpImages = true;
@@ -5097,9 +5098,29 @@ vector<vector<Point2f> > calcNormalsOnContour(CvSize size,
     cout << "calcNormalsOnContour " << tag << endl;
   }
   
+  contourNormals.clear();
+  contourNormalCoords.clear();
+  
+  // Set all contourNormals to 0.0 so that the size of contourNormals is
+  // the same as the size of contour.
+  
+  {
+    Point2f zeroNormal(0.0, 0.0);
+    for ( Point2i p : contour ) {
+      contourNormals.push_back(zeroNormal);
+    }
+    assert(contourNormals.size() == contour.size());
+    
+    if (debug) {
+      cout << "zero out " << contourNormals.size() << " contourNormals" << endl;
+    }
+  }
+  
   // Calculate normal vector that corresponds to each original contour coordinate.
   
-  vector<vector<Point2f> > allNormalVectors;
+//  vector<vector<Point2f> > allNormalVectors;
+  
+  vector<vector<Point2f> > &allNormalVectors = contourNormalCoords;
   
   Rect roi(0,0,size.width, size.height);
   
@@ -5113,6 +5134,96 @@ vector<vector<Point2f> > calcNormalsOnContour(CvSize size,
   double epsilon = 1.4;
   
   vector<HullLineOrCurveSegment> vecOfSeg = splitContourIntoLinesSegments(tag, size, roi, contour, epsilon);
+  
+  // Implement very simple mapping that examines the first 2 coords returned in vecOfSeg and determines
+  // the contour offset where these 2 coords are found.
+  
+  // FIXME: would be better if HullLineOrCurveSegment retained relative offsets explicitly.
+  
+  int contourOffset;
+  
+  {
+    vector<Point2i> firstTwoPoints;
+    
+    for ( HullLineOrCurveSegment & locSeg : vecOfSeg ) {
+      if (firstTwoPoints.size() == 2) {
+        break;
+      }
+      
+      vector<Point2i> &points = locSeg.points;
+      for ( Point2i p : points ) {
+        firstTwoPoints.push_back(p);
+        
+        if (firstTwoPoints.size() == 2) {
+          break;
+        }
+      }
+    }
+    
+    assert(firstTwoPoints.size() <= 2);
+    assert(firstTwoPoints.size() != 0);
+    
+    if (firstTwoPoints.size() == 1) {
+      // Use zero as contourOffset
+      
+      contourOffset = 0;
+      
+      if (debug) {
+        cout << "found contour start point at offset " << contourOffset << endl;
+      }
+    } else {
+      Point2i p1 = firstTwoPoints[0];
+      Point2i p2 = firstTwoPoints[1];
+      
+      if (debug) {
+        cout << "search for start point " << p1 << endl;
+        cout << "second point " << p2 << endl;
+      }
+      
+      int iMax = (int) contour.size() - 1;
+      
+      contourOffset = -1;
+      
+      for ( int i = 0; i < iMax; i++ ) {
+        Point2i cp1 = contour[i];
+        
+        if (debug) {
+          cout << "contour point " << cp1 << " at offset " << i << endl;
+        }
+        
+        if (cp1 == p1) {
+          Point2i cp2 = contour[i+1];
+          
+          if (debug) {
+            cout << "matched contour points " << cp1 << " and " << cp2 << " at offset " << i << endl;
+          }
+          
+          if (cp2 == p2) {
+            contourOffset = i;
+            break;
+          }
+        }
+      }
+      
+      if (contourOffset == -1) {
+        // Weird case, jsut looks for first match
+        int iMax = (int) contour.size();
+        for ( int i = 0; i < iMax; i++ ) {
+          Point2i cp1 = contour[i];
+          if (cp1 == p1) {
+            contourOffset = i;
+            break;
+          }
+        }
+      }
+      
+      if (debug) {
+        cout << "found contour start point " << pointToCoord(p1) << " " << pointToCoord(p2) << " at offset " << contourOffset << endl;
+      }
+      
+      assert(contourOffset != -1);
+    }
+  }
   
   // Note that iteration order of coordinates in vecOfSeg may not start on contourCoords[0] so
   // create a map from known line points to the common line slope.
@@ -5140,7 +5251,7 @@ vector<vector<Point2f> > calcNormalsOnContour(CvSize size,
   
   // Util lambda that will determine the slope for a position by ave of L and R slopes
   
-  auto aveSlope = [&normalUnitVecTable, &contourCoords, &lineCoordToNormalMap](int offset)->Point2f {
+  auto aveSlope = [&normalUnitVecTable, &contour, &contourNormals](int offset)->Point2f {
     const bool debug = true;
     
     if (debug) {
@@ -5155,19 +5266,21 @@ vector<vector<Point2f> > calcNormalsOnContour(CvSize size,
     int32_t actualOffsetL;
     int32_t actualOffsetR;
     
-    Coord cL;
-    Coord cR;
+//    Coord cL;
+//    Coord cR;
+    
+    Point2f zeroSlopeF(0.0f, 0.0f);
     
     while (1) {
-      actualOffsetL = vecOffsetAround((int32_t)contourCoords.size(), offsetL);
+      actualOffsetL = vecOffsetAround((int32_t)contour.size(), offsetL);
       
       if (actualOffsetL == offset) {
         break;
       }
       
-      cL = contourCoords[actualOffsetL];
+      bool isNormalSet = (contourNormals[actualOffsetL] != zeroSlopeF);
       
-      if (lineCoordToNormalMap.count(cL) > 0) {
+      if (isNormalSet) {
         break;
       }
       
@@ -5175,15 +5288,15 @@ vector<vector<Point2f> > calcNormalsOnContour(CvSize size,
     }
     
     while (1) {
-      actualOffsetR = vecOffsetAround((int32_t)contourCoords.size(), offsetR);
+      actualOffsetR = vecOffsetAround((int32_t)contour.size(), offsetR);
       
       if (actualOffsetR == offset) {
         break;
       }
       
-      cR = contourCoords[actualOffsetR];
+      bool isNormalSet = (contourNormals[actualOffsetR] != zeroSlopeF);
       
-      if (lineCoordToNormalMap.count(cR) > 0) {
+      if (isNormalSet) {
         break;
       }
       
@@ -5193,16 +5306,39 @@ vector<vector<Point2f> > calcNormalsOnContour(CvSize size,
     // Smooth out the difference between the two normal vectors
     
 #if defined(DEBUG)
-    assert(lineCoordToNormalMap.count(cL) > 0);
-    assert(lineCoordToNormalMap.count(cR) > 0);
+    {
+      bool isNormalSet = (contourNormals[actualOffsetL] != zeroSlopeF);
+      assert(isNormalSet);
+    }
+    {
+      bool isNormalSet = (contourNormals[actualOffsetR] != zeroSlopeF);
+      assert(isNormalSet);
+    }
+    
+//    int32_t actualOffsetL;
+//    int32_t actualOffsetR;
+    
+//    assert(lineCoordToNormalMap.count(cL) > 0);
+//    assert(lineCoordToNormalMap.count(cR) > 0);
 #endif // DEBUG
     
-    Point2f pF1 = lineCoordToNormalMap[cL];
-    Point2f pF2 = lineCoordToNormalMap[cR];
+//    Point2f pF1 = lineCoordToNormalMap[cL];
+//    Point2f pF2 = lineCoordToNormalMap[cR];
+    
+    Point2f pF1 = contourNormals[actualOffsetL];
+    Point2f pF2 = contourNormals[actualOffsetR];
     
     if (debug) {
-      printf("Coord on Left  (%d,%d) from offset %d\n", cL.x, cL.y, actualOffsetL);
-      printf("Coord on Right (%d,%d) from offset %d\n", cR.x, cR.y, actualOffsetR);
+      //const vector<Point2i> &contour
+      
+      const Point2i pL = contour[actualOffsetL];
+      const Point2i pR = contour[actualOffsetR];
+      
+//      Coord cL = contourNormals[actualOffsetL];
+//      Coord cR = contourNormals[actualOffsetR];
+      
+      printf("Coord on Left  (%d,%d) from offset %d\n", pL.x, pL.y, actualOffsetL);
+      printf("Coord on Right (%d,%d) from offset %d\n", pR.x, pR.y, actualOffsetR);
       
       printf("Norm on Left  (%0.3f,%0.3f)\n", pF1.x, pF1.y);
       printf("Norm on Right (%0.3f,%0.3f)\n", pF2.x, pF2.y);
@@ -5223,17 +5359,72 @@ vector<vector<Point2f> > calcNormalsOnContour(CvSize size,
     return sumF;
   };
   
-  vector<Coord> pendingLineEdges;
+  // Map table of calculated normals to each contour offset
+  
+  unordered_map<int, Coord> pendingLineEdges;
   
   int locOffset;
+  int locContourOffset;
   
   locOffset = 0;
+  locContourOffset = contourOffset;
+  
+  const int lastContourOffset = (int)contour.size() - 1;
+  
+  const bool debugOffsetOutput = true;
+  
   for ( HullLineOrCurveSegment & locSeg : vecOfSeg ) {
     if (locSeg.isLine) {
       auto &pointsVec = locSeg.points;
       int startEndN;
       
-      auto insideOutVec = iterInsideOut(pointsVec);
+      // Generate mapping from point to contour offset
+      const int numPoints = (int) pointsVec.size();
+      vector<int> contourOffsetVec(numPoints);
+      
+      for ( int i = 0; i < numPoints; i++ ) {
+        contourOffsetVec[i] = locContourOffset;
+        
+        if (debugOffsetOutput) {
+          cout << "contourOffsetVec[" << i << "] = " << locContourOffset << endl;
+        }
+        
+        if (locContourOffset == lastContourOffset) {
+          locContourOffset = 0;
+        } else {
+          locContourOffset++;
+        }
+      }
+      
+      // Iterate from line midpoint to edges using offsets into pointsVec
+      
+      vector<int> pointOffsetVec(numPoints);
+      
+      for ( int i = 0; i < numPoints; i++ ) {
+        pointOffsetVec[i] = i;
+      }
+      
+#if defined(DEBUG)
+      assert(numPoints == pointOffsetVec.size());
+#endif // DEBUG
+      
+      vector<int> reorderedOffsetVec = iterInsideOut(pointOffsetVec);
+      
+//      vector<Point2i> insideOutVec;
+//      
+//      for ( int i = 0; i < numPoints; i++ ) {
+//        int offset = reorderedOffsetVec[i];
+//        Point2i p = pointsVec[offset];
+//        insideOutVec.push_back(p);
+//        
+//        if (debugOffsetOutput) {
+//          cout << "insideOutVec[" << i << "] = " << insideOutVec[insideOutVec.size()-1] << endl;
+//        }
+//      }
+      
+#if defined(DEBUG)
+//      assert(numPoints == insideOutVec.size());
+#endif // DEBUG
       
       if (pointsVec.size() <= 3) {
         startEndN = 2;
@@ -5241,22 +5432,59 @@ vector<vector<Point2f> > calcNormalsOnContour(CvSize size,
         startEndN = 2;
       } else {
         startEndN = 2;
-        //              startEndN = 1;
+        //startEndN = 1;
       }
       
-      int maxOffset = (int) insideOutVec.size();
-      
-      for ( int i = 0; i < maxOffset; i++ ) {
-        Point2i p = insideOutVec[i];
+      for ( int i = 0; i < numPoints; i++ ) {
+#if defined(DEBUG)
+        assert(i >= 0 && i < reorderedOffsetVec.size());
+#endif // DEBUG
         
-        if (i >= (maxOffset - startEndN)) {
+        int insideOutOffset = reorderedOffsetVec[i];
+        
+#if defined(DEBUG)
+        assert(insideOutOffset >= 0 && insideOutOffset < pointsVec.size());
+#endif // DEBUG
+        
+        Point2i p = pointsVec[insideOutOffset];
+        
+        if (debugOffsetOutput) {
+          cout << "loop i = " << i << " : insideOutOffset " << insideOutOffset << " point " << p << endl;
+        }
+        
+        //Point2i p = insideOutVec[i];
+        
+#if defined(DEBUG)
+        assert(i >= 0 && i < contourOffsetVec.size());
+#endif // DEBUG
+        
+        int originalContourOffset = contourOffsetVec[insideOutOffset];
+        
+        if (debugOffsetOutput) {
+          cout << "slope calc " << i << " : originalContourOffset " << originalContourOffset << endl;
+        }
+        
+        if (i >= (numPoints - startEndN)) {
           // Append rest of values
           Coord c = pointToCoord(p);
-          pendingLineEdges.push_back(c);
+          
+#if defined(DEBUG)
+          assert(pendingLineEdges.count(originalContourOffset) == 0);
+#endif // DEBUG
+
+          pendingLineEdges[originalContourOffset] = c;
         } else {
           Point2f normal = normalUnitVecTable[locOffset];
-          Coord c = pointToCoord(p);
-          lineCoordToNormalMap[c] = normal;
+          
+#if defined(DEBUG)
+          assert(originalContourOffset >= 0 && originalContourOffset < contourNormals.size());
+#endif // DEBUG
+          
+          contourNormals[originalContourOffset] = normal;
+          
+          if (debugOffsetOutput) {
+            cout << "set contourNormals[" << originalContourOffset << "] = " << normal << endl;
+          }
         }
       }
     } else {
@@ -5266,56 +5494,85 @@ vector<vector<Point2f> > calcNormalsOnContour(CvSize size,
       // edges is done before other points?
       
       vector<Coord> vec = convertPointsToCoords(locSeg.points);
-      append_to_vector(pendingLineEdges, vec);
+      
+      for ( Coord c : vec ) {
+        int originalContourOffset = locContourOffset;
+        locContourOffset += 1;
+        
+#if defined(DEBUG)
+        assert(pendingLineEdges.count(originalContourOffset) == 0);
+#endif // DEBUG
+        
+        pendingLineEdges[originalContourOffset] = c;
+      }
     }
     
     locOffset++;
   }
   
+// FIXME: need to use offsets into contour instead of Map here
+  
   // Iterate over original contour points and determine if any points
   // still need to have normals calculated.
   
-  unordered_map<Coord, int> contourCoordsToFirstOffsetMap;
+//  unordered_map<Coord, int> contourCoordsToFirstOffsetMap;
   
-  int contourOffset = 0;
+//  int contourOffset = 0;
   
-  for ( Coord c : contourCoords ) {
-    if (contourCoordsToFirstOffsetMap.count(c) == 0) {
-      contourCoordsToFirstOffsetMap[c] = contourOffset;
-    }
-    contourOffset++;
-  }
+//  for ( Coord c : contourCoords ) {
+//    if (contourCoordsToFirstOffsetMap.count(c) == 0) {
+//      contourCoordsToFirstOffsetMap[c] = contourOffset;
+//    }
+//    contourOffset++;
+//  }
   
   // Average pending points in backward order so that the points
   // farthest from the line center are processed first.
   
-  for ( auto it = pendingLineEdges.begin(); it != pendingLineEdges.end(); it++ ) {
-    Coord c = *it;
-    cout << c << endl;
+  for ( auto &pair : pendingLineEdges ) {
+    int contourOffset = pair.first;
+    Coord c = pair.second;
+    
+    if (debug) {
+      cout << "pendingLineEdge coord " << c << " at offset " << contourOffset << endl;
+    }
     
 #if defined(DEBUG)
-    assert(contourCoordsToFirstOffsetMap.count(c) > 0);
+    {
+      Point2f zeroSlopeF(0.0f, 0.0f);
+      bool isNormalSet = (contourNormals[contourOffset] != zeroSlopeF);
+      assert(isNormalSet == false);
+    }
 #endif // DEBUG
     
-    int contourOffset = contourCoordsToFirstOffsetMap[c];
+    //int contourOffset = contourCoordsToFirstOffsetMap[c];
     
     Point2f normF = aveSlope(contourOffset);
     
-    lineCoordToNormalMap[c] = normF;
+//    lineCoordToNormalMap[c] = normF;
+    
+    contourNormals[contourOffset] = normF;
   }
+
+  // At this point, slopes for each contour coordinate should be defined
+  
+  int contouri = 0;
+  
+  // FIXME: if this is the only use for contourCoords  then use contour directly!
   
   for ( Coord c : contourCoords ) {
     Point2f normF;
     
 #if defined(DEBUG)
-    assert(lineCoordToNormalMap.count(c) > 0);
+    {
+      Point2f zeroSlopeF(0.0f, 0.0f);
+      assert(contouri < contourCoords.size());
+      bool isNormalSet = (contourNormals[contouri] != zeroSlopeF);
+      assert(isNormalSet);
+    }
 #endif // DEBUG
     
-    if (lineCoordToNormalMap.count(c) == 0) {
-      assert(0);
-    } else {
-      normF = lineCoordToNormalMap[c];
-    }
+    normF = contourNormals[contouri];
     
     Point2f cF(c.x, c.y);
     
@@ -5336,6 +5593,8 @@ vector<vector<Point2f> > calcNormalsOnContour(CvSize size,
     vecPoints.push_back(normOutside);
     
     allNormalVectors.push_back(vecPoints);
+    
+    contouri += 1;
   }
   
   // Dump the pixels contained in allNormalVectors as a massive image where the pixels
@@ -5433,9 +5692,10 @@ vector<vector<Point2f> > calcNormalsOnContour(CvSize size,
     cout << "calcNormalsOnContour return " << allNormalVectors.size() << " normals" << endl;
   }
 
+  assert(contourNormals.size() == contour.size());
   assert(allNormalVectors.size() == contour.size());
          
-  return allNormalVectors;
+  return;
 }
 
 // Scan region given likely bounds and determine where most accurate region bounds are likely to be
@@ -5938,8 +6198,12 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
   
   vector<Point2i> contour = convertCoordsToPoints(contourCoords);
   
-  unordered_map<Coord, Point2f> lineCoordToNormalMap;
-  vector<vector<Point2f> > allNormalVectors = calcNormalsOnContour(tagsImg.size(), tag, contour, lineCoordToNormalMap);
+//  unordered_map<Coord, Point2f> lineCoordToNormalMap;
+  
+  vector<Point2f> contourNormals;
+  vector<vector<Point2f> > allNormalVectors;
+  
+  calcNormalsOnContour(tagsImg.size(), tag, contour, contourNormals, allNormalVectors);
   
   if (1) {
     int maxWidth = 0;
@@ -6016,14 +6280,14 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
   // pixels inside the shape are marked as consumed already, in that case the iteration has
   // to stop once a consumed pixel is found.
   
-  unordered_map<Coord, vector<Coord>> edgesInsideMap;
-  unordered_map<Coord, vector<Coord>> edgesOutsideMap;
+  unordered_map<int, vector<Coord>> edgesInsideMap;
+  unordered_map<int, vector<Coord>> edgesOutsideMap;
   
   {
     int maxContouri = (int) contourCoords.size();
     
     for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-      Coord c = contourCoords[contouri];
+      //Coord c = contourCoords[contouri];
       vector<Point2f> normalVecPoints = allNormalVectors[contouri];
       
       Point2f insideF = normalVecPoints[0];
@@ -6035,7 +6299,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       
       vector<Point2i> generatedPoints = generatePointsOnLine(insideF, regionCenterP);
       
-      edgesInsideMap[c] = convertPointsToCoords(generatedPoints);
+      edgesInsideMap[contouri] = convertPointsToCoords(generatedPoints);
       
       if (debugDumpInsideOutsiteStepImages) {
         Mat renderMat(tagsImg.size(), CV_8UC1, Scalar(0));
@@ -6047,7 +6311,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         double tipLength = 0.2;
         arrowedLine(renderMat, insideF, regionCenterP, Scalar(0x7F), 2, 8, 0, tipLength);
         
-        for ( Coord c : edgesInsideMap[c] ) {
+        for ( Coord c : edgesInsideMap[contouri] ) {
           renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
         }
         
@@ -6073,7 +6337,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     CvRect roi(0, 0, inputImg.size().width, inputImg.size().height);
    
     for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-      Coord c = contourCoords[contouri];
+      //Coord c = contourCoords[contouri];
+      //Point2f normVec = allNormalVectors[contouri];
       vector<Point2f> normalVecPoints = allNormalVectors[contouri];
       
       Point2f insideF = normalVecPoints[0];
@@ -6085,14 +6350,15 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       
       // Determine point 5 pixels away from outside point based on normal vector
       
-      Point2f normVec = lineCoordToNormalMap[c];
+//      Point2f normVec = lineCoordToNormalMap[c];
+      Point2f normVec = contourNormals[contouri];
       Point2f wayOutsideF = onF + (5 * normVec);
       
       vector<Point2i> generatedPoints = generatePointsOnLine(outsideF, wayOutsideF);
       
       generatedPoints = filterPointsOutsideROI(generatedPoints, roi);
       
-      edgesOutsideMap[c] = convertPointsToCoords(generatedPoints);
+      edgesOutsideMap[contouri] = convertPointsToCoords(generatedPoints);
       
       if (debugDumpInsideOutsiteStepImages) {
         Mat renderMat(tagsImg.size(), CV_8UC1, Scalar(0));
@@ -6104,7 +6370,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         double tipLength = 0.2;
         arrowedLine(renderMat, outsideF, wayOutsideF, Scalar(0x7F), 2, 8, 0, tipLength);
         
-        for ( Coord c : edgesOutsideMap[c] ) {
+        for ( Coord c : edgesOutsideMap[contouri] ) {
           renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
         }
         
@@ -6128,10 +6394,10 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       int maxOutsideWidth = 0;
     
       for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-        Coord c = contourCoords[contouri];
+        //Coord c = contourCoords[contouri];
 
-        auto &vecInside = edgesInsideMap[c];
-        auto &vecOutside = edgesOutsideMap[c];
+        auto &vecInside = edgesInsideMap[contouri];
+        auto &vecOutside = edgesOutsideMap[contouri];
         
         maxInsideWidth = maxi(maxInsideWidth, (int)vecInside.size());
         maxOutsideWidth = maxi(maxOutsideWidth, (int)vecOutside.size());
@@ -6146,8 +6412,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
         Coord c = contourCoords[contouri];
         
-        auto &vecInside = edgesInsideMap[c];
-        auto &vecOutside = edgesOutsideMap[c];
+        auto &vecInside = edgesInsideMap[contouri];
+        auto &vecOutside = edgesOutsideMap[contouri];
         
         int midi = (maxInsideWidth + 1) - 1;
 
@@ -6217,7 +6483,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     // Iterate from region bound to the center point until a clear
     // interior bound is detected.
     
-    unordered_map<Coord, int32_t> insideVecEndOffsetMap;
+    unordered_map<int, int32_t> insideVecEndOffsetMap;
     
     bool convergedFromPixelSet = false;
     uint32_t convergedFromPixel = 0;
@@ -6229,12 +6495,12 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       int numEmpty = 0;
       
       for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-        Coord c = contourCoords[contouri];
-        auto &vecInside = edgesInsideMap[c];
+        //Coord c = contourCoords[contouri];
+        auto &vecInside = edgesInsideMap[contouri];
         
         // Grab current value and init to zero in first loop
         
-        int32_t &offset = insideVecEndOffsetMap[c];
+        int32_t &offset = insideVecEndOffsetMap[contouri];
         
         if (offset < vecInside.size()) {
           offset++;
@@ -6273,7 +6539,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         // in the contour needs to be used to uniq identify a specific coordinate
         // to deal with cases like a star shape that could cross itself.
         
-        if (1) {
+        if ((0)) {
           unordered_map<Coord, bool> seen;
           for ( Coord c : contourCoords ) {
             assert(seen.count(c) == 0);
@@ -6282,10 +6548,10 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         }
         
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-          Coord c = contourCoords[contouri];
+          //Coord c = contourCoords[contouri];
           
-          auto &vecInside = edgesInsideMap[c];
-          int32_t &endOffset = insideVecEndOffsetMap[c];
+          auto &vecInside = edgesInsideMap[contouri];
+          int32_t &endOffset = insideVecEndOffsetMap[contouri];
           
           // Gather pixels from (0, endOffset)
           
@@ -6370,8 +6636,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         int maxInsideWidth = 0;
         
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-          Coord c = contourCoords[contouri];
-          int numPixels = (int) insideVecEndOffsetMap[c];
+          //Coord c = contourCoords[contouri];
+          int numPixels = (int) insideVecEndOffsetMap[contouri];
           assert(numPixels > 0);
           
           printf("for contouri %4d : numPixels inside %d\n", contouri, numPixels);
@@ -6386,10 +6652,10 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         Mat colorPixelsMat(matSize, CV_8UC4, Scalar(0,0,0,0));
         
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-          Coord c = contourCoords[contouri];
+          //Coord c = contourCoords[contouri];
           
-          auto &vecInside = edgesInsideMap[c];
-          int32_t &endOffset = insideVecEndOffsetMap[c];
+          auto &vecInside = edgesInsideMap[contouri];
+          int32_t &endOffset = insideVecEndOffsetMap[contouri];
           
           // Gather pixels from (0, endOffset) which correspond
           // to pixels from the edge to the center.
@@ -6427,10 +6693,10 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         colorPixelsMat = Scalar(0,0,0,0);
         
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-          Coord c = contourCoords[contouri];
+          //Coord c = contourCoords[contouri];
           
-          auto &vecInside = edgesInsideMap[c];
-          int32_t &endOffset = insideVecEndOffsetMap[c];
+          auto &vecInside = edgesInsideMap[contouri];
+          int32_t &endOffset = insideVecEndOffsetMap[contouri];
           
           // Gather pixels from (0, endOffset) which correspond
           // to pixels from the edge to the center.
@@ -6481,8 +6747,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         int trimInd = -1;
         
-        auto &vecInside = edgesInsideMap[c];
-        int32_t &endOffset = insideVecEndOffsetMap[c];
+        auto &vecInside = edgesInsideMap[contouri];
+        int32_t &endOffset = insideVecEndOffsetMap[contouri];
         
         // Gather pixels from (0, endOffset)
         
@@ -6513,7 +6779,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           }
         }
         
-        edgesInsideMap[c] = filteredCoords;
+        edgesInsideMap[contouri] = filteredCoords;
       }
 
     }
@@ -6527,8 +6793,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
         Coord c = contourCoords[contouri];
         
-        auto &vecInside = edgesInsideMap[c];
-        auto &vecOutside = edgesOutsideMap[c];
+        auto &vecInside = edgesInsideMap[contouri];
+        auto &vecOutside = edgesOutsideMap[contouri];
         
         maxInsideWidth = maxi(maxInsideWidth, (int)vecInside.size());
         maxOutsideWidth = maxi(maxOutsideWidth, (int)vecOutside.size());
@@ -6543,8 +6809,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
         Coord c = contourCoords[contouri];
         
-        auto &vecInside = edgesInsideMap[c];
-        auto &vecOutside = edgesOutsideMap[c];
+        auto &vecInside = edgesInsideMap[contouri];
+        auto &vecOutside = edgesOutsideMap[contouri];
         
         int midi = (maxInsideWidth + 1) - 1;
         
@@ -7284,7 +7550,7 @@ bool srmMultiSegment(const Mat & inputImg, Mat & tagsMat) {
   //    double Q = 512.0;
   
   //double Qmore = Q + 128.0; // break up into more regions
-  double Qmore = 512.0; // break up into more regions
+  //double Qmore = 512.0; // break up into more regions
   
   Mat srmTags1 = generateSRM(inputImg, Q);
   
@@ -7401,7 +7667,7 @@ bool srmMultiSegment(const Mat & inputImg, Mat & tagsMat) {
     
   // -----------------------------------------------------------------------------
   
-  if (0) {
+  if ((0)) {
   
   // Scan each grouping to determine when pixels identified as being in
   // the same group in srmTags1 are not included in the group in srmTags2.
