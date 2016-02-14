@@ -359,9 +359,8 @@ clockwiseScanOfHullCoords(
   return clockwiseScanOfHullContour(tagsImg.size(), tag, contour);
 }
 
-// Given a contour that is already parsed into a clockwise set points, split
-// the split up into convex vs
-// concave parts.
+// Given a contour that is already parsed into a clockwise set of points,
+// split the hull segments into either convex or concave segments.
 
 vector<TypedHullCoords>
 clockwiseScanOfHullContour(CvSize size,

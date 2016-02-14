@@ -5118,8 +5118,6 @@ void calcNormalsOnContour(CvSize size,
   
   // Calculate normal vector that corresponds to each original contour coordinate.
   
-//  vector<vector<Point2f> > allNormalVectors;
-  
   vector<vector<Point2f> > &allNormalVectors = contourNormalCoords;
   
   Rect roi(0,0,size.width, size.height);
@@ -5135,99 +5133,16 @@ void calcNormalsOnContour(CvSize size,
   
   vector<HullLineOrCurveSegment> vecOfSeg = splitContourIntoLinesSegments(tag, size, roi, contour, epsilon);
   
-  /*
-  
-  // Implement very simple mapping that examines the first 2 coords returned in vecOfSeg and determines
-  // the contour offset where these 2 coords are found.
-  
-  // FIXME: would be better if HullLineOrCurveSegment retained relative offsets explicitly.
-  
-  int contourOffset;
-  
+#if defined(DEBUG)
   {
-    vector<Point2i> firstTwoPoints;
+    // Double check that the coordinate indicated as the HullLineOrCurveSegment
+    // starting point is the same as the first coord.
     
-    for ( HullLineOrCurveSegment & locSeg : vecOfSeg ) {
-      if (firstTwoPoints.size() == 2) {
-        break;
-      }
-      
-      vector<Point2i> &points = locSeg.points;
-      for ( Point2i p : points ) {
-        firstTwoPoints.push_back(p);
-        
-        if (firstTwoPoints.size() == 2) {
-          break;
-        }
-      }
-    }
-    
-    assert(firstTwoPoints.size() <= 2);
-    assert(firstTwoPoints.size() != 0);
-    
-    if (firstTwoPoints.size() == 1) {
-      // Use zero as contourOffset
-      
-      contourOffset = 0;
-      
-      if (debug) {
-        cout << "found contour start point at offset " << contourOffset << endl;
-      }
-    } else {
-      Point2i p1 = firstTwoPoints[0];
-      Point2i p2 = firstTwoPoints[1];
-      
-      if (debug) {
-        cout << "search for start point " << p1 << endl;
-        cout << "second point " << p2 << endl;
-      }
-      
-      int iMax = (int) contour.size() - 1;
-      
-      contourOffset = -1;
-      
-      for ( int i = 0; i < iMax; i++ ) {
-        Point2i cp1 = contour[i];
-        
-        if (debug) {
-          cout << "contour point " << cp1 << " at offset " << i << endl;
-        }
-        
-        if (cp1 == p1) {
-          Point2i cp2 = contour[i+1];
-          
-          if (debug) {
-            cout << "matched contour points " << cp1 << " and " << cp2 << " at offset " << i << endl;
-          }
-          
-          if (cp2 == p2) {
-            contourOffset = i;
-            break;
-          }
-        }
-      }
-      
-      if (contourOffset == -1) {
-        // Weird case, jsut looks for first match
-        int iMax = (int) contour.size();
-        for ( int i = 0; i < iMax; i++ ) {
-          Point2i cp1 = contour[i];
-          if (cp1 == p1) {
-            contourOffset = i;
-            break;
-          }
-        }
-      }
-      
-      if (debug) {
-        cout << "found contour start point " << pointToCoord(p1) << " " << pointToCoord(p2) << " at offset " << contourOffset << endl;
-      }
-      
-      assert(contourOffset != -1);
-    }
+    int startOff = vecOfSeg[0].startContourOffset;
+    Point2i p = vecOfSeg[0].points[0];
+    assert(contour[startOff] == p);
   }
-   
-  */
+#endif // DEBUG
   
   // Note that iteration order of coordinates in vecOfSeg may not start on contourCoords[0] so
   // create a map from known line points to the common line slope.
@@ -5249,9 +5164,6 @@ void calcNormalsOnContour(CvSize size,
     }
   }
   
-//  unordered_map<Coord, Point2f> lineCoordToNormalMap;
-//  const vector<Coord> contourCoords = convertPointsToCoords(contour);
-  
   // Util lambda that will determine the slope for a position by ave of L and R slopes
   
   auto aveSlope = [&normalUnitVecTable, &contour, &contourNormals](int offset)->Point2f {
@@ -5268,9 +5180,6 @@ void calcNormalsOnContour(CvSize size,
     
     int32_t actualOffsetL;
     int32_t actualOffsetR;
-    
-//    Coord cL;
-//    Coord cR;
     
     Point2f zeroSlopeF(0.0f, 0.0f);
     
@@ -5317,17 +5226,7 @@ void calcNormalsOnContour(CvSize size,
       bool isNormalSet = (contourNormals[actualOffsetR] != zeroSlopeF);
       assert(isNormalSet);
     }
-    
-//    int32_t actualOffsetL;
-//    int32_t actualOffsetR;
-    
-//    assert(lineCoordToNormalMap.count(cL) > 0);
-//    assert(lineCoordToNormalMap.count(cR) > 0);
 #endif // DEBUG
-    
-//    Point2f pF1 = lineCoordToNormalMap[cL];
-//    Point2f pF2 = lineCoordToNormalMap[cR];
-    
     Point2f pF1 = contourNormals[actualOffsetL];
     Point2f pF2 = contourNormals[actualOffsetR];
     
@@ -5336,9 +5235,6 @@ void calcNormalsOnContour(CvSize size,
       
       const Point2i pL = contour[actualOffsetL];
       const Point2i pR = contour[actualOffsetR];
-      
-//      Coord cL = contourNormals[actualOffsetL];
-//      Coord cR = contourNormals[actualOffsetR];
       
       printf("Coord on Left  (%d,%d) from offset %d\n", pL.x, pL.y, actualOffsetL);
       printf("Coord on Right (%d,%d) from offset %d\n", pR.x, pR.y, actualOffsetR);
@@ -5412,22 +5308,6 @@ void calcNormalsOnContour(CvSize size,
       
       vector<int> reorderedOffsetVec = iterInsideOut(pointOffsetVec);
       
-//      vector<Point2i> insideOutVec;
-//      
-//      for ( int i = 0; i < numPoints; i++ ) {
-//        int offset = reorderedOffsetVec[i];
-//        Point2i p = pointsVec[offset];
-//        insideOutVec.push_back(p);
-//        
-//        if (debugOffsetOutput) {
-//          cout << "insideOutVec[" << i << "] = " << insideOutVec[insideOutVec.size()-1] << endl;
-//        }
-//      }
-      
-#if defined(DEBUG)
-//      assert(numPoints == insideOutVec.size());
-#endif // DEBUG
-      
       if (pointsVec.size() <= 3) {
         startEndN = 2;
       } else if (pointsVec.size() <= 5) {
@@ -5453,8 +5333,6 @@ void calcNormalsOnContour(CvSize size,
         if (debugOffsetOutput) {
           cout << "loop i = " << i << " : insideOutOffset " << insideOutOffset << " point " << p << endl;
         }
-        
-        //Point2i p = insideOutVec[i];
         
 #if defined(DEBUG)
         assert(i >= 0 && i < contourOffsetVec.size());
@@ -5519,22 +5397,6 @@ void calcNormalsOnContour(CvSize size,
     locOffset++;
   }
   
-// FIXME: need to use offsets into contour instead of Map here
-  
-  // Iterate over original contour points and determine if any points
-  // still need to have normals calculated.
-  
-//  unordered_map<Coord, int> contourCoordsToFirstOffsetMap;
-  
-//  int contourOffset = 0;
-  
-//  for ( Coord c : contourCoords ) {
-//    if (contourCoordsToFirstOffsetMap.count(c) == 0) {
-//      contourCoordsToFirstOffsetMap[c] = contourOffset;
-//    }
-//    contourOffset++;
-//  }
-  
   // Average pending points in backward order so that the points
   // farthest from the line center are processed first.
   
@@ -5554,11 +5416,7 @@ void calcNormalsOnContour(CvSize size,
     }
 #endif // DEBUG
     
-    //int contourOffset = contourCoordsToFirstOffsetMap[c];
-    
     Point2f normF = aveSlope(contourOffset);
-    
-//    lineCoordToNormalMap[c] = normF;
     
     contourNormals[contourOffset] = normF;
   }
@@ -6205,8 +6063,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
   
   vector<Point2i> contour = convertCoordsToPoints(contourCoords);
   
-//  unordered_map<Coord, Point2f> lineCoordToNormalMap;
-  
   vector<Point2f> contourNormals;
   vector<vector<Point2f> > allNormalVectors;
   
@@ -6304,6 +6160,10 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       round(insideF);
       round(outsideF);
       
+      // FIXME: line to center point must not pass through the contour again.
+      // If this case would happen then path to center via distance transform
+      // should be used to determine a non-conflict path.
+      
       vector<Point2i> generatedPoints = generatePointsOnLine(insideF, regionCenterP);
       
       edgesInsideMap[contouri] = convertPointsToCoords(generatedPoints);
@@ -6345,7 +6205,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
    
     for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
       //Coord c = contourCoords[contouri];
-      //Point2f normVec = allNormalVectors[contouri];
       vector<Point2f> normalVecPoints = allNormalVectors[contouri];
       
       Point2f insideF = normalVecPoints[0];
@@ -6357,7 +6216,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       
       // Determine point 5 pixels away from outside point based on normal vector
       
-//      Point2f normVec = lineCoordToNormalMap[c];
       Point2f normVec = contourNormals[contouri];
       Point2f wayOutsideF = onF + (5 * normVec);
       
@@ -6585,6 +6443,11 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
               printf("endOffset %d\n", endOffset);
             }
           }
+          
+          // FIXME: converge could mean that the whole region converges
+          // into the same region with the same pixel value. Or it could
+          // also mean that each vector converges down to a comment set
+          // of values.
           
           //assert(pixels.size() > 1);
           
