@@ -6345,6 +6345,58 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       }
     }
     
+    // Util lambda to determine if a set of coordinates "converges"
+    // meaning that all the pixels that correspond to the coordinates
+    // are the same.
+    
+    auto doCoordsConvergeToSamePixel = [](const Mat & pixelMat, const vector<Coord> &coords, uint32_t *pixelPtr)->bool {
+      const bool debug = true;
+      
+      if (coords.size() == 0) {
+        return false;
+      }
+      
+      bool doPixelsConverge = true;
+      
+      uint32_t prevPixel;
+      
+      {
+        Coord c = coords[0];
+        Vec3b vec3 = pixelMat.at<Vec3b>(c.y, c.x);
+        prevPixel = Vec3BToUID(vec3);
+      }
+      
+      int iMax = (int) coords.size();
+      
+      for ( int i = 1; i < iMax; i++ ) {
+        Coord c = coords[i];
+        Vec3b vec3 = pixelMat .at<Vec3b>(c.y, c.x);
+        uint32_t pixel = Vec3BToUID(vec3);
+        if (pixel == prevPixel) {
+          // Could still converge
+        } else {
+          doPixelsConverge = false;
+          break;
+        }
+      }
+      
+      if (debug && doPixelsConverge) {
+        // All pixels inside are the same
+        
+        printf("all inside pixels converge to 0x%08X\n", prevPixel);
+      }
+      
+      if (doPixelsConverge) {
+        *pixelPtr = prevPixel;
+      }
+      
+      if (doPixelsConverge) {
+        return true;
+      } else {
+        return false;
+      }
+    };
+    
     // Iterate from region bound to the center point until a clear
     // interior bound is detected.
     
@@ -6389,28 +6441,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         convergedFromPixelSet = false;
         
-        vector<uint32_t> innerMostPixels;
-        innerMostPixels.reserve(1024);
-        
-        if (insideStep == 0) {
-          insideStep++;
-          insideStep--;
-        }
-        
-        // FIXME: do some of the coords in contour appear more than once, is that
-        // what is causing the increased count of the inside pixels? How to dedup?
-
-        // The reality of a fix here is that instead of using Coord, the offset
-        // in the contour needs to be used to uniq identify a specific coordinate
-        // to deal with cases like a star shape that could cross itself.
-        
-        if ((0)) {
-          unordered_map<Coord, bool> seen;
-          for ( Coord c : contourCoords ) {
-            assert(seen.count(c) == 0);
-            seen[c] = true;
-          }
-        }
+        vector<Coord> innerMostCoords;
+        innerMostCoords.reserve(1024);
         
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
           //Coord c = contourCoords[contouri];
@@ -6418,26 +6450,13 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           auto &vecInside = edgesInsideMap[contouri];
           int32_t &endOffset = insideVecEndOffsetMap[contouri];
           
-          // Gather pixels from (0, endOffset)
-          
-//          vector<uint32_t> pixels;
-          
-//          for ( int i = 0; i < endOffset; i++ ) {
-//            Coord c = vecInside[i];
-//            Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
-//            uint32_t pixel = Vec3BToUID(vec3);
-//            pixels.push_back(pixel);
-//          }
-          
           {
             int actualOffset = endOffset;
             if (actualOffset > 0) {
               actualOffset -= 1;
             }
             Coord c = vecInside[actualOffset];
-            Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
-            uint32_t pixel = Vec3BToUID(vec3);
-            innerMostPixels.push_back(pixel);
+            innerMostCoords.push_back(c);
             
             if (insideStep == 0 && endOffset > 1) {
               printf("endOffset %d\n", endOffset);
@@ -6449,56 +6468,27 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           // also mean that each vector converges down to a comment set
           // of values.
           
-          //assert(pixels.size() > 1);
-          
-          // FIXME: converge means that all pixels at the end of the
-          // vectors is the same, not all the same for all in each
-          // vector.
-          
-//          uint32_t prev = pixels[0];
-//          
-//          for ( uint32_t pixel : pixels ) {
-//            if (pixel != prev) {
-//              allVectorsConverge = false;
-//              break;
-//            }
-//          }
-          
-//          if (allVectorsConverge && (convergedFromPixelSet == false)) {
-//            convergedFromPixel = prev;
-//            convergedFromPixelSet = true;
-//          }
         }
         
-        if (innerMostPixels.size() > 0) {
-          uint32_t prev = innerMostPixels[0];
-          
-          for ( uint32_t pixel : innerMostPixels ) {
-            if (pixel != prev) {
-              allVectorsConverge = false;
-              break;
-            }
-          }
-          
-          if (allVectorsConverge && (convergedFromPixelSet == false)) {
-            convergedFromPixel = prev;
-            convergedFromPixelSet = true;
-          }
+        uint32_t tmp;
+        allVectorsConverge = doCoordsConvergeToSamePixel(inputImg, innerMostCoords, &tmp);
+        
+        if (allVectorsConverge && (convergedFromPixelSet == false)) {
+          convergedFromPixelSet = true;
+          convergedFromPixel = tmp;
         }
         
         if (allVectorsConverge) {
           // All pixels inside are the same
           
-          printf("all inside pixels converge to as 0x%08X\n", convergedFromPixel);
-          
           done = true;
         }
       }
       
-      if (insideStep == 0) {
-        insideStep++;
-        insideStep--;
-      }
+//      if (insideStep == 0) {
+//        insideStep++;
+//        insideStep--;
+//      }
       
       if (debugDumpImages) {
         // Emit vector image that shows how many pixels are filled in at this step level
@@ -6607,49 +6597,52 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     
     if (convergedFromPixelSet) {
       
-      // convergedFromPixel
+      // Trim repeated occurances of convergedFromPixel off end of edgesInsideMap
       
       for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
         //Coord c = contourCoords[contouri];
         
-        // Find first offset where convergedFromPixel is located
-        // and use this offset as the trim point.
+        vector<Coord> &vecInside = edgesInsideMap[contouri];
+        const int32_t endOffset = insideVecEndOffsetMap[contouri];
         
-        int trimInd = -1;
+        // Iterate from endOffset down to but not including zero and
+        // trim while the pixel is the same as convergedFromPixel.
         
-        auto &vecInside = edgesInsideMap[contouri];
-        int32_t &endOffset = insideVecEndOffsetMap[contouri];
-        
-        // Gather pixels from (0, endOffset)
-        
-        vector<uint32_t> pixels;
-        
-        for ( int i = 0; i < endOffset; i++ ) {
-          Coord c = vecInside[i];
+        for ( int trimi = (int) vecInside.size() - 1 ; trimi > 0; trimi-- ) {
+          if (trimi >= endOffset) {
+            if (debug) {
+              printf("quick trim at index %d\n", trimi);
+            }
+            
+            vecInside.pop_back();
+            continue;
+          }
+          
+          Coord c = vecInside[trimi];
           Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
           uint32_t pixel = Vec3BToUID(vec3);
           
           if (pixel == convergedFromPixel) {
-            trimInd = i;
-          }
-        }
-        
-        assert(trimInd != -1);
-        
-        // Trim to N coords for this vector
-        
-        vector<Coord> filteredCoords;
-        
-        for ( int i = 0; i < vecInside.size(); i++ ) {
-          Coord c = vecInside[i];
-          filteredCoords.push_back(c);
-          
-          if (trimInd == i) {
+            // Continue to trim from right
+            
+            if (debug) {
+              printf("trim at index %d\n", trimi);
+            }
+            
+            vecInside.pop_back();
+          } else {
+            if (debug) {
+              printf("found non same pixel 0x%08X at index %d compared to convergedFromPixel 0x%08X\n", pixel, trimi, convergedFromPixel);
+            }
+            
             break;
           }
         }
         
-        edgesInsideMap[contouri] = filteredCoords;
+        if (debug) {
+          printf("after trim steps, vec contains of %d coords\n", (int)vecInside.size());
+        }
+        
       }
 
     }
