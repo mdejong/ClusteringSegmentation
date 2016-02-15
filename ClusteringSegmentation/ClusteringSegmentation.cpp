@@ -6206,6 +6206,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     
     auto doCoordsConvergeToSamePixel = [](const Mat & pixelMat, const vector<Coord> &coords, uint32_t *pixelPtr)->bool {
       const bool debug = true;
+      const bool debugPrintPixels = false;
       
       if (coords.size() == 0) {
         return false;
@@ -6219,6 +6220,10 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         Coord c = coords[0];
         Vec3b vec3 = pixelMat.at<Vec3b>(c.y, c.x);
         prevPixel = Vec3BToUID(vec3);
+        
+        if (debugPrintPixels) {
+          printf("prevPixel 0x%08X\n", prevPixel);
+        }
       }
       
       int iMax = (int) coords.size();
@@ -6227,6 +6232,11 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         Coord c = coords[i];
         Vec3b vec3 = pixelMat .at<Vec3b>(c.y, c.x);
         uint32_t pixel = Vec3BToUID(vec3);
+        
+        if (debugPrintPixels) {
+          printf("pixel 0x%08X\n", pixel);
+        }
+        
         if (pixel == prevPixel) {
           // Could still converge
         } else {
@@ -6312,10 +6322,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             }
             Coord c = vecInside[actualOffset];
             innerMostCoords.push_back(c);
-            
-            if (insideStep == 0 && endOffset > 1) {
-              printf("endOffset %d\n", endOffset);
-            }
           }
           
           // FIXME: converge could mean that the whole region converges
@@ -6507,10 +6513,195 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     
     unordered_map<int, vector<Coord>> edgesOutsideMap;
     
+    CvRect roi(0, 0, inputImg.size().width, inputImg.size().height);
+    
+    bool convergedToPixelSet = false;
+    uint32_t convergedToPixel = 0;
+    
+    done = false;
+    int outsideStep = 0;
+    
+    while (!done) {
+      
+      // Expand the radius outward so that additional pixels around
+      // the contour area can be included in the vectors. Note that
+      // the very first expansion is implemented by looking at
+      // the contour points and mapping outward.
+      
+      if (outsideStep == 0) {
+        for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+          //Coord c = contourCoords[contouri];
+          vector<Coord> &vecOutside = edgesOutsideMap[contouri];
+          vector<Point2f> normalVecPoints = allNormalVectors[contouri];
+          
+          //Point2f insideF = normalVecPoints[0];
+          Point2f onF = normalVecPoints[1];
+          Point2f outsideF = normalVecPoints[2];
+          
+          //round(insideF);
+          round(outsideF);
+          
+          Coord outsideC((int)outsideF.x, (int)outsideF.y);
+          vecOutside.push_back(outsideC);
+        }
+      } else {
+        // FIXME: trouble with edgesOutsideMap is that not all pixels
+        // are getting captured by the outgoing vector. A better
+        // approch could be to select outgoing pixels with the known
+        // vector. Then add more vectors in between existing ones
+        // to account for the additional pixels going outward.
+        
+        assert(0);
+      }
+      
+      // scan the vectors for insideVecPixelsMap at this point and
+      // if the pixels all collapse to the same value or COM then this
+      // it a likely early termination.
+      
+      {
+        bool allVectorsConverge = true;
+        
+        convergedFromPixelSet = false;
+        
+        vector<Coord> outerMostCoords;
+        outerMostCoords.reserve(1024);
+        
+        for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+          //Coord c = contourCoords[contouri];
+          
+          vector<Coord> &vecOutside = edgesOutsideMap[contouri];
+          Coord c = vecOutside[vecOutside.size() - 1];
+          outerMostCoords.push_back(c);
+        }
+        
+        uint32_t tmp;
+        allVectorsConverge = doCoordsConvergeToSamePixel(inputImg, outerMostCoords, &tmp);
+        
+        if (allVectorsConverge && (convergedToPixelSet == false)) {
+          convergedToPixelSet = true;
+          convergedToPixel = tmp;
+        }
+        
+        if (allVectorsConverge) {
+          // All pixels inside are the same
+          
+          done = true;
+        }
+      }
+      
+      if (outsideStep == 0) {
+        outsideStep++;
+        outsideStep--;
+      }
+      
+      if (debugDumpImages) {
+        // Emit vector image that shows how many pixels are filled in at this step level
+        
+        int maxWidth = 0;
+        
+        for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+          //Coord c = contourCoords[contouri];
+          int numPixels = (int) edgesOutsideMap[contouri].size();
+          assert(numPixels > 0);
+          
+          printf("for contouri %4d : numPixels inside %d\n", contouri, numPixels);
+          
+          maxWidth = maxi(maxWidth, numPixels);
+        }
+        
+        int numCols = maxWidth;
+        
+        CvSize matSize(numCols, maxContouri);
+        
+        Mat colorPixelsMat(matSize, CV_8UC4, Scalar(0,0,0,0));
+        
+        for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+          //Coord c = contourCoords[contouri];
+          
+          vector<Coord> &vecOutside = edgesOutsideMap[contouri];
+          
+          // Gather pixels in the outward vector
+          
+          vector<uint32_t> edgeToOutsidePixels;
+          
+          for ( Coord c : vecOutside ) {
+            Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
+            uint32_t pixel = Vec3BToUID(vec3);
+            edgeToOutsidePixels.push_back(pixel);
+          }
+          
+          // center most pixels on the left, pixels nearest edge on right
+          
+          for ( int i = 0; i < edgeToOutsidePixels.size(); i++ ) {
+            Vec3b vec3 = PixelToVec3b(edgeToOutsidePixels[i]);
+            Vec4b vec4;
+            vec4[0] = vec3[0]; vec4[1] = vec3[1]; vec4[2] = vec3[2]; vec4[3] = 0xFF;
+            
+            int offset = (int) (numCols - 1) - i;
+            colorPixelsMat.at<Vec4b>(contouri, offset) = vec4;
+          }
+        }
+        
+        {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_edge_out" << outsideStep << ".png";
+          string fname = fnameStream.str();
+          
+          writeWroteImg(fname, colorPixelsMat);
+          cout << "" << endl;
+        }
+      }
+      
+      if (debugDumpImages) {
+        // Emit vector image that shows how many pixels are filled in at this step level
+        
+        int maxWidth = 0;
+        
+        for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+          //Coord c = contourCoords[contouri];
+          int numPixels = (int) edgesOutsideMap[contouri].size();
+          assert(numPixels > 0);
+          
+          printf("for contouri %4d : numPixels inside %d\n", contouri, numPixels);
+          
+          maxWidth = maxi(maxWidth, numPixels);
+        }
+        
+        Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
+        
+        for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+          //Coord c = contourCoords[contouri];
+          
+          vector<Coord> &vecOutside = edgesOutsideMap[contouri];
+          
+          // Gather pixels in the outward vector
+          
+          for ( Coord c : vecOutside ) {
+            binMat.at<uint8_t>(c.y, c.x) = 0xFF;
+          }
+        }
+        
+        {
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_hits_" << outsideStep << ".png";
+          string fname = fnameStream.str();
+          
+          writeWroteImg(fname, binMat);
+          cout << "" << endl;
+        }
+      }
+      
+      outsideStep++;
+    } // while !done loop
+    
+    // -----------------------------
+    
+    /*
+    
     // Generate vectors going through the edge point, this vector starts on the first coordinate
     // outside the contour shape.
     
-    CvRect roi(0, 0, inputImg.size().width, inputImg.size().height);
+    //CvRect roi(0, 0, inputImg.size().width, inputImg.size().height);
     
     for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
       //Coord c = contourCoords[contouri];
@@ -6520,7 +6711,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       Point2f onF = normalVecPoints[1];
       Point2f outsideF = normalVecPoints[2];
       
-      round(insideF);
+      //round(insideF);
       round(outsideF);
       
       // Determine point 5 pixels away from outside point based on normal vector
@@ -6556,8 +6747,11 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         cout << "";
       }
     }
+     
+    */
     
     if (debug) {
+      cout << "generated " << edgesInsideMap.size() << " entries for edge to inside vectors" << endl;
       cout << "generated " << edgesOutsideMap.size() << " entries for edge to outside vectors" << endl;
     }
     
