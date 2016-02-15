@@ -6138,13 +6138,15 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     }
   }
   
+  // ---------------------------------------------------------------------------------------------
+  // Inside
+  
   // From the normal vector, determine the first "inside" pixel and then follow the vector from
   // the inside pixel to the center of the region shape. Note the case where the interior
   // pixels inside the shape are marked as consumed already, in that case the iteration has
   // to stop once a consumed pixel is found.
   
   unordered_map<int, vector<Coord>> edgesInsideMap;
-  unordered_map<int, vector<Coord>> edgesOutsideMap;
   
   {
     int maxContouri = (int) contourCoords.size();
@@ -6196,153 +6198,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     
     if (debug) {
       cout << "generated " << edgesInsideMap.size() << " entries for edge to center vectors" << endl;
-    }
-    
-    // Generate vectors going through the edge point, this vector starts on the first coordinate
-    // outside the contour shape.
-    
-    CvRect roi(0, 0, inputImg.size().width, inputImg.size().height);
-   
-    for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-      //Coord c = contourCoords[contouri];
-      vector<Point2f> normalVecPoints = allNormalVectors[contouri];
-      
-      Point2f insideF = normalVecPoints[0];
-      Point2f onF = normalVecPoints[1];
-      Point2f outsideF = normalVecPoints[2];
-      
-      round(insideF);
-      round(outsideF);
-      
-      // Determine point 5 pixels away from outside point based on normal vector
-      
-      Point2f normVec = contourNormals[contouri];
-      Point2f wayOutsideF = onF + (5 * normVec);
-      
-      vector<Point2i> generatedPoints = generatePointsOnLine(outsideF, wayOutsideF);
-      
-      generatedPoints = filterPointsOutsideROI(generatedPoints, roi);
-      
-      edgesOutsideMap[contouri] = convertPointsToCoords(generatedPoints);
-      
-      if (debugDumpInsideOutsiteStepImages) {
-        Mat renderMat(tagsImg.size(), CV_8UC1, Scalar(0));
-        
-        for ( Coord c : regionCoords ) {
-          renderMat.at<uint8_t>(c.y, c.x) = 0x7F / 2;
-        }
-        
-        double tipLength = 0.2;
-        arrowedLine(renderMat, outsideF, wayOutsideF, Scalar(0x7F), 2, 8, 0, tipLength);
-        
-        for ( Coord c : edgesOutsideMap[contouri] ) {
-          renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
-        }
-        
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_hull_line_outside_step" << contouri << ".png";
-        string fname = fnameStream.str();
-        
-        writeWroteImg(fname, renderMat);
-        cout << "";
-      }
-    }
-    
-    if (debug) {
-      cout << "generated " << edgesOutsideMap.size() << " entries for edge to outside vectors" << endl;
-    }
-    
-    // Dump image showing the vector contents
-    
-    if (debugDumpImages) {
-      int maxInsideWidth = 0;
-      int maxOutsideWidth = 0;
-    
-      for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-        //Coord c = contourCoords[contouri];
-
-        auto &vecInside = edgesInsideMap[contouri];
-        auto &vecOutside = edgesOutsideMap[contouri];
-        
-        maxInsideWidth = maxi(maxInsideWidth, (int)vecInside.size());
-        maxOutsideWidth = maxi(maxOutsideWidth, (int)vecOutside.size());
-      }
-      
-      int numCols = maxInsideWidth + 1 + maxOutsideWidth;
-      
-      CvSize matSize(numCols, maxContouri);
-      Mat typesBinMat(matSize, CV_8UC1, Scalar(0));
-      Mat colorPixelsMat(matSize, CV_8UC4, Scalar(0,0,0,0));
-      
-      for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-        Coord c = contourCoords[contouri];
-        
-        auto &vecInside = edgesInsideMap[contouri];
-        auto &vecOutside = edgesOutsideMap[contouri];
-        
-        int midi = (maxInsideWidth + 1) - 1;
-
-        Vec3b vec3;
-        Vec4b vec4(0,0,0,0xFF);
-        uint8_t gray;
-        
-        gray = 0xFF;
-        
-        vec3 = inputImg.at<Vec3b>(c.y, c.x);
-        vec4[0] = vec3[0]; vec4[1] = vec3[1]; vec4[2] = vec3[2];
-        
-        typesBinMat.at<uint8_t>(contouri, midi) = gray;
-        colorPixelsMat.at<Vec4b>(contouri, midi) = vec4;
-        
-        int insidei = midi - 1;
-        int outsidei = midi + 1;
-
-        gray = 0xFF/4;
-        
-        assert((insidei+1) >= vecInside.size());
-        
-        for ( Coord c : vecInside ) {
-          typesBinMat.at<uint8_t>(contouri, insidei) = gray;
-          
-          vec3 = inputImg.at<Vec3b>(c.y, c.x);
-          vec4[0] = vec3[0]; vec4[1] = vec3[1]; vec4[2] = vec3[2];
-          
-          colorPixelsMat.at<Vec4b>(contouri, insidei) = vec4;
-          insidei--;
-        }
-        
-        gray = 0xFF/2;
-        
-        assert((outsidei+1) >= vecOutside.size());
-        
-        for ( Coord c : vecOutside ) {
-          typesBinMat.at<uint8_t>(contouri, outsidei) = gray;
-          
-          vec3 = inputImg.at<Vec3b>(c.y, c.x);
-          vec4[0] = vec3[0]; vec4[1] = vec3[1]; vec4[2] = vec3[2];
-          
-          colorPixelsMat.at<Vec4b>(contouri, outsidei) = vec4;
-          outsidei++;
-        }
-      }
-      
-      {
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_hull_iter_inout5_types" << ".png";
-        string fname = fnameStream.str();
-        
-        writeWroteImg(fname, typesBinMat);
-        cout << "" << endl;
-      }
-      
-      {
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_hull_iter_inout5_pixels" << ".png";
-        string fname = fnameStream.str();
-        
-        writeWroteImg(fname, colorPixelsMat);
-        cout << "" << endl;
-      }
     }
     
     // Util lambda to determine if a set of coordinates "converges"
@@ -6646,8 +6501,67 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       }
 
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // Outside
     
-    // Dump image showing the vector contents
+    unordered_map<int, vector<Coord>> edgesOutsideMap;
+    
+    // Generate vectors going through the edge point, this vector starts on the first coordinate
+    // outside the contour shape.
+    
+    CvRect roi(0, 0, inputImg.size().width, inputImg.size().height);
+    
+    for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+      //Coord c = contourCoords[contouri];
+      vector<Point2f> normalVecPoints = allNormalVectors[contouri];
+      
+      Point2f insideF = normalVecPoints[0];
+      Point2f onF = normalVecPoints[1];
+      Point2f outsideF = normalVecPoints[2];
+      
+      round(insideF);
+      round(outsideF);
+      
+      // Determine point 5 pixels away from outside point based on normal vector
+      
+      Point2f normVec = contourNormals[contouri];
+      Point2f wayOutsideF = onF + (5 * normVec);
+      
+      vector<Point2i> generatedPoints = generatePointsOnLine(outsideF, wayOutsideF);
+      
+      generatedPoints = filterPointsOutsideROI(generatedPoints, roi);
+      
+      edgesOutsideMap[contouri] = convertPointsToCoords(generatedPoints);
+      
+      if (debugDumpInsideOutsiteStepImages) {
+        Mat renderMat(tagsImg.size(), CV_8UC1, Scalar(0));
+        
+        for ( Coord c : regionCoords ) {
+          renderMat.at<uint8_t>(c.y, c.x) = 0x7F / 2;
+        }
+        
+        double tipLength = 0.2;
+        arrowedLine(renderMat, outsideF, wayOutsideF, Scalar(0x7F), 2, 8, 0, tipLength);
+        
+        for ( Coord c : edgesOutsideMap[contouri] ) {
+          renderMat.at<uint8_t>(c.y, c.x) = 0xFF;
+        }
+        
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_hull_line_outside_step" << contouri << ".png";
+        string fname = fnameStream.str();
+        
+        writeWroteImg(fname, renderMat);
+        cout << "";
+      }
+    }
+    
+    if (debug) {
+      cout << "generated " << edgesOutsideMap.size() << " entries for edge to outside vectors" << endl;
+    }
+    
+    // Dump image showing the both inside and outside vector contents
     
     if (debugDumpImages) {
       int maxInsideWidth = 0;
@@ -6740,44 +6654,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       }
     }
 
-    /*
-    
-    // Iterate from inside to outside looking for a transition from the interior area
-    // to the exterior area.
-    
-    for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-      Coord c = contourCoords[contouri];
-      auto &vecInside = edgesInsideMap[c];
-      auto &vecOutside = edgesOutsideMap[c];
-      
-      // Does the vector from outside to inside collapse in on a single
-      // value on the inside area of the contour.
-      
-      vector<uint32_t> pixels;
-      
-      for ( Coord c : vecInside ) {
-        Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
-        uint32_t pixel = Vec3BToUID(vec3);
-        pixels.push_back(pixel);
-      }
-      
-      {
-        Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
-        uint32_t pixel = Vec3BToUID(vec3);
-        pixels.push_back(pixel);
-      }
-      
-      for ( Coord c : vecOutside ) {
-        Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
-        uint32_t pixel = Vec3BToUID(vec3);
-        pixels.push_back(pixel);
-      }
-      
-    }
-     
-    */
-
-    
   }
   
   
