@@ -6659,20 +6659,24 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           lookupIsOn[c] = true;
         }
         
-        vector<Coord> filteredCoords2;
-        for ( Coord c : filteredCoords ) {
+        // filter out coords that are not in lookupIsOn table
+        
+        vector<Coord> notOutermostOrInsideContour;
+        
+        filter(filteredCoords, notOutermostOrInsideContour, [&lookupIsOn](const Coord & c)->bool {
           uint8_t isOn = (lookupIsOn.count(c) > 0);
-          if ( isOn ) {
-            // Ignore coordinates on in contour outside vec
+          if (isOn) {
+            // Ignore coordinates on contour outside vec
+            return false;
           } else {
-            filteredCoords2.push_back(c);
+            return true;
           }
-        }
+        });
         
         if (debugDumpImages) {
           Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
           
-          for ( Coord c : filteredCoords2 ) {
+          for ( Coord c : notOutermostOrInsideContour ) {
             binMat.at<uint8_t>(c.y, c.x) = 0xFF;
           }
           
@@ -6696,12 +6700,18 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         // pairs of (nextClosest, closest) for each coordinate
         
-        vector<pair<int32_t,int32_t> > closestContourPairs;
+        typedef struct {
+          Coord c;
+          int32_t closestContourCoordOffset;
+          int32_t nextClosestContourCoordOffset;
+        } ClosestCoordsTriple;
+        
+        vector<ClosestCoordsTriple> closestContourTuples;
         
         vector<Coord> notClosestCoords;
         notClosestCoords.reserve(contourCoords.size()); // optimize reallocation inside filter
         
-        for ( Coord c : filteredCoords2 ) {
+        for ( Coord c : notOutermostOrInsideContour ) {
           Coord closestContourCoord = closestToCoord(contourCoords, c);
           
           // Remove closestContourCoord from search coords and find next closest with a tie going to earlier
@@ -6724,13 +6734,16 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           // Need to do linear iteration through contourCoords to find the first matches for
           // nextClosestContourCoord and closestContourCoord.
           
-          int closestContourCoordOffset = -1;
-          int nextClosestContourCoordOffset = -1;
+          int32_t closestContourCoordOffset = -1;
+          int32_t nextClosestContourCoordOffset = -1;
           
           const int iMax = (int) contourCoords.size();
           
+          // FIXME: no need for slow search if using 8 connected neighbor search and only 2 coords at a time!
+          
           for ( int i = 0; i < iMax; i++ ) {
             Coord c = contourCoords[i];
+            
             if (closestContourCoordOffset == -1 && c == closestContourCoord) {
               closestContourCoordOffset = i;
             }
@@ -6741,17 +6754,39 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
               break;
             }
           }
+          
+          ClosestCoordsTriple t;
           assert(closestContourCoordOffset != -1);
           assert(nextClosestContourCoordOffset != -1);
-          closestContourPairs.push_back(make_pair(nextClosestContourCoordOffset, closestContourCoordOffset));
+          t.c = c;
+          t.closestContourCoordOffset = closestContourCoordOffset;
+          t.nextClosestContourCoordOffset = nextClosestContourCoordOffset;
+          closestContourTuples.push_back(t);
         }
+        
+        // Sort in terms of closestContourCoordOffset and then nextClosestContourCoordOffset (ascending)
+        
+        sort(begin(closestContourTuples), end(closestContourTuples),
+             [](ClosestCoordsTriple &t1, ClosestCoordsTriple &t2) {
+               if (t1.closestContourCoordOffset == t2.closestContourCoordOffset) {
+                 return t1.nextClosestContourCoordOffset < t2.nextClosestContourCoordOffset;
+               } else {
+                 return t1.closestContourCoordOffset < t2.closestContourCoordOffset;
+               }
+             });
         
         if (debugDumpImages) {
           Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
           
-          for ( Coord c : filteredCoords2 ) {
-            Coord closestContourCoord = closestToCoord(contourCoords, c);
+          for ( ClosestCoordsTriple &t : closestContourTuples ) {
+            Coord c = t.c;
+            int nextClosestContourCoordOffset = t.nextClosestContourCoordOffset;
+            int closestContourCoordOffset = t.closestContourCoordOffset;
             
+            Coord closestContourCoord = contourCoords[closestContourCoordOffset];
+            Coord nextClosestContourCoord = contourCoords[nextClosestContourCoordOffset];
+            
+            line(binMat, coordToPoint(c), coordToPoint(nextClosestContourCoord), Scalar(0x7F));
             line(binMat, coordToPoint(c), coordToPoint(closestContourCoord), Scalar(0xFF));
           }
           
