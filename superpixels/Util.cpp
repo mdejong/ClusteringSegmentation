@@ -230,6 +230,65 @@ uint32_t closestToPixel(const vector<uint32_t> &pixels, const uint32_t closeToPi
   return closestToPixel;
 }
 
+// Given a vecor of 2D coordinates and another coordinate, determine which 2D coordinate
+// is closest to the given coordinate.
+
+Coord closestToCoord(const vector<Coord> &coords, const Coord &closeToCoord) {
+  const bool debug = true;
+  
+#if defined(DEBUG)
+  assert(coords.size() > 0);
+#endif // DEBUG
+
+  unsigned int minDist = (~0);
+  Coord closestToCoord;
+  
+  uint32_t closeToCoordX = closeToCoord.x;
+  uint32_t closeToCoordY = closeToCoord.y;
+  
+  for ( Coord c : coords ) {
+    uint32_t cx = c.x;
+    uint32_t cy = c.y;
+    
+    int dx = (int)closeToCoordX - (int)cx;
+    int dy = (int)closeToCoordY - (int)cy;
+    
+    unsigned int d2 = (unsigned int) ((dx * dx) + (dy * dy));
+    
+    if (debug) {
+      printf("d2 from (%3d,%3d) to closeToCoordX (%3d,%3d) is (%3d,%3d) = %d\n", cx, cy, closeToCoordX, closeToCoordY, dx, dy, d2);
+    }
+
+    if (debug) {
+      if (d2 == minDist) {
+        if ((debug)) {
+          fprintf(stdout, "tie with minDist %d ignored for c (%3d,%3d)\n", minDist, c.x, c.y);
+        }
+      }
+    }
+    
+    if (d2 < minDist) {
+      closestToCoord = c;
+      minDist = d2;
+      
+      if ((debug)) {
+        fprintf(stdout, "new    closestToCoord (%3d,%3d)\n", closestToCoord.x, closestToCoord.y);
+      }
+      
+      if (minDist == 0) {
+        // Quit the loop once a zero distance has been found
+        break;
+      }
+    }
+  }
+  
+  if ((debug)) {
+    fprintf(stdout, "return closestToCoord (%3d,%3d)\n", closestToCoord.x, closestToCoord.y);
+  }
+  
+  return closestToCoord;
+}
+
 // Given a vector of cluster center pixels, determine a cluster to cluster walk order based on 3D
 // distance from one cluster center to the next. This method returns a vector of offsets into
 // the cluster table with the assumption that the number of clusters fits into a 16 bit offset.

@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		3C3106D71C4C4C6700F1A62D /* ClusteringSegmentation.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3C3106D51C4C4C6700F1A62D /* ClusteringSegmentation.cpp */; };
 		3C3106D81C4C4C6700F1A62D /* ClusteringSegmentation.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3C3106D51C4C4C6700F1A62D /* ClusteringSegmentation.cpp */; };
+		3C6D7CC81C72A845009EE80D /* RegionVectors.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3C6D7CC61C72A845009EE80D /* RegionVectors.cpp */; };
+		3C6D7CC91C72A845009EE80D /* RegionVectors.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3C6D7CC61C72A845009EE80D /* RegionVectors.cpp */; };
 		3C7A64081C6C7D280097CA92 /* RegionRemerger.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3C7A64061C6C7D280097CA92 /* RegionRemerger.cpp */; };
 		3C7A64091C6C7D280097CA92 /* RegionRemerger.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3C7A64061C6C7D280097CA92 /* RegionRemerger.cpp */; };
 		3CCC52281C6B1F3F0005EC86 /* OpenCVHull.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3CCC52261C6B1F3F0005EC86 /* OpenCVHull.cpp */; };
@@ -172,6 +174,8 @@
 /* Begin PBXFileReference section */
 		3C3106D51C4C4C6700F1A62D /* ClusteringSegmentation.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ClusteringSegmentation.cpp; sourceTree = "<group>"; };
 		3C3106D61C4C4C6700F1A62D /* ClusteringSegmentation.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = ClusteringSegmentation.hpp; sourceTree = "<group>"; };
+		3C6D7CC61C72A845009EE80D /* RegionVectors.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = RegionVectors.cpp; sourceTree = "<group>"; };
+		3C6D7CC71C72A845009EE80D /* RegionVectors.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = RegionVectors.hpp; sourceTree = "<group>"; };
 		3C7A64061C6C7D280097CA92 /* RegionRemerger.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = RegionRemerger.cpp; sourceTree = "<group>"; };
 		3C7A64071C6C7D280097CA92 /* RegionRemerger.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = RegionRemerger.hpp; sourceTree = "<group>"; };
 		3CCC52261C6B1F3F0005EC86 /* OpenCVHull.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = OpenCVHull.cpp; sourceTree = "<group>"; };
@@ -804,6 +808,8 @@
 				3CD524CE1C3481E2005AF4A7 /* Coord.cpp */,
 				3C7A64071C6C7D280097CA92 /* RegionRemerger.hpp */,
 				3C7A64061C6C7D280097CA92 /* RegionRemerger.cpp */,
+				3C6D7CC71C72A845009EE80D /* RegionVectors.hpp */,
+				3C6D7CC61C72A845009EE80D /* RegionVectors.cpp */,
 				3CD524D41C3481E2005AF4A7 /* Superpixel.h */,
 				3CD524D31C3481E2005AF4A7 /* Superpixel.cpp */,
 				3CD524D61C3481E2005AF4A7 /* SuperpixelEdge.h */,
@@ -1799,6 +1805,7 @@
 				3CEB39111C40FCCD0071358C /* unionfind.c in Sources */,
 				3CD522CF1C347DB2005AF4A7 /* ClusteringSegmentationMain.cpp in Sources */,
 				3CCD1AE01C45B51D00DBC550 /* SuperpixelMergeManager.cpp in Sources */,
+				3C6D7CC81C72A845009EE80D /* RegionVectors.cpp in Sources */,
 				3C3106D71C4C4C6700F1A62D /* ClusteringSegmentation.cpp in Sources */,
 				3CD524E21C3481E2005AF4A7 /* Superpixel.cpp in Sources */,
 				3CD524DF1C3481E2005AF4A7 /* Coord.cpp in Sources */,
@@ -1825,6 +1832,7 @@
 				3CDC334D1C600E52006A4242 /* IterTest.mm in Sources */,
 				3CD525061C35EAC0005AF4A7 /* SuperpixelImage.cpp in Sources */,
 				3CD525071C35EAC1005AF4A7 /* MergeSuperpixelImage.cpp in Sources */,
+				3C6D7CC91C72A845009EE80D /* RegionVectors.cpp in Sources */,
 				3CCD1AE81C4B1FF600DBC550 /* peakdetect.c in Sources */,
 				3CD525081C35EAC1005AF4A7 /* Util.cpp in Sources */,
 				3CD525091C35EAC1005AF4A7 /* OpenCVUtil.cpp in Sources */,

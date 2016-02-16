@@ -262,6 +262,11 @@ bool canSignedValueBeRepresented(uint8_t bval, const uint8_t nbits) {
 
 uint32_t closestToPixel(const vector<uint32_t> &pixels, const uint32_t closeToPixel);
 
+// Given a vecor of 2D coordinates and another coordinate, determine which 2D coordinate
+// is closest to the given coordinate.
+
+Coord closestToCoord(const vector<Coord> &coords, const Coord &closeToCoord);
+
 // Given a vector of cluster center pixels, determine a cluster to cluster walk order based on 3D
 // distance from one cluster center to the next. This method returns a vector of offsets into
 // the cluster table with the assumption that the number of clusters fits into a 16 bit offset.
@@ -423,6 +428,30 @@ vector<T> iterInsideOut(const vector<T> &vec)
 #endif // DEBUG
   
   return results;
+}
+
+// Filter each element in a vector and keep the elements for which
+// the passedd in function returns true. The output is
+
+// F = std::function<bool(const T& elem)>
+
+template <typename T, typename F>
+void filter (const vector<T> &inVec, vector<T> &outVec, F f) noexcept
+{
+#if defined(DEBUG)
+  std::function<bool(const T & elem)> funcPtr = f;
+#endif // DEBUG
+  
+  outVec.clear();
+  
+  for ( const T & v : inVec ) {
+    bool keep = f(v);
+    if (keep) {
+      outVec.push_back(v);
+    }
+  }
+  
+  return;
 }
 
 #endif // SUPERPIXEL_UTIL_H

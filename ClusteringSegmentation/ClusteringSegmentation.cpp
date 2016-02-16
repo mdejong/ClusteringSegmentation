@@ -30,6 +30,8 @@
 
 #include "RegionRemerger.hpp"
 
+#include "RegionVectors.hpp"
+
 #include <stack>
 
 using namespace cv;
@@ -6511,11 +6513,15 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     // ---------------------------------------------------------------------------------------------
     // Outside
     
+    // Region vectors for inside and outside
+    
+    RegionVectors regionVecs;
+    
     Mat filledContourBinMat(inputImg.size(), CV_8UC1, Scalar(0));
     drawOneContour(filledContourBinMat, contour, Scalar(0xFF), CV_FILLED, 8);
     
     // Convert contour to filled list of all coordinates
-    
+
     vector<Coord> filledContourCoords;
     
     {
@@ -6541,7 +6547,9 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       cout << "" << endl;
     }
     
-    unordered_map<int, vector<Coord>> edgesOutsideMap;
+//    unordered_map<int, vector<Coord>> edgesOutsideMap;
+    
+    regionVecs.setContour(contourCoords);
     
     CvRect roi(0, 0, inputImg.size().width, inputImg.size().height);
     
@@ -6561,7 +6569,9 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       if (outsideStep == 0) {
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
           //Coord c = contourCoords[contouri];
-          vector<Coord> &vecOutside = edgesOutsideMap[contouri];
+          //vector<Coord> &vecOutside = edgesOutsideMap[contouri];
+          int32_t vecUid = regionVecs.getUidForContour(contouri);
+          vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
           vector<Point2f> normalVecPoints = allNormalVectors[contouri];
           
           //Point2f insideF = normalVecPoints[0];
@@ -6636,7 +6646,9 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
           //Coord c = contourCoords[contouri];
           
-          vector<Coord> &vecOutside = edgesOutsideMap[contouri];
+          int32_t vecUid = regionVecs.getUidForContour(contouri);
+          vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
+
           Coord c = vecOutside[vecOutside.size() - 1];
           outerMostCoords.push_back(c);
         }
@@ -6672,6 +6684,87 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           cout << "" << endl;
         }
         
+        // Include filteredCoords2 coordinates as new vecrors in between existing
+        // contour points so that the region is subdivided into N subsegments.
+        
+        // FIXME: use 2D closest coordinate search to determine which original contour
+        // coord this not active coord is nearest to.
+        
+        // FIXME: if we know that the coords are going to be in a +-1 range of the contour
+        // then it seems that searching for values larger than say 2 is going to be a
+        // waste of time. Could limit the search and possibly use chess piece distance here.
+        
+        // pairs of (nextClosest, closest) for each coordinate
+        
+        vector<pair<int32_t,int32_t> > closestContourPairs;
+        
+        vector<Coord> notClosestCoords;
+        notClosestCoords.reserve(contourCoords.size()); // optimize reallocation inside filter
+        
+        for ( Coord c : filteredCoords2 ) {
+          Coord closestContourCoord = closestToCoord(contourCoords, c);
+          
+          // Remove closestContourCoord from search coords and find next closest with a tie going to earlier
+          // coord in the list
+          
+          filter(contourCoords, notClosestCoords, [closestContourCoord](const Coord & c)->bool {
+            if (c == closestContourCoord) {
+              // Do not keep the coord that was identified as the closest one
+              return false;
+            } else {
+              return true;
+            }
+          });
+          
+          Coord nextClosestContourCoord = closestToCoord(notClosestCoords, c);
+          
+          printf("for not set coord (%3d, %3d) the closest contour point is (%3d, %3d)\n", c.x, c.y, closestContourCoord.x, closestContourCoord.y);
+          printf("for not set coord (%3d, %3d) the next closest contour point is (%3d, %3d)\n", c.x, c.y, nextClosestContourCoord.x, nextClosestContourCoord.y);
+          
+          // Need to do linear iteration through contourCoords to find the first matches for
+          // nextClosestContourCoord and closestContourCoord.
+          
+          int closestContourCoordOffset = -1;
+          int nextClosestContourCoordOffset = -1;
+          
+          const int iMax = (int) contourCoords.size();
+          
+          for ( int i = 0; i < iMax; i++ ) {
+            Coord c = contourCoords[i];
+            if (closestContourCoordOffset == -1 && c == closestContourCoord) {
+              closestContourCoordOffset = i;
+            }
+            if (nextClosestContourCoordOffset == -1 && c == nextClosestContourCoord) {
+              nextClosestContourCoordOffset = i;
+            }
+            if (closestContourCoordOffset != -1 && nextClosestContourCoordOffset != -1) {
+              break;
+            }
+          }
+          assert(closestContourCoordOffset != -1);
+          assert(nextClosestContourCoordOffset != -1);
+          closestContourPairs.push_back(make_pair(nextClosestContourCoordOffset, closestContourCoordOffset));
+        }
+        
+        if (debugDumpImages) {
+          Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
+          
+          for ( Coord c : filteredCoords2 ) {
+            Coord closestContourCoord = closestToCoord(contourCoords, c);
+            
+            line(binMat, coordToPoint(c), coordToPoint(closestContourCoord), Scalar(0xFF));
+          }
+          
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_expand_line_closest" << outsideStep << ".png";
+          string fname = fnameStream.str();
+          
+          writeWroteImg(fname, binMat);
+          cout << "" << endl;
+        }
+        
+        //MOMO
+        
       } else {
         // FIXME: trouble with edgesOutsideMap is that not all pixels
         // are getting captured by the outgoing vector. A better
@@ -6697,7 +6790,9 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
           //Coord c = contourCoords[contouri];
           
-          vector<Coord> &vecOutside = edgesOutsideMap[contouri];
+          int32_t vecUid = regionVecs.getUidForContour(contouri);
+          vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
+
           Coord c = vecOutside[vecOutside.size() - 1];
           outerMostCoords.push_back(c);
         }
@@ -6729,7 +6824,11 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
           //Coord c = contourCoords[contouri];
-          int numPixels = (int) edgesOutsideMap[contouri].size();
+          
+          int32_t vecUid = regionVecs.getUidForContour(contouri);
+          vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
+          
+          int numPixels = (int) vecOutside.size();
           assert(numPixels > 0);
           
           printf("for contouri %4d : numPixels inside %d\n", contouri, numPixels);
@@ -6746,7 +6845,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
           //Coord c = contourCoords[contouri];
           
-          vector<Coord> &vecOutside = edgesOutsideMap[contouri];
+          int32_t vecUid = regionVecs.getUidForContour(contouri);
+          vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
           
           // Gather pixels in the outward vector
           
@@ -6787,7 +6887,11 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
           //Coord c = contourCoords[contouri];
-          int numPixels = (int) edgesOutsideMap[contouri].size();
+          
+          int32_t vecUid = regionVecs.getUidForContour(contouri);
+          vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
+          
+          int numPixels = (int) vecOutside.size();
           assert(numPixels > 0);
           
           printf("for contouri %4d : numPixels inside %d\n", contouri, numPixels);
@@ -6800,7 +6904,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
           //Coord c = contourCoords[contouri];
           
-          vector<Coord> &vecOutside = edgesOutsideMap[contouri];
+          int32_t vecUid = regionVecs.getUidForContour(contouri);
+          vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
           
           // Gather pixels in the outward vector
           
@@ -6880,7 +6985,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     
     if (debug) {
       cout << "generated " << edgesInsideMap.size() << " entries for edge to inside vectors" << endl;
-      cout << "generated " << edgesOutsideMap.size() << " entries for edge to outside vectors" << endl;
+      cout << "generated " << regionVecs.outsideVectorsMap.size() << " entries for edge to outside vectors" << endl;
     }
     
     // Dump image showing the both inside and outside vector contents
@@ -6893,7 +6998,11 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         //Coord c = contourCoords[contouri];
         
         auto &vecInside = edgesInsideMap[contouri];
-        auto &vecOutside = edgesOutsideMap[contouri];
+        
+        // FXIME: need to include all vectors in this output.
+        
+        int32_t vecUid = regionVecs.getUidForContour(contouri);
+        vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
         
         maxInsideWidth = maxi(maxInsideWidth, (int)vecInside.size());
         maxOutsideWidth = maxi(maxOutsideWidth, (int)vecOutside.size());
@@ -6909,7 +7018,11 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         Coord c = contourCoords[contouri];
         
         auto &vecInside = edgesInsideMap[contouri];
-        auto &vecOutside = edgesOutsideMap[contouri];
+        
+        // FXIME: need to include all vectors in this output.
+        
+        int32_t vecUid = regionVecs.getUidForContour(contouri);
+        vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
         
         int midi = (maxInsideWidth + 1) - 1;
         
