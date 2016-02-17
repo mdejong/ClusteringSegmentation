@@ -6557,9 +6557,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
         Coord c = contourCoords[contouri];
         
-        const Vec3b whiteVec(0xFF, 0xFF, 0xFF); // white
-        regionTypeMat.at<Vec3b>(c.y, c.x) = whiteVec;
-        
         // Render the normal vector from this contouri coord out to the edge
         
         int dMax = 0;
@@ -6586,33 +6583,11 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         Point2f normVec = contourNormals[contouri];
         Point2f wayOutsideF = onF + (dMax * normVec);
         
-        vector<Point2i> generatedPoints = generatePointsOnLine(outsideF, wayOutsideF);
+        vector<Point2i> generatedPoints = generatePointsOnLine(onF, wayOutsideF);
         
         generatedPoints = filterPointsOutsideROI(generatedPoints, roi);
-
-        if (0)
-        {
-          uint32_t pixel = 0xFF0000;
-          assert(contouri < 0xFFFF);
-          pixel += contouri;
-          Vec3b vec = PixelToVec3b(pixel);
-          
-          for ( Point2i p : generatedPoints ) {
-            regionTypeMat.at<Vec3b>(p.y, p.x) = vec;
-          }
-        }
         
         vecOfGeneratedPoints.push_back(std::move(generatedPoints));
-        
-        // A polygon can be filled up to the edge, then specific values
-        // drawn over to indicate the 2 edges.
-        
-        // Note that regions will need to be subdivided so that the
-        // maximum number N of vectors that could be generated can
-        // be determined.
-        
-        // Like, draw with 1 line between, draw 2, draw 3 up until
-        // it is clear that all pixels are hit by vectors.
       }
       
       // Iterate over contouri and contouri+1 as pairs, so that one segment
@@ -6659,6 +6634,15 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             regionTypeMat.at<Vec3b>(p.y, p.x) = vec;
           }
         }
+      }
+      
+      // Final render is the contour pixels as white, if any polygon
+      // or line renders set contour pixels then they are reset here.
+      
+      for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+        Coord c = contourCoords[contouri];
+        const Vec3b whiteVec(0xFF, 0xFF, 0xFF); // white
+        regionTypeMat.at<Vec3b>(c.y, c.x) = whiteVec;
       }
 
     }
