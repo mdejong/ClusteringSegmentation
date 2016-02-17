@@ -100,50 +100,66 @@ public:
     return insideVectorsMap[vecUid];
   }
   
-  // Add a new vector between two existing vectors
+  // Define N vectors between two existing contour points and return
+  // the vecUid for each new in between vector.
 
-  vector<Coord>& getOutsideVectorBetween(int32_t leftUid, int32_t rightUid) {
+  vector<int32_t> makeVectorsBetween(int32_t leftUid, int32_t rightUid, int N) {
+#if defined(DEBUG)
     assert(leftUid != rightUid);
     assert(orderedKeys.count(leftUid) > 0);
     assert(orderedKeys.count(rightUid) > 0);
+#endif // DEBUG
     
     // leftUid and rightUid must be directly next to each other
     
-    // FIXME: evenly split the region based on how many values there are between
-    // specific contour pixels.
+    int stepBetween = RegionVectorsSpaceSkip / (N + 1);
     
-    int32_t newUid = -1;
+    vector<int32_t> newUids;
+    newUids.reserve(N);
     
-    if (leftUid < rightUid) {
-      assert(leftUid == (rightUid - RegionVectorsSpaceSkip));
-      
-      for ( int i = rightUid; i > 0; i-- ) {
-        if (i == leftUid) {
-          break;
-        }
-        newUid = i;
-        if (orderedKeys.count(newUid) > 0) {
-          break;
-        }
-      }
-    } else {
-      // Wraps around the end of the contour at zero
-      assert(rightUid == 0);
-      
-      for ( int i = leftUid; i < (leftUid + RegionVectorsSpaceSkip); i++ ) {
-        newUid = i;
-        
-        if (orderedKeys.count(newUid) > 0) {
-          break;
-        }
-      }
+    for ( int i = 0; i < N; i++ ) {
+      int newUid = leftUid + ((i+1) * stepBetween);
+#if defined(DEBUG)
+      assert(newUid != leftUid);
+      assert(newUid != rightUid);
+#endif // DEBUG
+      newUids.push_back(newUid);
     }
-
-    // Got unused newUid
-    orderedKeys.insert(end(orderedKeys), newUid);
-    return outsideVectorsMap[newUid];
+    
+    return newUids;
   }
   
+  // If vectors are defined between contour points then this method returns
+  // those vectors in order.
+  
+  vector<int32_t> getVectorsBetween(int32_t leftUid, int32_t rightUid) {
+#if defined(DEBUG)
+    assert(leftUid != rightUid);
+    assert(orderedKeys.count(leftUid) > 0);
+    assert(orderedKeys.count(rightUid) > 0);
+    if (rightUid != 0) {
+      assert((leftUid + RegionVectorsSpaceSkip) == rightUid);
+    }
+#endif // DEBUG
+
+    // FIXME: sucky impl, should sort be done on overall list at start ?
+    
+    vector<int32_t> vecUids;
+    
+    const int lastUid = leftUid + RegionVectorsSpaceSkip;
+    
+    // FIXME: slightly better impl would be to loop through each key and
+    // filter out and that are LTEQ leftUid or GTEQ lastUid so that
+    // only a small set of numbers had to be checked.
+    
+    for ( int vecUid = leftUid + 1; vecUid < lastUid; vecUid++ ) {
+      if (outsideVectorsMap.count(vecUid) > 0) {
+        vecUids.push_back(vecUid);
+      }
+    }
+    
+    return vecUids;
+  }
 };
 
 #endif // RegionVectors_hpp

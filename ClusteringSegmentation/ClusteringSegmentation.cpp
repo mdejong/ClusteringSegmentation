@@ -6798,7 +6798,147 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           cout << "" << endl;
         }
         
-        //MOMO
+        // Each tuple is in ascending contour order, but it is still possible that multiple
+        // tuples will apply to the same (left, right) set of pairs. Gather values in terms
+        // of the pair of offsets stuffed into a uint64_t in a map.
+        
+        unordered_map<uint64_t, vector<ClosestCoordsTriple> > leftRightMap;
+        
+        vector<uint64_t> orderedKeys;
+        
+        for ( int i = 0; i < closestContourTuples.size(); i++ ) {
+          ClosestCoordsTriple &t = closestContourTuples[i];
+          
+          int32_t leftOffset = t.closestContourCoordOffset;
+          int32_t rightOffset = t.nextClosestContourCoordOffset;
+          
+          if (rightOffset != 0 && rightOffset < leftOffset) {
+            std::swap(leftOffset, rightOffset);
+          }
+          
+          uint32_t low = (uint32_t) leftOffset;
+          uint32_t high = (uint32_t) rightOffset;
+          
+          uint64_t combined = high;
+          combined <<= 32;
+          combined |= low;
+          
+          leftRightMap[combined].push_back(t);
+          
+          orderedKeys.push_back(combined);
+        }
+        
+        unordered_map<uint64_t, bool> leftRightMapSeen;
+        
+        for ( uint64_t key : orderedKeys ) {
+          if (leftRightMapSeen.count(key) > 0) {
+            continue;
+          }
+          leftRightMapSeen[key] = true;
+          
+          vector<ClosestCoordsTriple> &vecForOffset = leftRightMap[key];
+          
+          if (debug) {
+            cout << "key = " << key;
+            for ( ClosestCoordsTriple &t : vecForOffset ) {
+              int32_t leftOffset = t.closestContourCoordOffset;
+              int32_t rightOffset = t.nextClosestContourCoordOffset;
+              
+              if (rightOffset != 0 && rightOffset < leftOffset) {
+                std::swap(leftOffset, rightOffset);
+              }
+              
+              cout << " tuple " << leftOffset << " -> " << rightOffset;
+            }
+            cout << endl;
+          }
+          
+#if defined(DEBUG)
+          // Verify that the (leftOffset, rightOffset) are the same for each
+          {
+            int32_t leftOffsetPrev = -1;
+            int32_t rightOffsetPrev = -1;
+            
+            for ( ClosestCoordsTriple &t : vecForOffset ) {
+              int32_t leftOffset = t.closestContourCoordOffset;
+              int32_t rightOffset = t.nextClosestContourCoordOffset;
+              
+              if (rightOffset != 0 && rightOffset < leftOffset) {
+                std::swap(leftOffset, rightOffset);
+              }
+              
+              if (leftOffsetPrev) {
+                leftOffsetPrev = leftOffset;
+                rightOffsetPrev = rightOffset;
+              } else {
+                assert(leftOffset == leftOffsetPrev);
+                assert(rightOffset == rightOffsetPrev);
+              }
+            }
+          }
+#endif // DEBUG
+          
+          int N = (int) vecForOffset.size();
+          
+          ClosestCoordsTriple &t = vecForOffset[0];
+          
+          int32_t leftOffset = t.closestContourCoordOffset;
+          int32_t rightOffset = t.nextClosestContourCoordOffset;
+          
+          if (rightOffset != 0 && rightOffset < leftOffset) {
+            std::swap(leftOffset, rightOffset);
+          }
+          
+          // Add vectors in between existing vectors
+          
+          int32_t leftUid = regionVecs.getUidForContour(leftOffset);
+          int32_t rightUid = regionVecs.getUidForContour(rightOffset);
+          
+          vector<int32_t> vecUids = regionVecs.makeVectorsBetween(leftUid, rightUid, N);
+          
+          int offset = 0;
+          
+          for ( int32_t vecUid : vecUids ) {
+            cout << "create vecUid " << vecUid << endl;
+            
+            if (vecUid == 63500) {
+              cout << "";
+            }
+            
+            vector<Coord> &vecOfCoords = regionVecs.getOutsideVector(vecUid);
+            
+            // FIXME: only works for 1 level at this point.
+            
+            // Create new outside vector that includes the outside point.
+            
+            ClosestCoordsTriple &t = vecForOffset[offset];
+            vecOfCoords.push_back(t.c);
+            
+            cout << "append outside and not in vectors coord " << t.c << endl;
+            
+#if defined(DEBUG)
+            // Query elements in between leftUid and rightUid
+            {
+              cout << "checking getVectorsBetween for (" << leftUid << "," << rightUid << ")" << endl;
+              vector<int32_t> vecUids = regionVecs.getVectorsBetween(leftUid, rightUid);
+              assert(vecUids.size() == 1);
+            }
+#endif // DEBUG
+            
+            offset++;
+          }
+          
+          cout << "";
+        }
+        
+        cout << "";
+        
+        // Dump all the points that are "in between" known contour points
+        // to verify that the vector looping logic is sound.
+        
+        // MOMO
+        
+        
         
       } else {
         // FIXME: trouble with edgesOutsideMap is that not all pixels
@@ -6830,6 +6970,19 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
 
           Coord c = vecOutside[vecOutside.size() - 1];
           outerMostCoords.push_back(c);
+          
+          // Process vectors between contour points
+          
+          int32_t leftUid = regionVecs.getUidForContour(contouri);
+          int32_t rightUid = regionVecs.getUidForContour(vecOffsetAround(maxContouri, contouri+1));
+          
+          vector<int32_t> vecUids = regionVecs.getVectorsBetween(leftUid, rightUid);
+          
+          for ( int32_t vecUid : vecUids ) {
+            vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
+            Coord c = vecOutside[vecOutside.size() - 1];
+            outerMostCoords.push_back(c);
+          }
         }
         
         uint32_t tmp;
@@ -6855,6 +7008,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       if (debugDumpImages) {
         // Emit vector image that shows how many pixels are filled in at this step level
         
+        int numRows = 0;
         int maxWidth = 0;
         
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
@@ -6866,25 +7020,44 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           int numPixels = (int) vecOutside.size();
           assert(numPixels > 0);
           
-          printf("for contouri %4d : numPixels inside %d\n", contouri, numPixels);
+          printf("for contouri %4d : numPixels %d\n", contouri, numPixels);
           
           maxWidth = maxi(maxWidth, numPixels);
+          
+          numRows++;
+          
+          // Process vectors between contour points
+          
+          int32_t leftUid = regionVecs.getUidForContour(contouri);
+          int32_t rightUid = regionVecs.getUidForContour(vecOffsetAround(maxContouri, contouri+1));
+          
+          vector<int32_t> vecUids = regionVecs.getVectorsBetween(leftUid, rightUid);
+          
+          for ( int32_t vecUid : vecUids ) {
+            vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
+            
+            int numPixels = (int) vecOutside.size();
+            assert(numPixels > 0);
+            
+            printf("for contouri %4d between : numPixels %d\n", contouri, numPixels);
+            
+            maxWidth = maxi(maxWidth, numPixels);
+            
+            numRows++;
+          }
         }
         
         int numCols = maxWidth;
         
-        CvSize matSize(numCols, maxContouri);
+        CvSize matSize(numCols, numRows);
         
         Mat colorPixelsMat(matSize, CV_8UC4, Scalar(0,0,0,0));
         
-        for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-          //Coord c = contourCoords[contouri];
-          
-          int32_t vecUid = regionVecs.getUidForContour(contouri);
-          vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
-          
-          // Gather pixels in the outward vector
-          
+        int outRow = 0;
+        
+        // lambda to gather coords as pixels and write as a row
+        
+        auto writePixelsToRow = [&inputImg, &colorPixelsMat, &outRow, numCols](const vector<Coord> &vecOutside) {
           vector<uint32_t> edgeToOutsidePixels;
           
           for ( Coord c : vecOutside ) {
@@ -6893,7 +7066,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             edgeToOutsidePixels.push_back(pixel);
           }
           
-          // center most pixels on the left, pixels nearest edge on right
+          // edge pixels on left, outside pixels on right
           
           for ( int i = 0; i < edgeToOutsidePixels.size(); i++ ) {
             Vec3b vec3 = PixelToVec3b(edgeToOutsidePixels[i]);
@@ -6901,7 +7074,30 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             vec4[0] = vec3[0]; vec4[1] = vec3[1]; vec4[2] = vec3[2]; vec4[3] = 0xFF;
             
             int offset = (int) (numCols - 1) - i;
-            colorPixelsMat.at<Vec4b>(contouri, offset) = vec4;
+            colorPixelsMat.at<Vec4b>(outRow, offset) = vec4;
+          }
+          
+          outRow++;
+        };
+        
+        for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+          //Coord c = contourCoords[contouri];
+          
+          int32_t vecUid = regionVecs.getUidForContour(contouri);
+          vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
+          
+          writePixelsToRow(vecOutside);
+          
+          // Process vectors between contour points
+          
+          int32_t leftUid = regionVecs.getUidForContour(contouri);
+          int32_t rightUid = regionVecs.getUidForContour(vecOffsetAround(maxContouri, contouri+1));
+          
+          vector<int32_t> vecUids = regionVecs.getVectorsBetween(leftUid, rightUid);
+          
+          for ( int32_t vecUid : vecUids ) {
+            vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
+            writePixelsToRow(vecOutside);
           }
         }
         
@@ -6918,22 +7114,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       if (debugDumpImages) {
         // Emit vector image that shows how many pixels are filled in at this step level
         
-        int maxWidth = 0;
-        
-        for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-          //Coord c = contourCoords[contouri];
-          
-          int32_t vecUid = regionVecs.getUidForContour(contouri);
-          vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
-          
-          int numPixels = (int) vecOutside.size();
-          assert(numPixels > 0);
-          
-          printf("for contouri %4d : numPixels inside %d\n", contouri, numPixels);
-          
-          maxWidth = maxi(maxWidth, numPixels);
-        }
-        
         Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
         
         for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
@@ -6946,6 +7126,21 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           
           for ( Coord c : vecOutside ) {
             binMat.at<uint8_t>(c.y, c.x) = 0xFF;
+          }
+          
+          int32_t leftUid = regionVecs.getUidForContour(contouri);
+          int32_t rightUid = regionVecs.getUidForContour(vecOffsetAround(maxContouri, contouri+1));
+          
+          vector<int32_t> vecUids = regionVecs.getVectorsBetween(leftUid, rightUid);
+          
+          cout << "(leftUid, rightUid) " << leftUid << " " << rightUid << " contains " << vecUids.size() << " in between vectors" << endl;
+          
+          for ( int32_t vecUid : vecUids ) {
+            vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
+            
+            for ( Coord c : vecOutside ) {
+              binMat.at<uint8_t>(c.y, c.x) = 0x7F;
+            }
           }
         }
         
