@@ -6534,7 +6534,143 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     
     regionVecs.setContour(contourCoords);
     
+    // The hard part of the process is classification as the expansion is going on.
+    // Instead of inspecting each point, setup a pixel map that can store 24BPP
+    // values as integers and use these values to tell what a specific coords is
+    // while precalculating different types.
+    
     CvRect roi(0, 0, inputImg.size().width, inputImg.size().height);
+    
+    Mat regionTypeMat(inputImg.size(), CV_8UC3, Scalar(0,0,0));
+    
+    drawOneContour(regionTypeMat, contour, Scalar(0x7F, 0x7F, 0x7F), CV_FILLED, 8);
+    
+    {
+      vector<Coord> edgeCoords;
+      edgeCoords.push_back(Coord(0,0));
+      edgeCoords.push_back(Coord(inputImg.cols,0));
+      edgeCoords.push_back(Coord(inputImg.cols,inputImg.rows));
+      edgeCoords.push_back(Coord(0,inputImg.rows));
+      
+      vector<vector<Point2i> > vecOfGeneratedPoints;
+      
+      for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+        Coord c = contourCoords[contouri];
+        
+        const Vec3b whiteVec(0xFF, 0xFF, 0xFF); // white
+        regionTypeMat.at<Vec3b>(c.y, c.x) = whiteVec;
+        
+        // Render the normal vector from this contouri coord out to the edge
+        
+        int dMax = 0;
+        
+        for ( int i =0; i < 4; i++ ) {
+          int d = (int) round(deltaDistance(c, edgeCoords[i]));
+          if (d > dMax) {
+            dMax = d;
+          }
+        }
+        
+        dMax += 1;
+        
+        // dMax is largest distance a line could extend for
+        
+        vector<Point2f> normalVecPoints = allNormalVectors[contouri];
+        
+        Point2f onF = normalVecPoints[1];
+        Point2f outsideF = normalVecPoints[2];
+      
+        assert(c.x == onF.x);
+        assert(c.y == onF.y);
+        
+        Point2f normVec = contourNormals[contouri];
+        Point2f wayOutsideF = onF + (dMax * normVec);
+        
+        vector<Point2i> generatedPoints = generatePointsOnLine(outsideF, wayOutsideF);
+        
+        generatedPoints = filterPointsOutsideROI(generatedPoints, roi);
+
+        if (0)
+        {
+          uint32_t pixel = 0xFF0000;
+          assert(contouri < 0xFFFF);
+          pixel += contouri;
+          Vec3b vec = PixelToVec3b(pixel);
+          
+          for ( Point2i p : generatedPoints ) {
+            regionTypeMat.at<Vec3b>(p.y, p.x) = vec;
+          }
+        }
+        
+        vecOfGeneratedPoints.push_back(std::move(generatedPoints));
+        
+        // A polygon can be filled up to the edge, then specific values
+        // drawn over to indicate the 2 edges.
+        
+        // Note that regions will need to be subdivided so that the
+        // maximum number N of vectors that could be generated can
+        // be determined.
+        
+        // Like, draw with 1 line between, draw 2, draw 3 up until
+        // it is clear that all pixels are hit by vectors.
+      }
+      
+      // Iterate over contouri and contouri+1 as pairs, so that one segment
+      // at a time can be rendered.
+      
+      vector<pair<int,int> > contourPairs;
+      
+      for ( int contouri = 0; contouri < (maxContouri-1); contouri++ ) {
+        contourPairs.push_back(make_pair(contouri, contouri+1));
+      }
+      contourPairs.push_back(make_pair(maxContouri-1, 0));
+      
+      for ( auto &pair : contourPairs ) {
+        cout << "contour pair " << pair.first << "," << pair.second << endl;
+        
+        vector<Point2i> &vec1 = vecOfGeneratedPoints[pair.first];
+        vector<Point2i> &vec2 = vecOfGeneratedPoints[pair.second];
+        
+        // Render region as a filled polygon
+        
+        vector<Point2i> contour;
+        
+        append_to_vector(contour, vec1);
+        
+        for ( auto it = vec2.rbegin(); it != vec2.rend(); it++ ) {
+          contour.push_back(*it);
+        }
+        
+        drawOneContour(regionTypeMat, contour, Scalar(0x0, 0xFF, 0x0), CV_FILLED, 8);
+        //break;
+      }
+      
+      for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+        vector<Point2i> &generatedPoints = vecOfGeneratedPoints[contouri];
+        
+        if (1)
+        {
+          uint32_t pixel = 0xFF0000;
+          assert(contouri < 0xFFFF);
+          pixel += contouri;
+          Vec3b vec = PixelToVec3b(pixel);
+          
+          for ( Point2i p : generatedPoints ) {
+            regionTypeMat.at<Vec3b>(p.y, p.x) = vec;
+          }
+        }
+      }
+
+    }
+    
+    if (debugDumpImages) {
+      std::stringstream fnameStream;
+      fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_region_type_map" << ".png";
+      string fname = fnameStream.str();
+      
+      writeWroteImg(fname, regionTypeMat);
+      cout << "" << endl;
+    }
     
     bool convergedToPixelSet = false;
     uint32_t convergedToPixel = 0;
