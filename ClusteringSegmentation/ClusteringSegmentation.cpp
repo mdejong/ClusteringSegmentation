@@ -6661,6 +6661,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       }
       contourPairs.push_back(make_pair(maxContouri-1, 0));
       
+      int pairOffset = 0;
       for ( auto &pair : contourPairs ) {
         int pOffset1 = pair.first;
         int pOffset2 = pair.second;
@@ -6785,24 +6786,31 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           cout << endl;
         }
         
-        drawOneContour(regionTypeMat, contour, Scalar(0x0, 0xFF, 0x0), CV_FILLED, 8);
+        uint32_t regionColorPixel = 0x000000FF; // blue base
+        assert(pairOffset >= 0 && pairOffset < 0xFFFF);
+        regionColorPixel |= ((uint32_t) pairOffset) << 8;
+        
+        Vec3b regionColorVec = PixelToVec3b(regionColorPixel);
+        Scalar regionColorScalar = Scalar(regionColorVec[0], regionColorVec[1], regionColorVec[2]);
+        
+        drawOneContour(regionTypeMat, contour, regionColorScalar, CV_FILLED, 8);
         
         if (debugDumpPolygonSegmentStepImages) {
           Mat segmentMat = regionTypeMat.clone();
           segmentMat = Scalar(0,0,0);
           
-          drawOneContour(segmentMat, contour, Scalar(0x0, 0xFF, 0x0), CV_FILLED, 8);
-          
-          // Render just the 1 contour and emit as a step image
+          drawOneContour(segmentMat, contour, regionColorScalar, CV_FILLED, 8);
           
           std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_type_polygon" << pOffset1 << "_" << pOffset2 << ".png";
+          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_type_polygon" << pOffset1 << "_" << pOffset2 << "_offset" << pairOffset << ".png";
           string fname = fnameStream.str();
           
           writeWroteImg(fname, segmentMat);
           cout << "" << endl;
         }
-      }
+        
+        pairOffset += 1;
+      } // end foreach pair
       
       for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
         vector<Point2i> &generatedPoints = vecOfGeneratedPoints[contouri];
