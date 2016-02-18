@@ -5599,7 +5599,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
   const bool debug = true;
   const bool debugDumpImages = true;
   const bool debugDumpInsideOutsiteStepImages = false;
-  const bool debugDumpPolygonSegmentStepImages = true;
+  const bool debugDumpPolygonSegmentStepImages = false;
   
   if (debug) {
     cout << "clockwiseScanForShapeBounds " << tag << endl;
@@ -6568,6 +6568,12 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     
     drawOneContour(regionTypeMat, contour, Scalar(0x7F, 0x7F, 0x7F), CV_FILLED, 8);
     
+    const uint32_t redBase  = 0xFF0000;
+    const uint32_t redMax   = 0xFFFFFE;
+    
+    const uint32_t blueBase = 0x0000FF;
+    const uint32_t blueMax  = 0xFFFEFF;
+    
     {
       int w = inputImg.size().width;
       int h = inputImg.size().height;
@@ -6761,9 +6767,10 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           cout << endl;
         }
         
-        uint32_t regionColorPixel = 0x000000FF; // blue base
+        uint32_t regionColorPixel = blueBase;
         assert(pairOffset >= 0 && pairOffset < 0xFFFF);
         regionColorPixel |= ((uint32_t) pairOffset) << 8;
+        assert(regionColorPixel >= blueBase && regionColorPixel <= blueMax);
         
         Vec3b regionColorVec = PixelToVec3b(regionColorPixel);
         Scalar regionColorScalar = Scalar(regionColorVec[0], regionColorVec[1], regionColorVec[2]);
@@ -6792,9 +6799,10 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         if (1)
         {
-          uint32_t pixel = 0xFF0000;
+          uint32_t pixel = redBase;
           assert(contouri < 0xFFFF);
           pixel += contouri;
+          assert(pixel >= redBase && pixel <= redMax);
           Vec3b vec = PixelToVec3b(pixel);
           
           for ( Point2i p : generatedPoints ) {
@@ -6961,12 +6969,11 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         unordered_map<uint32_t, vector<Coord>> activatedNormalVectorMap;
         unordered_map<uint32_t, vector<Coord>> activatedInBetweenMap;
         
-        const uint32_t redBase  = 0xFF0000;
-        const uint32_t blueBase = 0x0000FF;
-        
         for ( Coord c : activatedCoords ) {
           Vec3b typeVec = regionTypeMat.at<Vec3b>(c.y, c.x) ;
           uint32_t pixel = Vec3BToUID(typeVec);
+          
+          printf("regionTypeMat 0x%06X\n", pixel);
           
           if (pixel == 0xFFFFFF) {
             // Should not activate contour pixel
@@ -6977,23 +6984,33 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           } else if (pixel == 0x0) {
             // No pixel should be off
             assert(0);
-          } else if (pixel >= redBase) {
+          } else if (pixel >= redBase && pixel <= redMax) {
             // A red shade means a normal vector pixel
             activatedNormalVectorCoords.push_back(c);
             
             uint32_t contouri = pixel - redBase;
+            assert(contouri < 0xFFFF);
             vector<Coord> &vec = activatedNormalVectorMap[contouri];
             vec.push_back(c);
-          } else if (pixel >= blueBase) {
+          } else if (pixel >= blueBase && pixel <= blueMax) {
             // A blue shade means pixel is inbetween a normal vector
             activatedInBetweenCoords.push_back(c);
             
-            uint32_t contouri = pixel - blueBase;
+            uint32_t contouri = pixel >> 8;
+            assert(contouri < 0xFFFF);
             vector<Coord> &vec = activatedInBetweenMap[contouri];
             vec.push_back(c);
           } else {
             assert(0);
           }
+        }
+        
+        if (debug) {
+          cout << "found " << activatedNormalVectorCoords.size() << " activatedNormalVectorCoords" << endl;
+          cout << "found " << activatedInBetweenCoords.size() << " activatedInBetweenCoords" << endl;
+          
+          cout << "activatedNormalVectorMap contains " << activatedNormalVectorMap.size() << " keys" << endl;
+          cout << "activatedInBetweenMap " << activatedInBetweenMap.size() << " keys" << endl;
         }
         
         if (debugDumpImages) {
@@ -7041,36 +7058,50 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             append_to_vector(vecOutside, normalsVectorCoords);
           }
           
-          if (0)
+          if (1)
           {
             vector<Coord> &inbetweenCoords = activatedInBetweenMap[contouri];
-            
-            int32_t vecUid = regionVecs.getUidForContour(contouri);
-            
-            /*
-            // Add vectors in between existing vectors
-            
-            int32_t leftUid = regionVecs.getUidForContour(leftOffset);
-            int32_t rightUid = regionVecs.getUidForContour(rightOffset);
-            
-            vector<int32_t> vecUids = regionVecs.makeVectorsBetween(leftUid, rightUid, N);
-            
-            int offset = 0;
-            
-            for ( int32_t vecUid : vecUids ) {
-              cout << "create vecUid " << vecUid << endl;
-              
-              if (vecUid == 63500) {
-                cout << "";
-              }
-              
-              vector<Coord> &vecOfCoords = regionVecs.getOutsideVector(vecUid);
-            */
 
+            int32_t leftContouri = contouri;
+            int32_t rightContouri = (contouri == (maxContouri-1)) ? 0 : contouri+1;
             
-//            vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
+            int32_t leftUid = regionVecs.getUidForContour(leftContouri);
+            int32_t rightUid = regionVecs.getUidForContour(rightContouri);
             
-//            append_to_vector(vecOutside, inbetweenCoords);
+            if (debug) {
+              cout << "in between (" << leftContouri << "," << rightContouri << ")" << endl;
+            }
+            
+            int N = (int) inbetweenCoords.size();
+
+            // FIXME: not fast
+            
+            vector<int32_t> vecUids = regionVecs.getVectorsBetween(leftUid, rightUid);
+            
+            int currentInBetweenN = (int) vecUids.size();
+            
+            if (debug) {
+              cout << "old in between N " << currentInBetweenN << endl;
+              cout << "new in between N " << N << endl;
+            }
+            
+            if (currentInBetweenN == 0 && N > 0) {
+              vector<int32_t> vecUids = regionVecs.makeVectorsBetween(leftUid, rightUid, N);
+              
+              int i = 0;
+              for ( int32_t vecUid : vecUids ) {
+                cout << "create in between vecUid " << vecUid << endl;
+                
+                vector<Coord> &vecOfCoords = regionVecs.getOutsideVector(vecUid);
+                Coord c = inbetweenCoords[i];
+                vecOfCoords.push_back(c);
+                
+                i++;
+              }
+            } else if (N > currentInBetweenN) {
+              assert(0);
+              //vector<int32_t> vecUids = regionVecs.makeVectorsBetween(leftUid, rightUid, N);
+            }
           }
           
           /*
@@ -7082,8 +7113,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           int32_t vecUid = regionVecs.getUidForContour(contouri);
           vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
           vecOutside.push_back(hitC);
-          
-          MOMO
           
           */
            
