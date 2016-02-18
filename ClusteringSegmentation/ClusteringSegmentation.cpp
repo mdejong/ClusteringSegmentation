@@ -5577,6 +5577,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
   const bool debug = true;
   const bool debugDumpImages = true;
   const bool debugDumpInsideOutsiteStepImages = false;
+  const bool debugDumpPolygonSegmentStepImages = true;
   
   if (debug) {
     cout << "clockwiseScanForShapeBounds " << tag << endl;
@@ -6546,11 +6547,71 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     drawOneContour(regionTypeMat, contour, Scalar(0x7F, 0x7F, 0x7F), CV_FILLED, 8);
     
     {
+      // Corners in clockwise order
+      
       vector<Coord> edgeCoords;
       edgeCoords.push_back(Coord(0,0));
-      edgeCoords.push_back(Coord(inputImg.cols,0));
-      edgeCoords.push_back(Coord(inputImg.cols,inputImg.rows));
-      edgeCoords.push_back(Coord(0,inputImg.rows));
+      edgeCoords.push_back(Coord(inputImg.cols-1,0));
+      edgeCoords.push_back(Coord(inputImg.cols-1,inputImg.rows-1));
+      edgeCoords.push_back(Coord(0,inputImg.rows-1));
+      
+      // Generate each point around the outside of the image
+      
+      vector<pair<Coord, Coord>> edgeCoordPairs;
+      
+      edgeCoordPairs.push_back(make_pair(edgeCoords[0], edgeCoords[1]));
+      edgeCoordPairs.push_back(make_pair(edgeCoords[1], edgeCoords[2]));
+      edgeCoordPairs.push_back(make_pair(edgeCoords[2], edgeCoords[3]));
+      edgeCoordPairs.push_back(make_pair(edgeCoords[3], edgeCoords[0]));
+      
+      // Edges contour in clockwise order
+      
+      vector<Coord> coordsAroundEdges;
+      
+      for ( auto & pair : edgeCoordPairs ) {
+        Coord c1 = pair.first;
+        Coord c2 = pair.second;
+        
+        vector<Point2i> generatedPoints = generatePointsOnLine(coordToPoint(c1), coordToPoint(c2));
+        
+        auto it = begin(generatedPoints);
+        
+        Coord firstCoord = pointToCoord(*it);
+        
+        if ((coordsAroundEdges.size() > 0) && (firstCoord == coordsAroundEdges[coordsAroundEdges.size() - 1])) {
+          // Skip dup point
+        } else {
+          coordsAroundEdges.push_back(firstCoord);
+        }
+        
+        Coord firstCoordInContour = coordsAroundEdges[0];
+        
+        for ( ++it ; it != end(generatedPoints); it++ ) {
+          Coord nextCoord = pointToCoord(*it);
+          
+          if (nextCoord != firstCoordInContour) {
+            coordsAroundEdges.push_back(nextCoord);
+          }
+        }
+      }
+      
+      if (debugDumpImages) {
+        Mat mat = regionTypeMat.clone();
+        mat = Scalar(0,0,0);
+        
+        for ( Coord c  : coordsAroundEdges ) {
+          mat.at<Vec3b>(c.y, c.x) = Vec3b(0xFF,0xFF,0xFF);
+        }
+        
+        std::stringstream fnameStream;
+        fnameStream << "srm" << "_tag_" << tag << "_coords_around" << ".png";
+        string fname = fnameStream.str();
+        
+        writeWroteImg(fname, mat);
+        cout << "" << endl;
+      }
+      
+      // Generate vector of vectors
       
       vector<vector<Point2i> > vecOfGeneratedPoints;
       
@@ -6601,23 +6662,146 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       contourPairs.push_back(make_pair(maxContouri-1, 0));
       
       for ( auto &pair : contourPairs ) {
-        cout << "contour pair " << pair.first << "," << pair.second << endl;
+        int pOffset1 = pair.first;
+        int pOffset2 = pair.second;
         
-        vector<Point2i> &vec1 = vecOfGeneratedPoints[pair.first];
-        vector<Point2i> &vec2 = vecOfGeneratedPoints[pair.second];
+        if (debug) {
+        cout << "contour pair " << pOffset1 << "," << pOffset2 << endl;
+        }
+        
+        vector<Point2i> &vec1 = vecOfGeneratedPoints[pOffset1];
+        vector<Point2i> &vec2 = vecOfGeneratedPoints[pOffset2];
         
         // Render region as a filled polygon
         
         vector<Point2i> contour;
+        contour.reserve(vec1.size() + vec2.size() + 1);
         
         append_to_vector(contour, vec1);
         
+        // Iterate vec2 backwards so that the end of the first vector
+        // at the image bound can be connected to the end of the second
+        // vector which is also at the image bound.
+
+        vector<Point2i> vec2Backwards;
+        vec2Backwards.reserve(vec2.size());
+        
         for ( auto it = vec2.rbegin(); it != vec2.rend(); it++ ) {
-          contour.push_back(*it);
+          vec2Backwards.push_back(*it);
+        }
+        
+        // If the angle between vec1[end] and vec2Backwards[0] is either
+        // 0 or 90 degrees (either dx or dy is zero) then a horiztonal
+        // or vertical passes through both end points.
+        
+        Point2i p1 = vec1[vec1.size() - 1];
+        Point2i p2 = vec2Backwards[0];
+        Point2i delta = p2 - p1;
+        
+        if (debug) {
+          printf("p1 (%5d,%5d)\n", p1.x, p1.y);
+          printf("p2 (%5d,%5d)\n", p2.x, p2.y);
+          printf("d  (%5d,%5d)\n", delta.x, delta.y);
+        }
+        
+        bool arePointsOnEasyHorizontal;
+        
+        if (delta.x == 0 && delta.y == 0) {
+          // Weird case, but could happen
+          arePointsOnEasyHorizontal = true;
+        } else if (delta.x == 0 && abs(delta.y) == (inputImg.rows-1)) {
+          // Two point are on different edges
+          arePointsOnEasyHorizontal = false;
+        } else if (delta.y == 0 && abs(delta.x) == (inputImg.cols-1)) {
+          // Two point are on different edges
+          arePointsOnEasyHorizontal = false;
+        } else if (delta.x == 0 || delta.y == 0) {
+          arePointsOnEasyHorizontal = true;
+        } else {
+          arePointsOnEasyHorizontal = false;
+        }
+        
+        if (arePointsOnEasyHorizontal) {
+          // Line is either vertical or horizontal, nop
+        } else {
+          // Include point around the clockwise contour
+          // to account for corners.
+          
+          Coord c1 = pointToCoord(p1);
+          Coord c2 = pointToCoord(p2);
+          
+          int p1Offset = -1;
+          int p2Offset = -1;
+          
+          for ( int i = 0; i < coordsAroundEdges.size(); i++) {
+            Coord edgeCoord = coordsAroundEdges[i];
+            
+            if (debug) {
+              cout << "checking edge coord " << edgeCoord << endl;
+            }
+            
+            if (edgeCoord == c1) {
+              p1Offset = i;
+            }
+            if (edgeCoord == c2) {
+              p2Offset = i;
+            }
+          }
+          
+          assert(p1Offset != -1);
+          assert(p2Offset != -1);
+
+          int contourSize = (int) coordsAroundEdges.size();
+          int contourMaxi = contourSize;
+          if (p2Offset < p1Offset) {
+            contourMaxi += p1Offset;
+          }
+          
+          for ( int i = p1Offset; i < contourMaxi; i++) {
+            Coord edgeCoord = coordsAroundEdges[vecOffsetAround(contourSize, i)];
+            
+            if (edgeCoord == c1) {
+              continue;
+            }
+            if (edgeCoord == c2) {
+              // Stop when the second coord is  hit
+              break;
+            }
+            
+            if (debug) {
+              printf("add edge point (%5d,%5d)\n", edgeCoord.x, edgeCoord.y);
+            }
+            
+            contour.push_back(coordToPoint(edgeCoord));
+          }
+        }
+        
+        append_to_vector(contour, vec2Backwards);
+        
+        if (debug) {
+          for ( Point2i p : contour ) {
+            cout << p << " ";
+          }
+          cout << endl;
         }
         
         drawOneContour(regionTypeMat, contour, Scalar(0x0, 0xFF, 0x0), CV_FILLED, 8);
-        //break;
+        
+        if (debugDumpPolygonSegmentStepImages) {
+          Mat segmentMat = regionTypeMat.clone();
+          segmentMat = Scalar(0,0,0);
+          
+          drawOneContour(segmentMat, contour, Scalar(0x0, 0xFF, 0x0), CV_FILLED, 8);
+          
+          // Render just the 1 contour and emit as a step image
+          
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_type_polygon" << pOffset1 << "_" << pOffset2 << ".png";
+          string fname = fnameStream.str();
+          
+          writeWroteImg(fname, segmentMat);
+          cout << "" << endl;
+        }
       }
       
       for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
