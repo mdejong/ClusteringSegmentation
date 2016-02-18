@@ -6568,11 +6568,63 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     
     drawOneContour(regionTypeMat, contour, Scalar(0x7F, 0x7F, 0x7F), CV_FILLED, 8);
     
+    // Construct ranges where pixels with the red component as 0xFF indicate
+    // normal vector pixels and if the red compomnent is 0x01 then this indicates
+    // pixels in between the normal vectors. These ranges do not overlap.
+    
     const uint32_t redBase  = 0xFF0000;
     const uint32_t redMax   = 0xFFFFFE;
     
-    const uint32_t blueBase = 0x0000FF;
-    const uint32_t blueMax  = 0xFFFEFF;
+    const uint32_t blueBase = 0x010000;
+    const uint32_t blueMax  = 0x01FFFE;
+    
+    auto isBlue = [](const uint32_t pixel)->bool {
+      uint8_t R = (pixel >> 16) & 0xFF;
+      return (R == 0x01);
+    };
+    
+    auto isRed = [](const uint32_t pixel)->bool {
+      uint8_t R = (pixel >> 16) & 0xFF;
+      return (R == 0xFF);
+    };
+    
+    auto getContourOffset = [](const uint32_t pixel)->uint32_t {
+      return (pixel & 0xFFFF);
+    };
+
+    auto encodeBlue = [
+#if defined(DEBUG)
+                       &isBlue, &isRed
+#endif // DEBUG
+    ](const uint32_t contourOffset)->uint32_t {
+#if defined(DEBUG)
+      assert(contourOffset < 0xFFFF);
+#endif // DEBUG
+      uint32_t pixel = blueBase + contourOffset;
+#if defined(DEBUG)
+      assert(pixel >= blueBase && pixel <= blueMax);
+      assert(isBlue(pixel) == true);
+      assert(isRed(pixel) == false);
+#endif // DEBUG
+      return pixel;
+    };
+    
+    auto encodeRed = [
+#if defined(DEBUG)
+                      &isBlue, &isRed
+#endif // DEBUG
+    ](const uint32_t contourOffset)->uint32_t {
+#if defined(DEBUG)
+      assert(contourOffset < 0xFFFF);
+#endif // DEBUG
+      uint32_t pixel = redBase + contourOffset;
+#if defined(DEBUG)
+      assert(pixel >= redBase && pixel <= redMax);
+      assert(isBlue(pixel) == false);
+      assert(isRed(pixel) == true);
+#endif // DEBUG
+      return pixel;
+    };
     
     {
       int w = inputImg.size().width;
@@ -6767,11 +6819,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           cout << endl;
         }
         
-        uint32_t regionColorPixel = blueBase;
-        assert(pairOffset >= 0 && pairOffset < 0xFFFF);
-        regionColorPixel |= ((uint32_t) pairOffset) << 8;
-        assert(regionColorPixel >= blueBase && regionColorPixel <= blueMax);
-        
+        uint32_t regionColorPixel = encodeBlue(pairOffset);
         Vec3b regionColorVec = PixelToVec3b(regionColorPixel);
         Scalar regionColorScalar = Scalar(regionColorVec[0], regionColorVec[1], regionColorVec[2]);
         
@@ -6799,10 +6847,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         if (1)
         {
-          uint32_t pixel = redBase;
-          assert(contouri < 0xFFFF);
-          pixel += contouri;
-          assert(pixel >= redBase && pixel <= redMax);
+          uint32_t pixel = encodeRed(contouri);
           Vec3b vec = PixelToVec3b(pixel);
           
           for ( Point2i p : generatedPoints ) {
@@ -6830,6 +6875,16 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       writeWroteImg(fname, regionTypeMat);
       cout << "" << endl;
     }
+    
+    // Verify that no pixels were missed
+    
+#if defined(DEBUG)
+    for_each_const_bgr(regionTypeMat, [](uint8_t B, uint8_t G, uint8_t R)->void {
+      Vec3b vec(B,G,R);
+      uint32_t pixel = Vec3BToUID(vec);
+      assert(pixel != 0);
+    });
+#endif // DEBUG
     
     bool convergedToPixelSet = false;
     uint32_t convergedToPixel = 0;
@@ -6984,20 +7039,18 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           } else if (pixel == 0x0) {
             // No pixel should be off
             assert(0);
-          } else if (pixel >= redBase && pixel <= redMax) {
+          } else if (isRed(pixel)) {
             // A red shade means a normal vector pixel
             activatedNormalVectorCoords.push_back(c);
             
-            uint32_t contouri = pixel - redBase;
-            assert(contouri < 0xFFFF);
+            uint32_t contouri = getContourOffset(pixel);
             vector<Coord> &vec = activatedNormalVectorMap[contouri];
             vec.push_back(c);
-          } else if (pixel >= blueBase && pixel <= blueMax) {
+          } else if (isBlue(pixel)) {
             // A blue shade means pixel is inbetween a normal vector
             activatedInBetweenCoords.push_back(c);
             
-            uint32_t contouri = pixel >> 8;
-            assert(contouri < 0xFFFF);
+            uint32_t contouri = getContourOffset(pixel);
             vector<Coord> &vec = activatedInBetweenMap[contouri];
             vec.push_back(c);
           } else {
