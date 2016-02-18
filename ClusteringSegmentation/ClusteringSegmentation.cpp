@@ -5016,6 +5016,8 @@ clockwiseScanForTagsAroundShape(
 
 vector<Coord> genRectangleOutline(int regionWidth, int regionHeight)
 {
+  const bool debugDumpImages = true;
+  
   vector<Coord> outlineCoords;
   
   // top right half
@@ -5079,7 +5081,27 @@ vector<Coord> genRectangleOutline(int regionWidth, int regionHeight)
       assert(0); // must not repeat
     }
   }
+  unordered_map<Coord,bool> seen;
+  for ( Coord c : outlineCoords ) {
+    assert(seen.count(c) == 0);
+    seen[c] = true;
+  }
 #endif // DEBUG
+  
+  if (debugDumpImages) {
+    Mat binMat(regionHeight, regionWidth, CV_8UC1, Scalar(0));
+    
+    for ( Coord c : outlineCoords ) {
+      binMat.at<uint8_t>(c.y, c.x) = 0xFF;
+    }
+    
+    std::stringstream fnameStream;
+    fnameStream << "coords_around.png";
+    string fname = fnameStream.str();
+    
+    writeWroteImg(fname, binMat);
+    cout << "" << endl;
+  }
   
   return outlineCoords;
 }
@@ -6547,69 +6569,20 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     drawOneContour(regionTypeMat, contour, Scalar(0x7F, 0x7F, 0x7F), CV_FILLED, 8);
     
     {
+      int w = inputImg.size().width;
+      int h = inputImg.size().height;
+      
       // Corners in clockwise order
       
       vector<Coord> edgeCoords;
       edgeCoords.push_back(Coord(0,0));
-      edgeCoords.push_back(Coord(inputImg.cols-1,0));
-      edgeCoords.push_back(Coord(inputImg.cols-1,inputImg.rows-1));
-      edgeCoords.push_back(Coord(0,inputImg.rows-1));
-      
-      // Generate each point around the outside of the image
-      
-      vector<pair<Coord, Coord>> edgeCoordPairs;
-      
-      edgeCoordPairs.push_back(make_pair(edgeCoords[0], edgeCoords[1]));
-      edgeCoordPairs.push_back(make_pair(edgeCoords[1], edgeCoords[2]));
-      edgeCoordPairs.push_back(make_pair(edgeCoords[2], edgeCoords[3]));
-      edgeCoordPairs.push_back(make_pair(edgeCoords[3], edgeCoords[0]));
+      edgeCoords.push_back(Coord(w-1,0));
+      edgeCoords.push_back(Coord(w-1,h-1));
+      edgeCoords.push_back(Coord(0,h-1));
       
       // Edges contour in clockwise order
       
-      vector<Coord> coordsAroundEdges;
-      
-      for ( auto & pair : edgeCoordPairs ) {
-        Coord c1 = pair.first;
-        Coord c2 = pair.second;
-        
-        vector<Point2i> generatedPoints = generatePointsOnLine(coordToPoint(c1), coordToPoint(c2));
-        
-        auto it = begin(generatedPoints);
-        
-        Coord firstCoord = pointToCoord(*it);
-        
-        if ((coordsAroundEdges.size() > 0) && (firstCoord == coordsAroundEdges[coordsAroundEdges.size() - 1])) {
-          // Skip dup point
-        } else {
-          coordsAroundEdges.push_back(firstCoord);
-        }
-        
-        Coord firstCoordInContour = coordsAroundEdges[0];
-        
-        for ( ++it ; it != end(generatedPoints); it++ ) {
-          Coord nextCoord = pointToCoord(*it);
-          
-          if (nextCoord != firstCoordInContour) {
-            coordsAroundEdges.push_back(nextCoord);
-          }
-        }
-      }
-      
-      if (debugDumpImages) {
-        Mat mat = regionTypeMat.clone();
-        mat = Scalar(0,0,0);
-        
-        for ( Coord c  : coordsAroundEdges ) {
-          mat.at<Vec3b>(c.y, c.x) = Vec3b(0xFF,0xFF,0xFF);
-        }
-        
-        std::stringstream fnameStream;
-        fnameStream << "srm" << "_tag_" << tag << "_coords_around" << ".png";
-        string fname = fnameStream.str();
-        
-        writeWroteImg(fname, mat);
-        cout << "" << endl;
-      }
+      vector<Coord> coordsAroundEdges = genRectangleOutline(w, h);
       
       // Generate vector of vectors
       
@@ -6638,8 +6611,10 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         Point2f onF = normalVecPoints[1];
         Point2f outsideF = normalVecPoints[2];
       
+#if defined(DEBUG)
         assert(c.x == onF.x);
         assert(c.y == onF.y);
+#endif // DEBUG
         
         Point2f normVec = contourNormals[contouri];
         Point2f wayOutsideF = onF + (dMax * normVec);
