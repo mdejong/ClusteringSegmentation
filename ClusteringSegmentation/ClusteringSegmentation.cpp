@@ -5599,7 +5599,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
   const bool debug = true;
   const bool debugDumpImages = true;
   const bool debugDumpInsideOutsiteStepImages = false;
-  const bool debugDumpPolygonSegmentStepImages = false;
+  const bool debugDumpPolygonSegmentStepImages = true;
   
   if (debug) {
     cout << "clockwiseScanForShapeBounds " << tag << endl;
@@ -6575,12 +6575,12 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
     const uint32_t redBase  = 0xFF0000;
     const uint32_t redMax   = 0xFFFFFE;
     
-    const uint32_t blueBase = 0x010000;
-    const uint32_t blueMax  = 0x01FFFE;
+    const uint32_t blueBase = 0x3F0000;
+    const uint32_t blueMax  = 0x3FFFFE;
     
     auto isBlue = [](const uint32_t pixel)->bool {
       uint8_t R = (pixel >> 16) & 0xFF;
-      return (R == 0x01);
+      return (R == 0x3F);
     };
     
     auto isRed = [](const uint32_t pixel)->bool {
@@ -6693,6 +6693,29 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         contourPairs.push_back(make_pair(contouri, contouri+1));
       }
       contourPairs.push_back(make_pair(maxContouri-1, 0));
+
+#if defined(DEBUG)
+      {
+        assert(contourPairs.size() == maxContouri);
+        
+        int pairOffset = 0;
+        for ( auto &pair : contourPairs ) {
+          assert(pair.first == pairOffset);
+          if (pairOffset < (contourPairs.size() - 1)) {
+            int nextContouri = pair.second;
+            assert(nextContouri == (pair.first+1));
+          } else {
+            assert(pair.second == 0);
+          }
+          pairOffset++;
+        }
+      }
+#endif // DEBUG
+      
+      // Retain the polygon path foreach pair
+      
+      vector<vector<Point2i> > contourPairPaths;
+      contourPairPaths.reserve(contourPairs.size());
       
       int pairOffset = 0;
       for ( auto &pair : contourPairs ) {
@@ -6712,6 +6735,14 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         contour.reserve(vec1.size() + vec2.size() + 1);
         
         append_to_vector(contour, vec1);
+        
+        if (debug) {
+          cout << "contour vec1:" << endl;
+          for ( Point2i p : vec1 ) {
+            cout << p << " ";
+          }
+          cout << endl;
+        }
         
         // Iterate vec2 backwards so that the end of the first vector
         // at the image bound can be connected to the end of the second
@@ -6813,7 +6844,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         append_to_vector(contour, vec2Backwards);
         
         if (debug) {
-          for ( Point2i p : contour ) {
+          cout << "contour vec2:" << endl;
+          for ( Point2i p : vec2Backwards ) {
             cout << p << " ";
           }
           cout << endl;
@@ -6839,20 +6871,24 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           cout << "" << endl;
         }
         
+        contourPairPaths.push_back(std::move(contour));
+        
         pairOffset += 1;
       } // end foreach pair
+      
+      assert(contourPairPaths.size() == contourPairs.size());
+      
+      // Draw normal vectors over the filled polygon, if no inbetween pixels then
+      // the normal vectors will cover up the inbetween ones.
       
       for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
         vector<Point2i> &generatedPoints = vecOfGeneratedPoints[contouri];
         
-        if (1)
-        {
-          uint32_t pixel = encodeRed(contouri);
-          Vec3b vec = PixelToVec3b(pixel);
-          
-          for ( Point2i p : generatedPoints ) {
-            regionTypeMat.at<Vec3b>(p.y, p.x) = vec;
-          }
+        uint32_t pixel = encodeRed(contouri);
+        Vec3b vec = PixelToVec3b(pixel);
+        
+        for ( Point2i p : generatedPoints ) {
+          regionTypeMat.at<Vec3b>(p.y, p.x) = vec;
         }
       }
       
@@ -6864,7 +6900,74 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         const Vec3b whiteVec(0xFF, 0xFF, 0xFF); // white
         regionTypeMat.at<Vec3b>(c.y, c.x) = whiteVec;
       }
+      
+      // Verify that no pixels were missed by the render process
+      
+#if defined(DEBUG)
+      for_each_const_bgr(regionTypeMat, [](uint8_t B, uint8_t G, uint8_t R)->void {
+        Vec3b vec(B,G,R);
+        uint32_t pixel = Vec3BToUID(vec);
+        assert(pixel != 0);
+      });
+#endif // DEBUG
+      
+      // If any inbetween points exist after rendering the normals and
+      // the contour lines then these inbetween pixels need to be considered
+      // when iterating over the contour points.
+      
+      unordered_map<uint32_t, uint32_t> inBetweenCountMap;
+      
+      for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+        inBetweenCountMap[contouri] = 0;
+      }
+      
+      for_each_const_bgr(regionTypeMat, [&isRed, &isBlue, &inBetweenCountMap, &getContourOffset](uint8_t B, uint8_t G, uint8_t R)->void {
+        Vec3b vec(B,G,R);
+        uint32_t pixel = ((uint32_t)R) << 16 | ((uint32_t)G) << 8 | B;
+        
+        if (pixel == 0xFFFFFF) {
+          // Nop
+        } else if (pixel == 0x7F7F7F) {
+          // Nop
+        } else if (pixel == 0x0) {
+          // No pixel should be off
+          assert(0);
+        } else if (isRed(pixel)) {
+          // A red shade means a normal vector pixel
+          // Nop
+        } else if (isBlue(pixel)) {
+          // A blue shade means pixel is inbetween a normal vector
+          
+          uint32_t contouri = getContourOffset(pixel);
+          inBetweenCountMap[contouri] += 1;
+        } else {
+          assert(0);
+        }
+      });
+      
+      // Any in between region not defined in the map contains zero pixels.
+      
+      for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
+        uint32_t count = inBetweenCountMap[contouri];
+        
+        if (count == 0) {
+          // Free up memory that was used for points on contour path with no inbetween
+          contourPairPaths[contouri] = std::move(vector<Point2i>());
+        } else {
+          auto &pair = contourPairs[contouri];
+          int nextContouri = pair.second;
+          
+          printf("contouri %5d to %5d contains %5d in between pixels\n", contouri, nextContouri, count);
+          
+          // FIXME: would 1 line capture all the points? 1 line inbetween the 2 around vectors.
+          
+          // FIXME: Capture the in between region as point, remove points along the vector lines
+          // and then iterate outward to determine the number of points at each outgoing step?
+          // Better to slice up region in terms of number of lines needed to cover all the points.
+        }
+      }
 
+      //MOMO
     }
     
     if (debugDumpImages) {
@@ -6876,57 +6979,15 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       cout << "" << endl;
     }
     
-    // Verify that no pixels were missed
-    
-#if defined(DEBUG)
-    for_each_const_bgr(regionTypeMat, [](uint8_t B, uint8_t G, uint8_t R)->void {
-      Vec3b vec(B,G,R);
-      uint32_t pixel = Vec3BToUID(vec);
-      assert(pixel != 0);
-    });
-#endif // DEBUG
-    
     bool convergedToPixelSet = false;
     uint32_t convergedToPixel = 0;
     
     done = false;
     int outsideStep = 0;
     
-    // Each iteration of the loop expands the currently defined region, but
-    // the first iteration assumes that one time init logic has been run
-    // to setup state related to contour vectors.
-    
-    /*
-    
-    if (0)
-    {
-      for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-        //Coord c = contourCoords[contouri];
-        int32_t vecUid = regionVecs.getUidForContour(contouri);
-        vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
-        vector<Point2f> normalVecPoints = allNormalVectors[contouri];
-        
-        Point2f onF = normalVecPoints[1];
-        Point2f outsideF = normalVecPoints[2];
-        
-        round(outsideF);
-        
-        Coord outsideC((int)outsideF.x, (int)outsideF.y);
-        vecOutside.push_back(outsideC);
-      }
-    }
-     
-    */
+    // Each iteration of the loop expands the original polygon region by 1 pixel.
     
     while (!done) {
-      
-      // Both the outside expand and the inside contract basically need the same
-      // kind of approach where the total contour shape is either contracted or
-      // expanded by 1 pixel, and then any pixels not directly hit by the contour
-      // point vectors should be added as vectors in between. This step by step
-      // algo needs to build on the previous results so that only 1 pixel halos
-      // need to be considered from on step to the next to avoid scanning N
-      // things over and over?
       
       // Expand the radius outward so that additional pixels around
       // the contour area can be included in the vectors. Note that

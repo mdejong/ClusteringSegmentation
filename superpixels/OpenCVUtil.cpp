@@ -1132,7 +1132,7 @@ vector<uint32_t> generateVector(uint32_t fromPixel, uint32_t toPixel)
 
 vector<Point2i> generatePointsOnLine(Point2i startP, Point2i endP)
 {
-  const bool debug = true;
+  const bool debug = false;
   
   Point2f deltaP = endP - startP;
   Point2f deltaUnit = deltaP;
