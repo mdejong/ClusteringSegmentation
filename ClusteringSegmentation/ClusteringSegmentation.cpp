@@ -6712,10 +6712,21 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       }
 #endif // DEBUG
       
-      // Retain the polygon path foreach pair
+      // When in DEBUG mode, maintain the entire contour that defines
+      // the in between region.
       
+#if defined(DEBUG)
       vector<vector<Point2i> > contourPairPaths;
       contourPairPaths.reserve(contourPairs.size());
+#endif // DEBUG
+      
+      typedef struct {
+        vector<Coord> innerCoords;
+        vector<Coord> outerCoords;
+      } InBetweenRegionEdges;
+      
+      vector<InBetweenRegionEdges> contourInBetweenPaths;
+      contourInBetweenPaths.reserve(contourPairs.size());
       
       int pairOffset = 0;
       for ( auto &pair : contourPairs ) {
@@ -6728,6 +6739,10 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         vector<Point2i> &vec1 = vecOfGeneratedPoints[pOffset1];
         vector<Point2i> &vec2 = vecOfGeneratedPoints[pOffset2];
+        
+        InBetweenRegionEdges inbetweenEdges;
+        vector<Coord> &innerCoords = inbetweenEdges.innerCoords;
+        vector<Coord> &outerCoords = inbetweenEdges.outerCoords;
         
         // Render region as a filled polygon
         
@@ -6753,6 +6768,20 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         for ( auto it = vec2.rbegin(); it != vec2.rend(); it++ ) {
           vec2Backwards.push_back(*it);
+        }
+        
+        // The last point of the second vector would implicitly close
+        // back to the first point of the first vector.
+        
+        {
+          Point2i p2 = vec1[0];
+          Point2i p1 = vec2[0];
+          
+          vector<Point2i> generatedPoints = generatePointsOnLine(p1, p2);
+          
+          for ( Point2i p : generatedPoints ) {
+            innerCoords.push_back(pointToCoord(p));
+          }
         }
         
         // If the angle between vec1[end] and vec2Backwards[0] is either
@@ -6787,7 +6816,13 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         }
         
         if (arePointsOnEasyHorizontal) {
-          // Line is either vertical or horizontal, nop
+          // Line is either vertical or horizontal
+          
+          vector<Point2i> generatedPoints = generatePointsOnLine(p1, p2);
+          
+          for ( Point2i p : generatedPoints ) {
+            outerCoords.push_back(pointToCoord(p));
+          }
         } else {
           // Include point around the clockwise contour
           // to account for corners.
@@ -6826,10 +6861,12 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             Coord edgeCoord = coordsAroundEdges[vecOffsetAround(contourSize, i)];
             
             if (edgeCoord == c1) {
+              outerCoords.push_back(edgeCoord);
               continue;
             }
             if (edgeCoord == c2) {
               // Stop when the second coord is  hit
+              outerCoords.push_back(edgeCoord);
               break;
             }
             
@@ -6838,6 +6875,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             }
             
             contour.push_back(coordToPoint(edgeCoord));
+            
+            outerCoords.push_back(edgeCoord);
           }
         }
         
@@ -6850,6 +6889,8 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           }
           cout << endl;
         }
+        
+        // Emit Vec3b
         
         uint32_t regionColorPixel = encodeBlue(pairOffset);
         Vec3b regionColorVec = PixelToVec3b(regionColorPixel);
@@ -6871,12 +6912,46 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           cout << "" << endl;
         }
         
+        if (debugDumpPolygonSegmentStepImages) {
+          Mat segmentMat = regionTypeMat.clone();
+          segmentMat = Scalar(0,0,0);
+          
+          drawOneContour(segmentMat, contour, regionColorScalar, CV_FILLED, 8);
+          
+          // Also render inner and outer and white and gray
+          
+          Vec3b grayVec(0x7F,0x7F,0x7F);
+          
+          for ( Coord c : inbetweenEdges.innerCoords ) {
+            segmentMat.at<Vec3b>(c.y, c.x) = grayVec;
+          }
+          
+          Vec3b whiteVec(0xFF,0xFF,0xFF);
+          
+          for ( Coord c : inbetweenEdges.outerCoords ) {
+            segmentMat.at<Vec3b>(c.y, c.x) = whiteVec;
+          }
+          
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_type_polygon_inner_outer" << pOffset1 << "_" << pOffset2 << "_offset" << pairOffset << ".png";
+          string fname = fnameStream.str();
+          
+          writeWroteImg(fname, segmentMat);
+          cout << "" << endl;
+        }
+        
+#if defined(DEBUG)
         contourPairPaths.push_back(std::move(contour));
+#endif // DEBUG
+        
+        contourInBetweenPaths.push_back(std::move(inbetweenEdges));
         
         pairOffset += 1;
       } // end foreach pair
       
+#if defined(DEBUG)
       assert(contourPairPaths.size() == contourPairs.size());
+#endif // DEBUG
       
       // Draw normal vectors over the filled polygon, if no inbetween pixels then
       // the normal vectors will cover up the inbetween ones.
@@ -6952,22 +7027,86 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         
         if (count == 0) {
           // Free up memory that was used for points on contour path with no inbetween
-          contourPairPaths[contouri] = std::move(vector<Point2i>());
+          
+          contourInBetweenPaths[contouri] = std::move(InBetweenRegionEdges());
         } else {
           auto &pair = contourPairs[contouri];
           int nextContouri = pair.second;
           
           printf("contouri %5d to %5d contains %5d in between pixels\n", contouri, nextContouri, count);
           
+          InBetweenRegionEdges & inbetweenEdges = contourInBetweenPaths[contouri];
+          
           // FIXME: would 1 line capture all the points? 1 line inbetween the 2 around vectors.
+          
+          if (debugDumpPolygonSegmentStepImages) {
+            Mat segmentMat = regionTypeMat.clone();
+            
+            // Filter regionTypeMat to keep only in between pixels that correspond to this contouri
+            
+            for_each_bgr(segmentMat, regionTypeMat, [&isRed, &isBlue, &getContourOffset, contouri](uint8_t B1, uint8_t G1, uint8_t R1,
+                                                                                                   uint8_t B2, uint8_t G2, uint8_t R2)->Vec3b {
+              uint32_t pixel = ((uint32_t)R2) << 16 | ((uint32_t)G2) << 8 | B2;
+              
+              if (pixel == 0xFFFFFF) {
+                // Nop
+              } else if (pixel == 0x7F7F7F) {
+                // Nop
+              } else if (pixel == 0x0) {
+                // No pixel should be off
+                assert(0);
+              } else if (isRed(pixel)) {
+                // A red shade means a normal vector pixel
+                // Nop
+              } else if (isBlue(pixel)) {
+                // A blue shade means pixel is inbetween a normal vector
+                
+                uint32_t thisContouri = getContourOffset(pixel);
+                if (contouri == thisContouri) {
+                  return Vec3b(B2,G2,R2);
+                }
+              } else {
+                assert(0);
+              }
+              
+              return Vec3b(0,0,0);
+            });
+            
+            // Also render inner and outer and white and gray
+            
+            Vec3b grayVec(0x7F,0x7F,0x7F);
+            
+            for ( Coord c : inbetweenEdges.innerCoords ) {
+              Vec3b currentVec = segmentMat.at<Vec3b>(c.y, c.x);
+              assert(currentVec[0] == 0);
+              assert(currentVec[1] == 0);
+              assert(currentVec[2] == 0);
+              segmentMat.at<Vec3b>(c.y, c.x) = grayVec;
+            }
+            
+            Vec3b whiteVec(0xFF,0xFF,0xFF);
+            
+            for ( Coord c : inbetweenEdges.outerCoords ) {
+              Vec3b currentVec = segmentMat.at<Vec3b>(c.y, c.x);
+              assert(currentVec[0] == 0);
+              assert(currentVec[1] == 0);
+              assert(currentVec[2] == 0);
+              segmentMat.at<Vec3b>(c.y, c.x) = whiteVec;
+            }
+            
+            std::stringstream fnameStream;
+            fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_type_between_inner_outer" << contouri << "_" << nextContouri << ".png";
+            string fname = fnameStream.str();
+            
+            writeWroteImg(fname, segmentMat);
+            cout << "" << endl;
+          }
           
           // FIXME: Capture the in between region as point, remove points along the vector lines
           // and then iterate outward to determine the number of points at each outgoing step?
           // Better to slice up region in terms of number of lines needed to cover all the points.
         }
       }
-
-      //MOMO
     }
     
     if (debugDumpImages) {

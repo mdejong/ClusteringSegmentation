@@ -408,6 +408,73 @@
   return;
 }
 
+// This test calls the for_each_bgr iterator with a non-const pixel Mat
+// and a const pixel Mat pair of arguments.
+
+- (void) testNonConstBGRIteratorWithConstBGR
+{
+  NSArray *pixelsArr = @[
+                         @(0x00030201), @(0x00060504),
+                         @(0x00090807), @(0x000C0B0A),
+                         ];
+  
+  Mat tagsImg(2, 2, CV_MAKETYPE(CV_8U, 3));
+  
+  NSArray *pixels2Arr = @[
+                            @(3), @(6),
+                            @(9), @(0x0C),
+                            ];
+  
+  Mat tags2Img(2, 2, CV_MAKETYPE(CV_8U, 3));
+  
+  [self.class fillImageWithPixels:pixelsArr img:tagsImg];
+  [self.class fillImageWithPixels:pixels2Arr img:tags2Img];
+  
+  // Double iterator of 2 pixel mats
+  
+  for_each_bgr(tagsImg, tags2Img, [](uint8_t B1, uint8_t G1, uint8_t R1, uint8_t B2, uint8_t G2, uint8_t R2)->Vec3b {
+    assert(B1 != 0);
+    assert(G1 != 0);
+    assert(R1 != 0);
+    
+    assert(G1 > B1);
+    assert(R1 > G1);
+    
+    assert(B2 == R1);
+    assert(G2 == 0);
+    assert(R2 == 0);
+    
+    return Vec3b(B1,G1,R1);
+  });
+  
+  std::stringstream outStream;
+  
+  for_each_bgr(tagsImg, [&outStream](uint8_t B, uint8_t G, uint8_t R)->Vec3b {
+    char buffer[1000];
+    snprintf(buffer, sizeof(buffer), "%3d %3d %3d\n", B, G, R);
+    outStream << buffer;
+    snprintf(buffer, sizeof(buffer), "0x00%02X%02X%02X\n", R, G, B);
+    outStream << buffer;
+    return Vec3b(B, G, R);
+  });
+  
+  string result = outStream.str();
+  
+  string expectedOutput =
+  "  1   2   3\n"
+  "0x00030201\n"
+  "  4   5   6\n"
+  "0x00060504\n"
+  "  7   8   9\n"
+  "0x00090807\n"
+  " 10  11  12\n"
+  "0x000C0B0A\n";
+  
+  XCTAssert(result == expectedOutput, @"output");
+  
+  return;
+}
+
 // Number of Mat iteration loops inside the main test method
 
 #define NUM_ITER_LOOPS 40

@@ -193,6 +193,53 @@ void for_each_bgr (Mat & mat, F f) noexcept
 }
 
 // Double iterator that loops over a read/write bgr Mat and a second read only
+// bgr Mat. The current BGR values are passed as arguments to the function.
+// The result Vec3b() returned by the functor is written back to mat1 foreach pixel.
+
+// F = std::function<Vec3b(uint8_t B1, uint8_t G1, uint8_t R1, uint8_t B2, uint8_t G2, uint8_t R2)>
+
+template <typename F>
+void for_each_bgr (Mat & mat1, const Mat & mat2, F f) noexcept
+{
+#if defined(DEBUG)
+  assert(mat1.size() == mat2.size());
+  assert(mat1.channels() == 3);
+  assert(mat2.channels() == 3);
+  assert(mat1.isContinuous() == mat2.isContinuous());
+  std::function<Vec3b(uint8_t B1, uint8_t G1, uint8_t R1, uint8_t B2, uint8_t G2, uint8_t R2)> funcPtr = f;
+#endif // DEBUG
+  
+  int numRows = mat1.rows;
+  int numCols = mat1.cols;
+  
+  if (mat1.isContinuous()) {
+    numCols *= numRows;
+    numRows = 1;
+  }
+  
+  for (int y = 0; y < numRows; y++) {
+    uint8_t *rowPtr1 = mat1.ptr<uint8_t>(y);
+    const uint8_t * const rowMaxPtr1 = rowPtr1 + (3 * numCols);
+    const uint8_t *rowPtr2 = mat2.ptr<uint8_t>(y);
+    
+    for ( ; rowPtr1 < rowMaxPtr1; rowPtr1 += 3, rowPtr2 += 3) {
+      uint8_t B1 = rowPtr1[0];
+      uint8_t G1 = rowPtr1[1];
+      uint8_t R1 = rowPtr1[2];
+      uint8_t B2 = rowPtr2[0];
+      uint8_t G2 = rowPtr2[1];
+      uint8_t R2 = rowPtr2[2];
+      Vec3b result = f(B1, G1, R1, B2, G2, R2);
+      rowPtr1[0] = result[0]; // B
+      rowPtr1[1] = result[1]; // G
+      rowPtr1[2] = result[2]; // R
+    }
+  }
+  
+  return;
+}
+
+// Double iterator that loops over a read/write bgr Mat and a second read only
 // byte Mat. The read only binMat is passed as a byte via the bVal argument.
 // The current mat value is passed as components (B G R) and then the result
 // Vec3b() returned by the functor is written back to mat foreach pixel.
