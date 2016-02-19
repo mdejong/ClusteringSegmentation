@@ -6774,8 +6774,12 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         // back to the first point of the first vector.
         
         {
-          Point2i p2 = vec1[0];
-          Point2i p1 = vec2[0];
+          Point2i p1 = vec1[0];
+          Point2i p2 = vec2[0];
+          
+          if (debug) {
+            printf("gen inside line from (%5d,%5d) to (%5d,%5d)\n", p1.x, p1.y, p2.x, p2.y);
+          }
           
           vector<Point2i> generatedPoints = generatePointsOnLine(p1, p2);
           
@@ -7088,7 +7092,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             
             for ( Coord c : inbetweenEdges.outerCoords ) {
               Vec3b currentVec = segmentMat.at<Vec3b>(c.y, c.x);
-              if (0) {
+              if ((0)) {
                 uint32_t pixel = Vec3BToUID(currentVec);
                 printf("pixel 0x%06X\n", pixel);
                 printf("isBlue %d\n", isBlue(pixel));
@@ -7107,6 +7111,107 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             writeWroteImg(fname, segmentMat);
             cout << "" << endl;
           }
+          
+          // Render lines going from the inside points to the outside points that
+          // capture the in between points.
+          
+          // FIXME: if there is only 1 in between pixel, then easy case since simple line.
+          // Also, if only 2 points then generate a line between them.
+          
+          {
+            int largerN = 0;
+            
+            InBetweenRegionEdges &inbetweenEdges = contourInBetweenPaths[contouri];
+            
+            if (debug) {
+              cout << "innerCoords:" << endl;
+              for ( Coord c : inbetweenEdges.innerCoords ) {
+                cout << c << endl;
+              }
+            }
+            
+            if (debug) {
+              cout << "outerCoords:" << endl;
+              for ( Coord c : inbetweenEdges.outerCoords ) {
+                cout << c << endl;
+              }
+            }
+            
+            largerN = (int) inbetweenEdges.innerCoords.size();
+            largerN = maxi(largerN, (int) inbetweenEdges.outerCoords.size());
+            
+            float percent = 1.0f / largerN;
+            
+            vector<vector<Coord> > vecOfVecs(largerN);
+            
+            for ( int i = 0; i < largerN; i++ ) {
+              vector<Coord> coords;
+              
+              float p = percent * i;
+              
+              int innerOffset = round(p * (int) inbetweenEdges.innerCoords.size());
+              if (innerOffset == (int) inbetweenEdges.innerCoords.size()) {
+                innerOffset--;
+              }
+              int outerOffset = round(p * (int) inbetweenEdges.outerCoords.size());
+              if (outerOffset == (int) inbetweenEdges.outerCoords.size()) {
+                outerOffset--;
+              }
+              
+              if (debug) {
+                printf("i %d : p %0.3f -> inner offset %d of (0 -> %d)\n", i, p, innerOffset, (int)inbetweenEdges.innerCoords.size()-1);
+                printf("i %d : p %0.3f -> outer offset %d of (0 -> %d)\n", i, p, outerOffset, (int)inbetweenEdges.outerCoords.size()-1);
+              }
+              
+              Point2i p1 = coordToPoint(inbetweenEdges.innerCoords[innerOffset]);
+              Point2i p2 = coordToPoint(inbetweenEdges.outerCoords[outerOffset]);
+              
+              if (debug) {
+                printf("inner coord (%d,%d)\n", p1.x, p1.y);
+                printf("outer coord (%d,%d)\n", p2.x, p2.y);
+              }
+              
+              vector<Point2i> generatedPoints = generatePointsOnLine(p1, p2);
+              
+              for ( Point2i p : generatedPoints ) {
+                coords.push_back(pointToCoord(p));
+              }
+              
+              vecOfVecs[i] = std::move(coords);
+            }
+            
+            if (debug) {
+            cout << endl;
+            }
+            
+            if (debugDumpPolygonSegmentStepImages) {
+              Mat segmentMat = regionTypeMat.clone();
+              segmentMat = Scalar(0,0,0);
+              
+              for ( int i = 0; i < largerN; i++ ) {
+                vector<Coord> coordsInVec = vecOfVecs[i];
+                
+                cout << "render vec " << i << endl;
+                
+                Vec3b colorVec((rand() % 256), (rand() % 256), (rand() % 256));
+                
+                for ( Coord c : coordsInVec ) {
+                  segmentMat.at<Vec3b>(c.y, c.x) = colorVec;
+                  cout << "render coord " << c << endl;
+                }
+              }
+              
+              std::stringstream fnameStream;
+              fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_type_between_vectors" << contouri << "_" << nextContouri << ".png";
+              string fname = fnameStream.str();
+              
+              writeWroteImg(fname, segmentMat);
+              cout << "" << endl;
+            }
+
+          }
+          
+          // Generate lines from inside to outside
           
           // FIXME: Capture the in between region as point, remove points along the vector lines
           // and then iterate outward to determine the number of points at each outgoing step?
