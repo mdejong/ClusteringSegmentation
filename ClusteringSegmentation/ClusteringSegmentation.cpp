@@ -7088,10 +7088,16 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             
             for ( Coord c : inbetweenEdges.outerCoords ) {
               Vec3b currentVec = segmentMat.at<Vec3b>(c.y, c.x);
-              assert(currentVec[0] == 0);
-              assert(currentVec[1] == 0);
-              assert(currentVec[2] == 0);
-              segmentMat.at<Vec3b>(c.y, c.x) = whiteVec;
+              if (0) {
+                uint32_t pixel = Vec3BToUID(currentVec);
+                printf("pixel 0x%06X\n", pixel);
+                printf("isBlue %d\n", isBlue(pixel));
+              }
+              if (currentVec[0] == 0 && currentVec[1] == 0 && currentVec[1] == 0) {
+                segmentMat.at<Vec3b>(c.y, c.x) = whiteVec;
+              } else {
+                segmentMat.at<Vec3b>(c.y, c.x) = Vec3b(0, 0xFF, 0);
+              }
             }
             
             std::stringstream fnameStream;
