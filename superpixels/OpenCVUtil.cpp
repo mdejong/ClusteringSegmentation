@@ -1207,6 +1207,87 @@ vector<Point2i> generatePointsOnLine(Point2i startP, Point2i endP)
   return outPointsVec;
 }
 
+// Generate floats coordinates on a line.
+
+vector<Point2f> generateFloatPointsOnLine(const Point2f & startP, const Point2f & endP)
+{
+  const bool debug = true;
+  
+  Point2f deltaP = endP - startP;
+  Point2f deltaUnit = deltaP;
+  
+  float scale = makeUnitVector(deltaUnit);
+  
+  if (debug) {
+    printf("generateFloatPointsOnLine from (%0.3f,%0.3f) -> (%0.3f,%0.3f)\n", startP.x, startP.y, endP.x, endP.y);
+    printf("deltaP (%0.3f,%0.3f) -> as unit vector (%0.3f,%0.3f) with scale %0.3f\n", deltaP.x, deltaP.y, deltaUnit.x, deltaUnit.y, scale);
+  }
+  
+  vector<Point2f> outPointsVec;
+  
+  bool done = false;
+  
+  int numSteps = round(scale);
+  
+  if (numSteps < scale) {
+    // Rounded down, add 1
+    numSteps += 1;
+  }
+  
+  // Add 1 more point at end
+  numSteps += 1;
+  
+  Point2f startF = startP;
+  
+  for ( int i = 0; !done && i < numSteps; i++ ) {
+    Point2f pointVec = startF + (deltaUnit * i);
+    
+    if (debug && 1) {
+      cout << "at step " << i << " scaled vec " << (deltaUnit * i) << endl;
+      cout << "at step " << i << " point vec " << pointVec << endl;
+    }
+    
+    //Point2f deltaToEnd = endP - pointVec;
+    //float closeF = 0.75f;
+    
+    //if (debug) {
+    //  cout << "at step " << i << " deltaToEnd " << deltaToEnd << endl;
+    //}
+    
+//    if (fabs(deltaToEnd.x) < closeF && fabs(deltaToEnd.y) < closeF) {
+//      // Reached the end point, stop processing now
+//      //pointVec = endP;
+//      done = true;
+//    }
+    
+    outPointsVec.push_back(pointVec);
+  }
+  
+  // Verify that first point matches insidePixel and that last point matches outsidePixel
+  
+  if (debug) {
+    printf("generateVector returning %d coords\n", (int)outPointsVec.size());
+    
+    int i = 0;
+    for ( Point2f p : outPointsVec ) {
+      printf("points[%3d] = (%0.3f,%0.3f)\n", i, p.x, p.y);
+      i += 1;
+    }
+  }
+  
+#if defined(DEBUG)
+  {
+    Point2f p0 = outPointsVec[0];
+    Point2f pLast = outPointsVec[outPointsVec.size() - 1];
+    
+    assert(p0 == startP);
+    //assert(pLast == endP);
+  }
+#endif // DEBUG
+  
+  return outPointsVec;
+}
+
 // Flood fill based on region of zero values. Input comes from inBinMask and the results
 // are written to outBinMask. Black pixels are filled and white pixels are not filled.
 

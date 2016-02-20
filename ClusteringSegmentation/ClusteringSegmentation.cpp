@@ -5625,47 +5625,153 @@ generateVectorsThroughPoints(const CvSize &matSize,
   largerN = (int) innerCoords.size();
   largerN = maxi(largerN, (int) outerCoords.size());
   
+  largerN -= 1; // If 3 coord, use 2 in between
+  
   vector<vector<Coord> > vecOfVecs(largerN);
+  
+  if ((0)) {
+    // Direct int calculations
+    
+    float percent = 1.0f / largerN;
+    
+    int innerN = (int) innerCoords.size();
+    int outerN = (int) outerCoords.size();
+    
+    assert(innerN > 1);
+    assert(outerN > 1);
+    
+    for ( int i = 0; i < largerN; i++ ) {
+      vector<Coord> coords;
       
-  float percent = 1.0f / largerN;
-  
-  int innerN = (int) innerCoords.size();
-  int outerN = (int) outerCoords.size();
-  
-  for ( int i = 0; i < largerN; i++ ) {
-    vector<Coord> coords;
-    
-    float p = percent * i;
-    
-    int innerOffset = round(p * innerN);
-    if (innerOffset == innerN) {
-      innerOffset--;
-    }
-    int outerOffset = round(p * outerN);
-    if (outerOffset == outerN) {
-      outerOffset--;
-    }
-    
-    if (debug) {
-      printf("i %d : p %0.3f -> inner offset %d of (0 -> %d)\n", i, p, innerOffset, innerN-1);
-      printf("i %d : p %0.3f -> outer offset %d of (0 -> %d)\n", i, p, outerOffset, outerN-1);
-    }
-    
-    Point2i p1 = coordToPoint(innerCoords[innerOffset]);
-    Point2i p2 = coordToPoint(outerCoords[outerOffset]);
-    
-    if (debug) {
-      printf("inner coord (%d,%d)\n", p1.x, p1.y);
-      printf("outer coord (%d,%d)\n", p2.x, p2.y);
-    }
-    
-    vector<Point2i> generatedPoints = generatePointsOnLine(p1, p2);
-    
-    for ( Point2i p : generatedPoints ) {
-      coords.push_back(pointToCoord(p));
+      float p = percent * i;
+      
+      int innerOffset = round(p * innerN);
+      if (innerOffset == innerN) {
+        innerOffset--;
+      }
+      int outerOffset = round(p * outerN);
+      if (outerOffset == outerN) {
+        outerOffset--;
+      }
+      
+      if (debug) {
+        printf("i %d : p %0.3f -> inner offset %d of (0 -> %d)\n", i, p, innerOffset, innerN-1);
+        printf("i %d : p %0.3f -> outer offset %d of (0 -> %d)\n", i, p, outerOffset, outerN-1);
+      }
+      
+      Point2i p1 = coordToPoint(innerCoords[innerOffset]);
+      Point2i p2 = coordToPoint(outerCoords[outerOffset]);
+      
+      if (debug) {
+        printf("inner coord (%d,%d)\n", p1.x, p1.y);
+        printf("outer coord (%d,%d)\n", p2.x, p2.y);
+      }
+      
+      vector<Point2i> generatedPoints = generatePointsOnLine(p1, p2);
+      
+      for ( Point2i p : generatedPoints ) {
+        coords.push_back(pointToCoord(p));
+      }
+      
+      vecOfVecs[i] = std::move(coords);
     }
     
-    vecOfVecs[i] = std::move(coords);
+  } else {
+    // In between float calculations
+
+//    float stepPercent = 1.0f / (largerN + 1); // For 2 coords, step = 0.5
+    
+    int innerN = (int) innerCoords.size();
+    int outerN = (int) outerCoords.size();
+    
+    assert(innerN >= 2);
+    assert(outerN >= 2);
+    
+    float innerStep = 1.0f / innerN;
+    float outerStep = 1.0f / outerN;
+    
+    for ( int i = 0; i < largerN; i++ ) {
+      vector<Coord> coords;
+      
+      float innerP = (innerStep * 0.5) + (innerStep * i);
+      float outerP = (outerStep * 0.5) + (outerStep * i);
+      
+      int innerOffset = round((innerP - (innerStep * 0.5)) * innerN);
+      if (innerOffset == innerN) {
+        innerOffset--;
+      }
+      int outerOffset = round((outerP - (outerStep * 0.5)) * outerN);
+      if (outerOffset == outerN) {
+        outerOffset--;
+      }
+      
+      if (debug) {
+        printf("i %d : p %0.3f -> inner offset %d of (0 -> %d)\n", i, innerP, innerOffset, innerN-1);
+        printf("i %d : p %0.3f -> outer offset %d of (0 -> %d)\n", i, outerP, outerOffset, outerN-1);
+      }
+      
+      Point2f innerP1 = coordToPoint(innerCoords[innerOffset]);
+      Point2f innerP2 = coordToPoint(innerCoords[innerOffset+1]);
+      
+      if (debug) {
+        printf("inner coord p1 (%d,%d)\n", (int)innerP1.x, (int)innerP1.y);
+        printf("inner coord p2 (%d,%d)\n", (int)innerP2.x, (int)innerP2.y);
+      }
+      
+      Point2f outerP1 = coordToPoint(outerCoords[outerOffset]);
+      Point2f outerP2 = coordToPoint(outerCoords[outerOffset+1]);
+      
+      if (debug) {
+        printf("outer coord p1 (%d,%d)\n", (int)outerP1.x, (int)outerP1.y);
+        printf("outer coord p2 (%d,%d)\n", (int)outerP2.x, (int)outerP2.y);
+      }
+      
+      // Generate float point 1/2 way between these input points
+      
+      Point2f innerHalf = innerP1 + ((innerP2 - innerP1) * 0.5f);
+
+      if (debug) {
+        printf("inner halfway coord (%0.3f,%0.3f)\n", innerHalf.x, innerHalf.y);
+      }
+      
+      Point2f outerHalf = outerP1 + ((outerP2 - outerP1) * 0.5f);
+      
+      if (debug) {
+        printf("outer halfway coord (%0.3f,%0.3f)\n", outerHalf.x, outerHalf.y);
+      }
+      
+      vector<Point2f> generatedPoints = generateFloatPointsOnLine(innerHalf, outerHalf);
+      
+      for ( Point2f p : generatedPoints ) {
+        Point2f rp = p;
+        round(rp);
+        
+        // Any points out of value range must be cropped
+        
+        if (rp.x < 0) {
+          continue;
+        }
+        if (rp.y < 0) {
+          continue;
+        }
+        if (rp.x >= (matSize.width-1)) {
+          continue;
+        }
+        if (rp.y >= (matSize.height-1)) {
+          continue;
+        }
+        
+        Coord c = pointToCoord(rp);
+#if defined(DEBUG)
+        if (coords.size() > 0) {
+          assert(c != coords[coords.size() - 1]);
+        }
+#endif // DEBUG
+        coords.push_back(c);
+      }
+      
+      vecOfVecs[i] = std::move(coords);
+    }
   }
   
   if (debug) {

@@ -201,6 +201,10 @@ vector<uint32_t> generateVector(uint32_t fromPixel, uint32_t toPixel);
 
 vector<Point2i> generatePointsOnLine(Point2i startP, Point2i endP);
 
+// Generate floats coordinates on a line.
+
+vector<Point2f> generateFloatPointsOnLine(const Point2f & startP, const Point2f & endP);
+
 // Filter out coords that are outside the given ROI
 
 static inline
