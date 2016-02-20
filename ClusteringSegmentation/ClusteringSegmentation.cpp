@@ -5686,31 +5686,51 @@ generateVectorsThroughPoints(const CvSize &matSize,
     
     assert(innerN >= 2);
     assert(outerN >= 2);
+
+    float step = 1.0f / (largerN + 1);
     
-    float innerStep = 1.0f / innerN;
-    float outerStep = 1.0f / outerN;
+//    float innerStep = 1.0f / innerN;
+//    float outerStep = 1.0f / outerN;
     
     for ( int i = 0; i < largerN; i++ ) {
       vector<Coord> coords;
       
-      float innerP = (innerStep * 0.5) + (innerStep * i);
-      float outerP = (outerStep * 0.5) + (outerStep * i);
+      float percent = (step * i);
+      assert(percent <= 1.01f);
       
-      int innerOffset = round((innerP - (innerStep * 0.5)) * innerN);
-      if (innerOffset == innerN) {
-        innerOffset--;
-      }
-      int outerOffset = round((outerP - (outerStep * 0.5)) * outerN);
-      if (outerOffset == outerN) {
-        outerOffset--;
-      }
+      float innerOffsetNotRounded = percent * (innerN-1);
+      float outerOffsetNotRounded = percent * (outerN-1);
+      
+      int innerOffset = round(innerOffsetNotRounded);
+      int outerOffset = round(outerOffsetNotRounded);
       
       if (debug) {
-        printf("i %d : p %0.3f -> inner offset %d of (0 -> %d)\n", i, innerP, innerOffset, innerN-1);
-        printf("i %d : p %0.3f -> outer offset %d of (0 -> %d)\n", i, outerP, outerOffset, outerN-1);
+        printf("i %d : percent %0.2f\n", i, percent);
+        printf("inner offset %0.2f : %d of (0 -> %d)\n", innerOffsetNotRounded, innerOffset, innerN-1);
+        printf("outer offset %0.2f : %d of (0 -> %d)\n", outerOffsetNotRounded, outerOffset, outerN-1);
       }
       
+      // Note that innerOffset and outerOffset are adjusted back to end-1
+      // in the case where the percentage would have selected the final point.
+      
+      if (innerOffset == (innerN-1)) {
+        innerOffset--;
+        
+        if (debug) {
+          printf("adjust inner offset back to %d\n", innerOffset);
+        }
+      }
+      if (outerOffset == (outerN-1)) {
+        outerOffset--;
+        
+        if (debug) {
+          printf("adjust outer offset back to %d\n", outerOffset);
+        }
+      }
+      
+      assert(innerOffset < innerCoords.size());
       Point2f innerP1 = coordToPoint(innerCoords[innerOffset]);
+      assert((innerOffset+1) < innerCoords.size());
       Point2f innerP2 = coordToPoint(innerCoords[innerOffset+1]);
       
       if (debug) {
@@ -5718,7 +5738,9 @@ generateVectorsThroughPoints(const CvSize &matSize,
         printf("inner coord p2 (%d,%d)\n", (int)innerP2.x, (int)innerP2.y);
       }
       
+      assert(outerOffset < outerCoords.size());
       Point2f outerP1 = coordToPoint(outerCoords[outerOffset]);
+      assert((outerOffset+1) < outerCoords.size());
       Point2f outerP2 = coordToPoint(outerCoords[outerOffset+1]);
       
       if (debug) {
@@ -5762,20 +5784,18 @@ generateVectorsThroughPoints(const CvSize &matSize,
         }
         
         Coord c = pointToCoord(rp);
-#if defined(DEBUG)
-        if (coords.size() > 0) {
-          assert(c != coords[coords.size() - 1]);
+        int s = (int)coords.size();
+        if (s > 0) {
+          if (c  == coords[s - 1]) {
+            // Skip dup coord due to rounding
+            continue;
+          }
         }
-#endif // DEBUG
         coords.push_back(c);
       }
       
       vecOfVecs[i] = std::move(coords);
     }
-  }
-  
-  if (debug) {
-    cout << endl;
   }
   
   if (debugDumpImages) {
