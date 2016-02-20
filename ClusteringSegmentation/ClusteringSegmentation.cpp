@@ -6967,7 +6967,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
         vector<Coord> innerCoords;
         vector<Coord> outerCoords;
         
-        vector<vector<Coord> > vecInnerToOuter;
+        vector<set<Coord> > vecInnerToOuter;
       } InBetweenRegionEdges;
       
       vector<InBetweenRegionEdges> contourInBetweenPaths;
@@ -7369,13 +7369,13 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           
           // Filter out vectors that contain zero points that are identified as inbetween
           
-          vector<vector<Coord> > filteredVecOfVecs;
+          vector<set<Coord> > filteredVecOfSets;
           
           for ( vector<Coord> & vec : vecOfVecs ) {
             int numCoordsInBetween = 0;
             int numCoordsOnNormalVector = 0;
             
-            vector<Coord> filteredCoords;
+            set<Coord> filteredCoordsSet;
             
             for ( Coord c : vec ) {
               Vec3b currentVec = regionTypeMat.at<Vec3b>(c.y, c.x);
@@ -7402,7 +7402,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
                 if (contouri == thisContouri) {
                   // coord is in between
                   numCoordsInBetween += 1;
-                  filteredCoords.push_back(c);
+                  filteredCoordsSet.insert(c);
                 } else {
                   // coord corresponds to some other in between
                   //assert(0);
@@ -7417,21 +7417,45 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
               // No in between coords on this vector
               
               if (debug) {
-                cout << "skip vec" << endl;
+                cout << "skip vector where all points were filtered out" << endl;
+                
+                for ( Coord c : vec ) {
+                  cout << c << " ";
+                }
+                
+                cout << endl;
+                cout << "";
               }
             } else {
               
-              if (filteredCoords.size() < vec.size()) {
+              if (filteredCoordsSet.size() < vec.size()) {
                 if (debug) {
-                  cout << "trimmed coords from " << vec.size() << " down to " << filteredCoords.size() << endl;
+                  cout << "trimmed coords from " << vec.size() << " down to " << filteredCoordsSet.size() << endl;
+                  
+                  cout << "original ordered vector " << endl;
+                  
+                  for ( Coord c : vec ) {
+                    cout << c << " ";
+                  }
+                  
+                  cout << endl;
+                  
+                  cout << "filtered set " << endl;
+                  
+                  for ( Coord c : filteredCoordsSet ) {
+                    cout << c << " ";
+                  }
+                  
+                  cout << endl;
+                  cout << "";
                 }
               }
               
-              filteredVecOfVecs.push_back(filteredCoords);
+              filteredVecOfSets.push_back(filteredCoordsSet);
             }
           }
           
-          inbetweenEdges.vecInnerToOuter = filteredVecOfVecs;
+          inbetweenEdges.vecInnerToOuter = filteredVecOfSets;
           
           // Define the max number of vectors that could be between (contouri,contouri+1)
           
@@ -7443,7 +7467,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             int32_t leftUid = regionVecs.getUidForContour(leftContouri);
             int32_t rightUid = regionVecs.getUidForContour(rightContouri);
             
-            int N = (int) filteredVecOfVecs.size();
+            int N = (int) filteredVecOfSets.size();
             
             vector<int32_t> vecUids = regionVecs.makeVectorsBetween(leftUid, rightUid, N);
             
@@ -7695,60 +7719,40 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
               
               vector<int32_t> vecUids = regionVecs.getVectorsBetween(leftUid, rightUid);
               
+#if defined(DEBUG)
               assert(vecUids.size() == inbetweenEdges.vecInnerToOuter.size());
+#endif // DEBUG
               
               unordered_map<Coord, vector<int32_t>> coordsToVecUids;
               coordsToVecUids.reserve(256);
               
-              for ( vector<Coord> & vecOfCoords : inbetweenEdges.vecInnerToOuter ) {
-                for ( Coord c : vecOfCoords ) {
-                  vector<int32_t> & vecOfUidsForCoord = coordsToVecUids[c];
-                  
-                  for ( int32_t vecUid : vecUids ) {
-                    vecOfUidsForCoord.push_back(vecUid);
-                  }
-                }
-              }
-              
               for ( Coord c : inbetweenCoords ) {
-                vector<int32_t> & vecOfUidsForCoord = coordsToVecUids[c];
+                if (debug) {
+                  cout << "c " << c << endl;
+                }
                 
-                cout << "c " << c << endl;
-                
-                for ( int32_t vecUid : vecOfUidsForCoord ) {
-                  vector<Coord> &vecOfCoords = regionVecs.getOutsideVector(vecUid);
+                int vecSetOffset = 0;
+                for ( set<Coord> & coordsSet : inbetweenEdges.vecInnerToOuter ) {
+                  if (coordsSet.count(c) > 0) {
+                    int vecUid = vecUids[vecSetOffset];
+                    vector<Coord> &vecOfCoords = regionVecs.getOutsideVector(vecUid);
+                    
+                    if (debug) {
+                      cout << "coord found in set " << c << " " << vecUid << endl;
+                    }
+                    
+                    if (debug) {
+                      cout << "append inbetween coord c " << c << " to uid " << vecUid << endl;
+                    }
+                    
+                    vecOfCoords.push_back(c);
+                  }
                   
-                  cout << "append inbetween coord c " << c << " to uid " << vecUid << endl;
-                  
-                  vecOfCoords.push_back(c);
+                  vecSetOffset++;
                 }
               }
               
               cout << endl;
-              
-              /*
-              
-              for ( int inBetweeni = 0; inBetweeni < inbetweenCoords.size(); inBetweeni++ ) {
-                for ( int32_t vecUid : vecUids ) {
-                  vector<Coord> &vecOfCoords = regionVecs.getOutsideVector(vecUid);
-                  
-                  Coord c = inbetweenCoords[inBetweeni];
-                  
-                  cout << "check vectors for c " << c << endl;
-                  cout << endl;
-                  
-                  for ( int veci = 0; veci < vecOfCoords.size(); veci++ ) {
-                    Coord cv = vecOfCoords[veci];
-                    if (cv == c) {
-                      // Add coord to any vec that it is included in
-                      vecOfCoords.push_back(c);
-                    }
-                  }
-                }
-              }
-              
-              */
-
             }
           }
           
@@ -8345,7 +8349,13 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           
           for ( int32_t vecUid : vecUids ) {
             vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
-            assert(vecOutside.size() > 0);
+            
+            //assert(vecOutside.size() > 0);
+            
+            if (vecOutside.size() == 0) {
+              continue;
+            }
+            
             Coord c = vecOutside[vecOutside.size() - 1];
             outerMostCoords.push_back(c);
           }
@@ -8364,11 +8374,6 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           
           done = true;
         }
-      }
-      
-      if (outsideStep == 0) {
-        outsideStep++;
-        outsideStep--;
       }
       
       if (debugDumpImages) {
@@ -8403,11 +8408,12 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
             
             int numPixels = (int) vecOutside.size();
-            assert(numPixels > 0);
             
-            printf("for contouri %4d between : numPixels %d\n", contouri, numPixels);
-            
-            maxWidth = maxi(maxWidth, numPixels);
+            if (numPixels > 0) {
+              printf("for contouri %4d between : numPixels %d\n", contouri, numPixels);
+              
+              maxWidth = maxi(maxWidth, numPixels);
+            }
             
             numRows++;
           }
@@ -8499,7 +8505,9 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           
           vector<int32_t> vecUids = regionVecs.getVectorsBetween(leftUid, rightUid);
           
+          if (debug) {
           cout << "(leftUid, rightUid) " << leftUid << " " << rightUid << " contains " << vecUids.size() << " in between vectors" << endl;
+          }
           
           for ( int32_t vecUid : vecUids ) {
             vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
