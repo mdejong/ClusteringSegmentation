@@ -6869,7 +6869,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
       return pixel;
     };
     
-    {
+    //{
       int w = inputImg.size().width;
       int h = inputImg.size().height;
       
@@ -7433,12 +7433,40 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           
           inbetweenEdges.vecInnerToOuter = filteredVecOfVecs;
           
+          // Define the max number of vectors that could be between (contouri,contouri+1)
+          
+          {
+            auto &pair = contourPairs[contouri];
+            int leftContouri = pair.first;
+            int rightContouri = pair.second;
+            
+            int32_t leftUid = regionVecs.getUidForContour(leftContouri);
+            int32_t rightUid = regionVecs.getUidForContour(rightContouri);
+            
+            int N = (int) filteredVecOfVecs.size();
+            
+            vector<int32_t> vecUids = regionVecs.makeVectorsBetween(leftUid, rightUid, N);
+            
+            cout << "create N = " << N << " in between (" << leftContouri << ", " << rightContouri << ")" << endl;
+            
+            //int i = 0;
+            for ( int32_t vecUid : vecUids ) {
+              //cout << "create in between vecUid " << vecUid << endl;
+              
+              vector<Coord> &vecOfCoords = regionVecs.getOutsideVector(vecUid);
+              
+              //Coord c = inbetweenCoords[i];
+              //vecOfCoords.push_back(c);
+              //i++;
+            }
+          }
+          
           // FIXME: Capture the in between region as point, remove points along the vector lines
           // and then iterate outward to determine the number of points at each outgoing step?
           // Better to slice up region in terms of number of lines needed to cover all the points.
         }
       }
-    }
+    //}
     
     if (debugDumpImages) {
       std::stringstream fnameStream;
@@ -7657,34 +7685,70 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             }
             
             int N = (int) inbetweenCoords.size();
-
-            // FIXME: not fast
             
-            vector<int32_t> vecUids = regionVecs.getVectorsBetween(leftUid, rightUid);
-            
-            int currentInBetweenN = (int) vecUids.size();
-            
-            if (debug) {
-              cout << "old in between N " << currentInBetweenN << endl;
-              cout << "new in between N " << N << endl;
-            }
-            
-            if (currentInBetweenN == 0 && N > 0) {
-              vector<int32_t> vecUids = regionVecs.makeVectorsBetween(leftUid, rightUid, N);
+            if (N > 0) {
+              // FIXME: not fast
               
-              int i = 0;
-              for ( int32_t vecUid : vecUids ) {
-                cout << "create in between vecUid " << vecUid << endl;
-                
-                vector<Coord> &vecOfCoords = regionVecs.getOutsideVector(vecUid);
-                Coord c = inbetweenCoords[i];
-                vecOfCoords.push_back(c);
-                
-                i++;
+              InBetweenRegionEdges & inbetweenEdges = contourInBetweenPaths[contouri];
+              
+              // Map Coord -> (vecUid, vecUid, ...)
+              
+              vector<int32_t> vecUids = regionVecs.getVectorsBetween(leftUid, rightUid);
+              
+              assert(vecUids.size() == inbetweenEdges.vecInnerToOuter.size());
+              
+              unordered_map<Coord, vector<int32_t>> coordsToVecUids;
+              coordsToVecUids.reserve(256);
+              
+              for ( vector<Coord> & vecOfCoords : inbetweenEdges.vecInnerToOuter ) {
+                for ( Coord c : vecOfCoords ) {
+                  vector<int32_t> & vecOfUidsForCoord = coordsToVecUids[c];
+                  
+                  for ( int32_t vecUid : vecUids ) {
+                    vecOfUidsForCoord.push_back(vecUid);
+                  }
+                }
               }
-            } else if (N > currentInBetweenN) {
-              assert(0);
-              //vector<int32_t> vecUids = regionVecs.makeVectorsBetween(leftUid, rightUid, N);
+              
+              for ( Coord c : inbetweenCoords ) {
+                vector<int32_t> & vecOfUidsForCoord = coordsToVecUids[c];
+                
+                cout << "c " << c << endl;
+                
+                for ( int32_t vecUid : vecOfUidsForCoord ) {
+                  vector<Coord> &vecOfCoords = regionVecs.getOutsideVector(vecUid);
+                  
+                  cout << "append inbetween coord c " << c << " to uid " << vecUid << endl;
+                  
+                  vecOfCoords.push_back(c);
+                }
+              }
+              
+              cout << endl;
+              
+              /*
+              
+              for ( int inBetweeni = 0; inBetweeni < inbetweenCoords.size(); inBetweeni++ ) {
+                for ( int32_t vecUid : vecUids ) {
+                  vector<Coord> &vecOfCoords = regionVecs.getOutsideVector(vecUid);
+                  
+                  Coord c = inbetweenCoords[inBetweeni];
+                  
+                  cout << "check vectors for c " << c << endl;
+                  cout << endl;
+                  
+                  for ( int veci = 0; veci < vecOfCoords.size(); veci++ ) {
+                    Coord cv = vecOfCoords[veci];
+                    if (cv == c) {
+                      // Add coord to any vec that it is included in
+                      vecOfCoords.push_back(c);
+                    }
+                  }
+                }
+              }
+              
+              */
+
             }
           }
           
