@@ -5841,6 +5841,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
 {
   const bool debug = true;
   const bool debugDumpImages = true;
+  const bool debugDumpInsideOutsiteExpandStepImages = true;
   const bool debugDumpInsideOutsiteStepImages = false;
   const bool debugDumpPolygonSegmentStepImages = true;
   
@@ -7553,10 +7554,21 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           cout << "expand by 1 pixel at outsideStep " << outsideStep << endl;
           cout << "";
         }
-  
-        bool worked = contractOrExpandRegion(inputImg, tag, filledContourCoords, true, numToExpand, outExpandedCoords);
         
-        if (debugDumpImages) {
+        if (outsideStep == 34) {
+          cout << "";
+        }
+  
+        // The contractOrExpandRegion() method returns false to indicate that the expand operation
+        // expanded to all the available pixels.
+        
+        bool continueToExpandOrContract = contractOrExpandRegion(inputImg, tag, filledContourCoords, true, numToExpand, outExpandedCoords);
+        
+        if (continueToExpandOrContract == false) {
+          cout << "";
+        }
+        
+        if (debugDumpInsideOutsiteExpandStepImages) {
           Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
           
           for ( Coord c : outExpandedCoords ) {
@@ -7571,7 +7583,23 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           cout << "" << endl;
         }
         
-        assert(worked);
+        if (debugDumpInsideOutsiteExpandStepImages) {
+          Mat mat(inputImg.size(), CV_8UC4, Scalar(0,0,0,0));
+          
+          for ( Coord c : outExpandedCoords ) {
+            Vec3b vec3 = inputImg.at<Vec3b>(c.y, c.x);
+            Vec4b vec4;
+            vec4[0] = vec3[0]; vec4[1] = vec3[1]; vec4[2] = vec3[2]; vec4[3] = 0xFF;
+            mat.at<Vec4b>(c.y, c.x) = vec4;
+          }
+          
+          std::stringstream fnameStream;
+          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_expand" << outsideStep << "_alpha.png";
+          string fname = fnameStream.str();
+          
+          writeWroteImg(fname, mat);
+          cout << "" << endl;
+        }
         
         // Filter expanded coords to keep the pixels that were activated by the expansion.
         
@@ -7594,7 +7622,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           regionBinMat.at<uint8_t>(c.y, c.x) = 0xFF;
         }
         
-        if (debugDumpImages) {
+        if (debugDumpInsideOutsiteExpandStepImages) {
           Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
           
           for ( Coord c : activatedCoords ) {
@@ -7659,7 +7687,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           cout << "activatedInBetweenMap " << activatedInBetweenMap.size() << " keys" << endl;
         }
         
-        if (debugDumpImages) {
+        if (debugDumpInsideOutsiteExpandStepImages) {
           Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
           
           for ( Coord c : activatedNormalVectorCoords ) {
@@ -7674,7 +7702,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           cout << "" << endl;
         }
         
-        if (debugDumpImages) {
+        if (debugDumpInsideOutsiteExpandStepImages) {
           Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
           
           for ( Coord c : activatedInBetweenCoords ) {
@@ -7694,33 +7722,30 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           // Activated coords can be filtered to extract the contouri
           // from the pixel value
           
-          {
-            vector<Coord> &normalsVectorCoords = activatedNormalVectorMap[contouri];
-            
+          vector<Coord> &normalsVectorCoords = activatedNormalVectorMap[contouri];
+          
+          if (normalsVectorCoords.size() > 0) {
             int32_t vecUid = regionVecs.getUidForContour(contouri);
-            
             vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
-            
             append_to_vector(vecOutside, normalsVectorCoords);
           }
           
-          if (1)
           {
             vector<Coord> &inbetweenCoords = activatedInBetweenMap[contouri];
-
-            int32_t leftContouri = contouri;
-            int32_t rightContouri = (contouri == (maxContouri-1)) ? 0 : contouri+1;
-            
-            int32_t leftUid = regionVecs.getUidForContour(leftContouri);
-            int32_t rightUid = regionVecs.getUidForContour(rightContouri);
-            
-            if (debug) {
-              cout << "in between (" << leftContouri << "," << rightContouri << ")" << endl;
-            }
             
             int N = (int) inbetweenCoords.size();
             
             if (N > 0) {
+              int32_t leftContouri = contouri;
+              int32_t rightContouri = (contouri == (maxContouri-1)) ? 0 : contouri+1;
+              
+              int32_t leftUid = regionVecs.getUidForContour(leftContouri);
+              int32_t rightUid = regionVecs.getUidForContour(rightContouri);
+              
+              if (debug) {
+                cout << "in between (" << leftContouri << "," << rightContouri << ")" << endl;
+              }
+              
               InBetweenRegionEdges & inbetweenEdges = contourInBetweenPaths[contouri];
               
               if (debug) {
@@ -7778,566 +7803,20 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             }
           }
           
-          /*
-          
-          vector<Coord> &inbetweenCoords = activatedInBetweenMap[contouri];
-          
-          for ( Coord c : )
-          
-          int32_t vecUid = regionVecs.getUidForContour(contouri);
-          vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
-          vecOutside.push_back(hitC);
-          
-          */
-           
-          /*
-          
-          if (generatedPointFoundOffset == -1) {
-            // In the case where a normal vector does not directly hit a coord, just
-            // find the next closest coord and use it.
-            
-            assert(activatedCoordsMap.size() > 0);
-            
-            vector<Coord> notConsumed;
-            notConsumed.reserve(activatedCoordsMap.size());
-            
-            for ( auto & pair : activatedCoordsMap ) {
-              if (pair.second == true) {
-                // coord not consumed by a normal at this point
-                Coord c = pair.first;
-                notConsumed.push_back(c);
-              }
-            }
-            
-            int stepNPixels = outsideStep + 1;
-            Point2f normalOutsideF = onF + (stepNPixels * normVec);
-            round(normalOutsideF);
-            
-            Coord estOutside = pointToCoord(normalOutsideF);
-            hitC = closestToCoord(notConsumed, estOutside);
-          } else {
-            assert(generatedPointFoundOffset != -1); // found crossing between line and and activated coord
-            
-            hitC = pointToCoord(generatedPoints[generatedPointFoundOffset]);
-          }
-          
-          normalHitCoordVec.push_back(hitC);
-          
-          */
-          
-          /*
-          
-          // Append consumed coord to the contouri vector
-          
-          int32_t vecUid = regionVecs.getUidForContour(contouri);
-          vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
-          vecOutside.push_back(hitC);
-           
-          */
         }
         
-        /*
+        // In the case where no more expand or contract operations can be done, stop iterating
         
-        // Create a lookup table for just the coordinates that were activated
-        
-        unordered_map<Coord, bool> activatedCoordsMap;
-        
-        for ( Coord c : activatedCoords ) {
-          activatedCoordsMap[c] = true;
+        if (continueToExpandOrContract == false) {
+          done = true;
         }
-         
-        // Iterate over each contouri point and determine the points that are
-        // on the normal vector.
-        
-        vector<Coord> normalHitCoordVec;
-        
-        for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-          //Coord c = contourCoords[contouri];
-          vector<Point2f> normalVecPoints = allNormalVectors[contouri];
-          
-          //Point2f insideF = normalVecPoints[0];
-          Point2f onF = normalVecPoints[1];
-          Point2f outsideF = normalVecPoints[2];
-          
-          //round(insideF);
-          round(outsideF);
-          
-          // Generate points on line from contour point to N away
-          
-          Point2f normVec = contourNormals[contouri];
-          int stepNPixels = outsideStep + 2;
-          Point2f normalOutsideF = onF + (stepNPixels * normVec);
-          
-          round(normalOutsideF);
-          
-          vector<Point2i> generatedPoints = generatePointsOnLine(onF, normalOutsideF);
-          
-          int generatedPointFoundOffset = -1;
-          
-          int offset = 0;
-          for ( Point2i p : generatedPoints ) {
-            Coord c(pointToCoord(p));
-            if (activatedCoordsMap.count(c) > 0) {
-              generatedPointFoundOffset = offset;
-              break;
-            }
-            offset++;
-          }
-          
-          if (debugDumpImages && (generatedPointFoundOffset == -1)) {
-            Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
-            
-            for ( Coord c : activatedCoords ) {
-              binMat.at<uint8_t>(c.y, c.x) = 0xFF;
-            }
-            
-            for ( Point p : generatedPoints ) {
-              binMat.at<uint8_t>(p.y, p.x) = 0x7F;
-            }
-            
-            std::stringstream fnameStream;
-            fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_expand" << outsideStep << "_crossing.png";
-            string fname = fnameStream.str();
-            
-            writeWroteImg(fname, binMat);
-            cout << "" << endl;
-          }
-          
-          Coord hitC;
-          
-          if (generatedPointFoundOffset == -1) {
-            // In the case where a normal vector does not directly hit a coord, just
-            // find the next closest coord and use it.
-            
-            assert(activatedCoordsMap.size() > 0);
-            
-            vector<Coord> notConsumed;
-            notConsumed.reserve(activatedCoordsMap.size());
-            
-            for ( auto & pair : activatedCoordsMap ) {
-              if (pair.second == true) {
-                // coord not consumed by a normal at this point
-                Coord c = pair.first;
-                notConsumed.push_back(c);
-              }
-            }
-            
-            int stepNPixels = outsideStep + 1;
-            Point2f normalOutsideF = onF + (stepNPixels * normVec);
-            round(normalOutsideF);
-            
-            Coord estOutside = pointToCoord(normalOutsideF);
-            hitC = closestToCoord(notConsumed, estOutside);
-          } else {
-            assert(generatedPointFoundOffset != -1); // found crossing between line and and activated coord
-            
-            hitC = pointToCoord(generatedPoints[generatedPointFoundOffset]);
-          }
-            
-          normalHitCoordVec.push_back(hitC);
-          
-          // Mark the coord at hit in the table by setting it to false
-          activatedCoordsMap[hitC] = false;
-          
-          // Append consumed coord to the contouri vector
-          
-          int32_t vecUid = regionVecs.getUidForContour(contouri);
-          vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
-          vecOutside.push_back(hitC);
-        }
-        
-        // Dump Mat of coords that were consumed by the normals
-        
-        if (debugDumpImages) {
-          Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
-          
-          for ( auto & pair : activatedCoordsMap ) {
-            if (pair.second == true) {
-              // Skip unless coord was consumed by normal
-              continue;
-            }
-            Coord c = pair.first;
-            binMat.at<uint8_t>(c.y, c.x) = 0xFF;
-          }
-          
-          std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_expand" << outsideStep << "_activated_consumed.png";
-          string fname = fnameStream.str();
-          
-          writeWroteImg(fname, binMat);
-          cout << "" << endl;
-        }
-        
-        // Get set of coords not consumed by a normal vector
-        
-        vector<Coord> notConsumed;
-        
-        for ( auto & pair : activatedCoordsMap ) {
-          if (pair.second == true) {
-            // coord not consumed by normal
-            Coord c = pair.first;
-            notConsumed.push_back(c);
-          }
-        }
-
-        if (debugDumpImages) {
-          Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
-          
-          for ( Coord c : notConsumed ) {
-            binMat.at<uint8_t>(c.y, c.x) = 0xFF;
-          }
-          
-          std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_expand" << outsideStep << "_activated_not_consumed.png";
-          string fname = fnameStream.str();
-          
-          writeWroteImg(fname, binMat);
-          cout << "" << endl;
-        }
-        
-        auto notOutermostOrInsideContour = notConsumed;
-        
-        */
-         
-        /*
-
-        // Filter expanded coords to keep pixels that are on in the expanded region but
-        // are not included in the vector pixels.
-        
-        vector<Coord> filteredCoords;
-        for ( Coord c : outExpandedCoords ) {
-          uint8_t isOn = regionBinMat.at<uint8_t>(c.y, c.x);
-          if ( isOn ) {
-            // Ignore coordinates inside or on the original contour
-          } else {
-            filteredCoords.push_back(c);
-          }
-        }
-        
-        if (debugDumpImages) {
-          Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
-          
-          for ( Coord c : filteredCoords ) {
-            binMat.at<uint8_t>(c.y, c.x) = 0xFF;
-          }
-          
-          std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_expand_not_contour" << outsideStep << ".png";
-          string fname = fnameStream.str();
-          
-          writeWroteImg(fname, binMat);
-          cout << "" << endl;
-        }
-        
-        // Filter out coords identified as on the outside of the vectors
-        
-        vector<Coord> outerMostCoords;
-        outerMostCoords.reserve(1024);
-        
-        for ( int contouri = 0; contouri < maxContouri; contouri++ ) {
-          //Coord c = contourCoords[contouri];
-          
-          int32_t vecUid = regionVecs.getUidForContour(contouri);
-          vector<Coord> &vecOutside = regionVecs.getOutsideVector(vecUid);
-
-          Coord c = vecOutside[vecOutside.size() - 1];
-          outerMostCoords.push_back(c);
-        }
-        
-        unordered_map<Coord, bool> lookupIsOn;
-        
-        for ( Coord c : outerMostCoords ) {
-          lookupIsOn[c] = true;
-        }
-        
-        // filter out coords that are not in lookupIsOn table
-        
-        vector<Coord> notOutermostOrInsideContour;
-        
-        filter(filteredCoords, notOutermostOrInsideContour, [&lookupIsOn](const Coord & c)->bool {
-          uint8_t isOn = (lookupIsOn.count(c) > 0);
-          if (isOn) {
-            // Ignore coordinates on contour outside vec
-            return false;
-          } else {
-            return true;
-          }
-        });
-        
-        if (debugDumpImages) {
-          Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
-          
-          for ( Coord c : notOutermostOrInsideContour ) {
-            binMat.at<uint8_t>(c.y, c.x) = 0xFF;
-          }
-          
-          std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_expand_not_contour_or_vector" << outsideStep << ".png";
-          string fname = fnameStream.str();
-          
-          writeWroteImg(fname, binMat);
-          cout << "" << endl;
-        }
-         
-        */
-        
-        /*
-        
-        // Include filteredCoords2 coordinates as new vecrors in between existing
-        // contour points so that the region is subdivided into N subsegments.
-        
-        // FIXME: use 2D closest coordinate search to determine which original contour
-        // coord this not active coord is nearest to.
-        
-        // FIXME: if we know that the coords are going to be in a +-1 range of the contour
-        // then it seems that searching for values larger than say 2 is going to be a
-        // waste of time. Could limit the search and possibly use chess piece distance here.
-        
-        // pairs of (nextClosest, closest) for each coordinate
-        
-        typedef struct {
-          Coord c;
-          int32_t closestContourCoordOffset;
-          int32_t nextClosestContourCoordOffset;
-        } ClosestCoordsTriple;
-        
-        vector<ClosestCoordsTriple> closestContourTuples;
-        
-        vector<Coord> notClosestCoords;
-        notClosestCoords.reserve(contourCoords.size()); // optimize reallocation inside filter
-        
-        for ( Coord c : notOutermostOrInsideContour ) {
-          Coord closestContourCoord = closestToCoord(contourCoords, c);
-          
-          // Remove closestContourCoord from search coords and find next closest with a tie going to earlier
-          // coord in the list
-          
-          filter(contourCoords, notClosestCoords, [closestContourCoord](const Coord & c)->bool {
-            if (c == closestContourCoord) {
-              // Do not keep the coord that was identified as the closest one
-              return false;
-            } else {
-              return true;
-            }
-          });
-          
-          Coord nextClosestContourCoord = closestToCoord(notClosestCoords, c);
-          
-          printf("for not set coord (%3d, %3d) the closest contour point is (%3d, %3d)\n", c.x, c.y, closestContourCoord.x, closestContourCoord.y);
-          printf("for not set coord (%3d, %3d) the next closest contour point is (%3d, %3d)\n", c.x, c.y, nextClosestContourCoord.x, nextClosestContourCoord.y);
-          
-          // Need to do linear iteration through contourCoords to find the first matches for
-          // nextClosestContourCoord and closestContourCoord.
-          
-          int32_t closestContourCoordOffset = -1;
-          int32_t nextClosestContourCoordOffset = -1;
-          
-          const int iMax = (int) contourCoords.size();
-          
-          // FIXME: no need for slow search if using 8 connected neighbor search and only 2 coords at a time!
-          
-          for ( int i = 0; i < iMax; i++ ) {
-            Coord c = contourCoords[i];
-            
-            if (closestContourCoordOffset == -1 && c == closestContourCoord) {
-              closestContourCoordOffset = i;
-            }
-            if (nextClosestContourCoordOffset == -1 && c == nextClosestContourCoord) {
-              nextClosestContourCoordOffset = i;
-            }
-            if (closestContourCoordOffset != -1 && nextClosestContourCoordOffset != -1) {
-              break;
-            }
-          }
-          
-          ClosestCoordsTriple t;
-          assert(closestContourCoordOffset != -1);
-          assert(nextClosestContourCoordOffset != -1);
-          t.c = c;
-          t.closestContourCoordOffset = closestContourCoordOffset;
-          t.nextClosestContourCoordOffset = nextClosestContourCoordOffset;
-          closestContourTuples.push_back(t);
-        }
-        
-        // Sort in terms of closestContourCoordOffset and then nextClosestContourCoordOffset (ascending)
-        
-        sort(begin(closestContourTuples), end(closestContourTuples),
-             [](ClosestCoordsTriple &t1, ClosestCoordsTriple &t2) {
-               if (t1.closestContourCoordOffset == t2.closestContourCoordOffset) {
-                 return t1.nextClosestContourCoordOffset < t2.nextClosestContourCoordOffset;
-               } else {
-                 return t1.closestContourCoordOffset < t2.closestContourCoordOffset;
-               }
-             });
-        
-        if (debugDumpImages) {
-          Mat binMat(inputImg.size(), CV_8UC1, Scalar(0));
-          
-          for ( ClosestCoordsTriple &t : closestContourTuples ) {
-            Coord c = t.c;
-            int nextClosestContourCoordOffset = t.nextClosestContourCoordOffset;
-            int closestContourCoordOffset = t.closestContourCoordOffset;
-            
-            Coord closestContourCoord = contourCoords[closestContourCoordOffset];
-            Coord nextClosestContourCoord = contourCoords[nextClosestContourCoordOffset];
-            
-            line(binMat, coordToPoint(c), coordToPoint(nextClosestContourCoord), Scalar(0x7F));
-            line(binMat, coordToPoint(c), coordToPoint(closestContourCoord), Scalar(0xFF));
-          }
-          
-          std::stringstream fnameStream;
-          fnameStream << "srm" << "_tag_" << tag << "_hull_iter_outside_expand_line_closest" << outsideStep << ".png";
-          string fname = fnameStream.str();
-          
-          writeWroteImg(fname, binMat);
-          cout << "" << endl;
-        }
-        
-        // Each tuple is in ascending contour order, but it is still possible that multiple
-        // tuples will apply to the same (left, right) set of pairs. Gather values in terms
-        // of the pair of offsets stuffed into a uint64_t in a map.
-        
-        unordered_map<uint64_t, vector<ClosestCoordsTriple> > leftRightMap;
-        
-        vector<uint64_t> orderedKeys;
-        
-        for ( int i = 0; i < closestContourTuples.size(); i++ ) {
-          ClosestCoordsTriple &t = closestContourTuples[i];
-          
-          int32_t leftOffset = t.closestContourCoordOffset;
-          int32_t rightOffset = t.nextClosestContourCoordOffset;
-          
-          if (rightOffset != 0 && rightOffset < leftOffset) {
-            std::swap(leftOffset, rightOffset);
-          }
-          
-          uint32_t low = (uint32_t) leftOffset;
-          uint32_t high = (uint32_t) rightOffset;
-          
-          uint64_t combined = high;
-          combined <<= 32;
-          combined |= low;
-          
-          leftRightMap[combined].push_back(t);
-          
-          orderedKeys.push_back(combined);
-        }
-        
-        unordered_map<uint64_t, bool> leftRightMapSeen;
-        
-        for ( uint64_t key : orderedKeys ) {
-          if (leftRightMapSeen.count(key) > 0) {
-            continue;
-          }
-          leftRightMapSeen[key] = true;
-          
-          vector<ClosestCoordsTriple> &vecForOffset = leftRightMap[key];
-          
-          if (debug) {
-            cout << "key = " << key;
-            for ( ClosestCoordsTriple &t : vecForOffset ) {
-              int32_t leftOffset = t.closestContourCoordOffset;
-              int32_t rightOffset = t.nextClosestContourCoordOffset;
-              
-              if (rightOffset != 0 && rightOffset < leftOffset) {
-                std::swap(leftOffset, rightOffset);
-              }
-              
-              cout << " tuple " << leftOffset << " -> " << rightOffset;
-            }
-            cout << endl;
-          }
-          
-#if defined(DEBUG)
-          // Verify that the (leftOffset, rightOffset) are the same for each
-          {
-            int32_t leftOffsetPrev = -1;
-            int32_t rightOffsetPrev = -1;
-            
-            for ( ClosestCoordsTriple &t : vecForOffset ) {
-              int32_t leftOffset = t.closestContourCoordOffset;
-              int32_t rightOffset = t.nextClosestContourCoordOffset;
-              
-              if (rightOffset != 0 && rightOffset < leftOffset) {
-                std::swap(leftOffset, rightOffset);
-              }
-              
-              if (leftOffsetPrev) {
-                leftOffsetPrev = leftOffset;
-                rightOffsetPrev = rightOffset;
-              } else {
-                assert(leftOffset == leftOffsetPrev);
-                assert(rightOffset == rightOffsetPrev);
-              }
-            }
-          }
-#endif // DEBUG
-          
-          int N = (int) vecForOffset.size();
-          
-          ClosestCoordsTriple &t = vecForOffset[0];
-          
-          int32_t leftOffset = t.closestContourCoordOffset;
-          int32_t rightOffset = t.nextClosestContourCoordOffset;
-          
-          if (rightOffset != 0 && rightOffset < leftOffset) {
-            std::swap(leftOffset, rightOffset);
-          }
-          
-          // Add vectors in between existing vectors
-          
-          int32_t leftUid = regionVecs.getUidForContour(leftOffset);
-          int32_t rightUid = regionVecs.getUidForContour(rightOffset);
-          
-          vector<int32_t> vecUids = regionVecs.makeVectorsBetween(leftUid, rightUid, N);
-          
-          int offset = 0;
-          
-          for ( int32_t vecUid : vecUids ) {
-            cout << "create vecUid " << vecUid << endl;
-            
-            if (vecUid == 63500) {
-              cout << "";
-            }
-            
-            vector<Coord> &vecOfCoords = regionVecs.getOutsideVector(vecUid);
-            
-            // FIXME: only works for 1 level at this point.
-            
-            // Create new outside vector that includes the outside point.
-            
-            ClosestCoordsTriple &t = vecForOffset[offset];
-            vecOfCoords.push_back(t.c);
-            
-            cout << "append outside and not in vectors coord " << t.c << endl;
-            
-#if defined(DEBUG)
-            // Query elements in between leftUid and rightUid
-            {
-              cout << "checking getVectorsBetween for (" << leftUid << "," << rightUid << ")" << endl;
-              vector<int32_t> vecUids = regionVecs.getVectorsBetween(leftUid, rightUid);
-              assert(vecUids.size() == 1);
-            }
-#endif // DEBUG
-            
-            offset++;
-          }
-          
-          cout << "";
-        }
-
-        // end foreach contouri
-        
-        cout << "";
-         
-        */
-      
       }
       
       // scan the vectors for insideVecPixelsMap at this point and
       // if the pixels all collapse to the same value or COM then this
       // it a likely early termination.
       
+      if (!done)
       {
         bool allVectorsConverge = true;
         
@@ -8878,7 +8357,7 @@ contractOrExpandRegion(const Mat & inputImg,
                        int numPixels,
                        vector<Coord> &outCoords)
 {
-  const bool debug = false;
+  const bool debug = true;
   const bool debugDumpImages = true;
   const bool debugDumpInputStateImages = true;
   
@@ -8974,19 +8453,21 @@ contractOrExpandRegion(const Mat & inputImg,
     }
   }
   
+  bool retval = true;
+  
   int numNonZero = (int) outCoords.size();
   
   if (isExpand) {
     // Stop when expanded out to the entire region filled
     
     if (numNonZero == (inputImg.rows * inputImg.cols)) {
-      return false;
+      retval = false;
     }
   } else {
     // Stop when contracting down to zero pixels
     
     if (numNonZero == 0) {
-      return false;
+      retval = false;
     }
   }
   
@@ -9052,10 +8533,10 @@ contractOrExpandRegion(const Mat & inputImg,
 #endif // DEBUG
   
   if (debug) {
-    cout << "return contractOrExpandRegion" << endl;
+    cout << "return contractOrExpandRegion with retval " << retval << endl;
   }
   
-  return true;
+  return retval;
 }
 
 // Invoked for each child of a container, returns the tags that are direct children of tag
