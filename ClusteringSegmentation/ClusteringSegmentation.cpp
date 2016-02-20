@@ -7373,7 +7373,9 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           
           for ( vector<Coord> & vec : vecOfVecs ) {
             int numCoordsInBetween = 0;
-            int numCoordsOnNormalVector = 0;
+            
+            // filter out coords that are on the contour but retain
+            // coords that hit a normal or an inbetween pixel.
             
             set<Coord> filteredCoordsSet;
             
@@ -7383,18 +7385,16 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
               uint32_t pixel = Vec3BToUID(currentVec);
               
               if (pixel == 0xFFFFFF) {
-                // Nop
-                //assert(0);
+                // Nop to skip
               } else if (pixel == 0x7F7F7F) {
-                // Nop
-                //assert(0);
+                // Nop to skip
               } else if (pixel == 0x0) {
                 // No pixel should be off
                 assert(0);
               } else if (isRed(pixel)) {
                 // A red shade means a normal vector pixel
                 
-                numCoordsOnNormalVector += 1;
+                filteredCoordsSet.insert(c);
               } else if (isBlue(pixel)) {
                 // A blue shade means pixel is inbetween a normal vector
                 
@@ -7404,9 +7404,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
                   numCoordsInBetween += 1;
                   filteredCoordsSet.insert(c);
                 } else {
-                  // coord corresponds to some other in between
-                  //assert(0);
-                  //Nop
+                  // coord corresponds to some other in between, skip
                 }
               } else {
                 assert(0);
@@ -7417,7 +7415,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
               // No in between coords on this vector
               
               if (debug) {
-                cout << "skip vector where all points were filtered out" << endl;
+                cout << "skip vector where all points were filtered out because none hit an inbetween pixel" << endl;
                 
                 for ( Coord c : vec ) {
                   cout << c << " ";
@@ -7436,6 +7434,18 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
                   
                   for ( Coord c : vec ) {
                     cout << c << " ";
+                  }
+                  
+                  cout << endl;
+                  
+                  cout << "filtered as ordered vector " << endl;
+                  
+                  for ( Coord c : vec ) {
+                    if (filteredCoordsSet.count(c) > 0) {
+                      cout << c << "  ";
+                    } else {
+                      cout << "!" << c << "! ";
+                    }
                   }
                   
                   cout << endl;
@@ -7711,11 +7721,23 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
             int N = (int) inbetweenCoords.size();
             
             if (N > 0) {
-              // FIXME: not fast
-              
               InBetweenRegionEdges & inbetweenEdges = contourInBetweenPaths[contouri];
               
+              if (debug) {
+                cout << "found N = " << N << " in between coords and " << inbetweenEdges.vecInnerToOuter.size() << " vectors " << endl;
+              }
+              
               // Map Coord -> (vecUid, vecUid, ...)
+
+              if (leftContouri == 0) {
+                cout << "";
+              }
+              
+              if (leftContouri == 74) {
+                cout << "";
+              }
+              
+              // FIXME: not fast
               
               vector<int32_t> vecUids = regionVecs.getVectorsBetween(leftUid, rightUid);
               
@@ -7738,7 +7760,7 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
                     vector<Coord> &vecOfCoords = regionVecs.getOutsideVector(vecUid);
                     
                     if (debug) {
-                      cout << "coord found in set " << c << " " << vecUid << endl;
+                      cout << "coord found in set " << c << " " << vecUid << " ( " << vecSetOffset << " of " << inbetweenEdges.vecInnerToOuter.size() << ")" << endl;
                     }
                     
                     if (debug) {
