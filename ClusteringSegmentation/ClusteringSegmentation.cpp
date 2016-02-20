@@ -7363,7 +7363,75 @@ clockwiseScanForShapeBounds(const Mat & inputImg,
           // FIXME: if there is only 1 in between pixel, then easy case since simple line.
           // Also, if only 2 points then generate a line between them.
           
-          inbetweenEdges.vecInnerToOuter = generateVectorsThroughPoints(regionTypeMat.size(), tag, contouri, inbetweenEdges.innerCoords, inbetweenEdges.outerCoords);
+          vector<vector<Coord> > vecOfVecs;
+          
+          vecOfVecs = generateVectorsThroughPoints(regionTypeMat.size(), tag, contouri, inbetweenEdges.innerCoords, inbetweenEdges.outerCoords);
+          
+          // Filter out vectors that contain zero points that are identified as inbetween
+          
+          vector<vector<Coord> > filteredVecOfVecs;
+          
+          for ( vector<Coord> & vec : vecOfVecs ) {
+            int numCoordsInBetween = 0;
+            int numCoordsOnNormalVector = 0;
+            
+            vector<Coord> filteredCoords;
+            
+            for ( Coord c : vec ) {
+              Vec3b currentVec = regionTypeMat.at<Vec3b>(c.y, c.x);
+              
+              uint32_t pixel = Vec3BToUID(currentVec);
+              
+              if (pixel == 0xFFFFFF) {
+                // Nop
+                //assert(0);
+              } else if (pixel == 0x7F7F7F) {
+                // Nop
+                //assert(0);
+              } else if (pixel == 0x0) {
+                // No pixel should be off
+                assert(0);
+              } else if (isRed(pixel)) {
+                // A red shade means a normal vector pixel
+                
+                numCoordsOnNormalVector += 1;
+              } else if (isBlue(pixel)) {
+                // A blue shade means pixel is inbetween a normal vector
+                
+                uint32_t thisContouri = getContourOffset(pixel);
+                if (contouri == thisContouri) {
+                  // coord is in between
+                  numCoordsInBetween += 1;
+                  filteredCoords.push_back(c);
+                } else {
+                  // coord corresponds to some other in between
+                  //assert(0);
+                  //Nop
+                }
+              } else {
+                assert(0);
+              }
+            }
+            
+            if (numCoordsInBetween == 0) {
+              // No in between coords on this vector
+              
+              if (debug) {
+                cout << "skip vec" << endl;
+              }
+            } else {
+              
+              if (filteredCoords.size() < vec.size()) {
+                if (debug) {
+                  cout << "trimmed coords from " << vec.size() << " down to " << filteredCoords.size() << endl;
+                }
+              }
+              
+              filteredVecOfVecs.push_back(filteredCoords);
+            }
+          }
+          
+          inbetweenEdges.vecInnerToOuter = filteredVecOfVecs;
           
           // FIXME: Capture the in between region as point, remove points along the vector lines
           // and then iterate outward to determine the number of points at each outgoing step?
